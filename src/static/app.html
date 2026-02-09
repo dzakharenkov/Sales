@@ -47,6 +47,7 @@
     .err { color: #c00; font-size: 13px; margin-top: 8px; }
     .msg { color: #0a0; font-size: 13px; margin-top: 8px; }
     .btn:disabled { opacity: 0.7; cursor: not-allowed; }
+    select.from-order, input.from-order { background: #e9ecef !important; color: #495057; cursor: not-allowed; }
     #content { min-height: 200px; }
     #opWhReceiptItemsTable td { padding: 8px; }
     #opWhReceiptItemsTable td input, #opWhReceiptItemsTable td select { width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
@@ -1932,7 +1933,7 @@
           paymentTypes.forEach(function (pt) { payOpts += '<option value="' + escAttr(pt.code) + '">' + escAttr(pt.name || pt.code) + '</option>'; });
           var formHtml = '<div class="card"><h2>Создание операции: ' + escAttr(config.operation_name || 'Доставка клиенту') + '</h2>';
           formHtml += '<div id="opFormErr" class="err" style="margin-bottom:12px"></div><div id="opFormMsg" class="msg" style="margin-bottom:12px;display:none"></div>';
-          formHtml += '<div class="form-group"><label>Заказ № <span style="color:#c00">*</span></label><input type="number" id="deliveryOrderId" min="1" required placeholder="Введите номер заказа" autocomplete="off"></div>';
+          formHtml += '<div class="form-group"><label>Заказ № <span style="color:#c00">*</span></label><div style="display:flex;gap:8px;align-items:center"><input type="number" id="deliveryOrderId" min="1" required placeholder="Введите номер заказа или найдите" autocomplete="off" style="flex:1"><button type="button" class="btn btn-secondary" id="deliveryOrderSearchBtn">Найти заказ</button></div></div>';
           formHtml += '<div id="deliveryOrderInfo" style="margin-bottom:16px;display:none"></div>';
           formHtml += '<div class="form-group"><label>Склад от <span style="color:#c00">*</span></label><select id="deliveryWhFrom" required>' + whOpts + '</select></div>';
           formHtml += '<div class="form-group"><label>Экспедитор <span style="color:#c00">*</span></label><select id="deliveryExpeditor" required>' + expOpts + '</select></div>';
@@ -1958,6 +1959,14 @@
               infoDiv.style.display = 'none';
               tbody.innerHTML = '';
               orderData = null;
+              var custSel = document.getElementById('deliveryCustomer');
+              var paySel = document.getElementById('deliveryPaymentType');
+              var expSel = document.getElementById('deliveryExpeditor');
+              var whSel = document.getElementById('deliveryWhFrom');
+              if (custSel) { custSel.disabled = false; custSel.classList.remove('from-order'); }
+              if (paySel) { paySel.disabled = false; paySel.classList.remove('from-order'); }
+              if (expSel) { expSel.disabled = false; expSel.classList.remove('from-order'); }
+              if (whSel) { whSel.disabled = false; whSel.classList.remove('from-order'); }
               return;
             }
             infoDiv.style.display = 'block';
@@ -1966,15 +1975,25 @@
               orderData = order;
               var custSel = document.getElementById('deliveryCustomer');
               var paySel = document.getElementById('deliveryPaymentType');
-              if (custSel && order.customer_id) custSel.value = order.customer_id;
+              var expSel = document.getElementById('deliveryExpeditor');
+              var whSel = document.getElementById('deliveryWhFrom');
+              if (custSel && order.customer_id) custSel.value = String(order.customer_id);
               if (paySel && order.payment_type_code) paySel.value = order.payment_type_code;
-              infoDiv.innerHTML = '<p style="color:#28a745;font-weight:600">Заказ №' + order.order_no + ' — ' + escAttr(order.customer_name || '') + '</p>';
+              if (expSel && order.login_expeditor) expSel.value = order.login_expeditor;
+              if (whSel && order.warehouse_from_expeditor) {
+                whSel.value = order.warehouse_from_expeditor;
+                whSel.disabled = true; whSel.classList.add('from-order');
+              }
+              var whFrom = whSel ? whSel.value : '';
+              custSel.disabled = true; custSel.classList.add('from-order');
+              paySel.disabled = true; paySel.classList.add('from-order');
+              if (expSel) { expSel.disabled = true; expSel.classList.add('from-order'); }
+              infoDiv.innerHTML = '<p style="color:#28a745;font-weight:600">Заказ №' + order.order_no + ' — ' + escAttr(order.customer_name || '') + '</p><p style="color:#666;font-size:12px;margin-top:4px">Склад, экспедитор, клиент и тип оплаты взяты из заказа (только для чтения).</p>';
               tbody.innerHTML = '';
               if (!order.items || !order.items.length) {
                 tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:16px;color:#666">В заказе нет товаров</td></tr>';
                 return;
               }
-              var whFrom = document.getElementById('deliveryWhFrom').value;
               if (whFrom) loadStock(whFrom).then(function () { renderOrderItems(order.items); });
               else renderOrderItems(order.items);
             }).catch(function (e) {
@@ -2023,6 +2042,10 @@
               row.setAttribute('data-price', price);
               row.innerHTML = '<td>' + escAttr(productName) + '</td><td><select class="delivery-batch" required>' + batchOpts + '</select></td><td class="delivery-expiry">—</td><td class="delivery-days" style="text-align:center">—</td><td class="delivery-available" style="text-align:right">0</td><td style="text-align:right;font-weight:600">' + (item.quantity || 0) + '</td><td><input type="number" class="delivery-qty" min="1" max="' + (item.quantity || 0) + '" value="' + (item.quantity || 0) + '" required></td><td class="delivery-price" style="text-align:right">' + (price ? price.toFixed(2) : '—') + '</td><td class="delivery-sum" style="text-align:right">—</td>';
               tbody.appendChild(row);
+              var batchSel = row.querySelector('.delivery-batch');
+              if (batchSel && stockRows.length > 0) {
+                batchSel.selectedIndex = 1;
+              }
               attachDeliveryRowHandlers(row);
             });
             updateDeliveryTotals();
@@ -2095,6 +2118,122 @@
             if (totalQtyEl) totalQtyEl.textContent = totalQty;
             if (totalSumEl) totalSumEl.textContent = totalSum ? totalSum.toFixed(2) : '0';
           }
+          function showOrderSearchModal() {
+            api('/api/v1/orders/statuses').catch(function() { return []; }).then(function(statuses) {
+              function formatDateTashkent(isoStr) {
+                if (!isoStr) return '';
+                try {
+                  var d = new Date(isoStr);
+                  return d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                } catch (e) { return isoStr; }
+              }
+              var modalId = 'orderSearchModal_' + Date.now();
+              var statusOptsHtml = '<option value="">— Все —</option>';
+              if (statuses && statuses.length) {
+                statuses.forEach(function(s) {
+                  statusOptsHtml += '<option value="' + escAttr(s.code) + '">' + escAttr(s.name || s.code) + '</option>';
+                });
+              } else {
+                statusOptsHtml += '<option value="open">Открыт</option><option value="delivery">Доставка</option>';
+              }
+              var modalHtml = '<div class="modal show" id="' + modalId + '"><div class="modal-inner" style="max-width:900px;max-height:90vh;overflow:auto"><h3>Поиск заказа</h3>';
+              modalHtml += '<div style="margin-bottom:16px"><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:12px">';
+              modalHtml += '<div><label style="display:block;margin-bottom:4px;font-size:13px;font-weight:600">Экспедитор</label><select id="orderSearchModalExpeditor" style="min-width:200px">' + expOpts + '</select></div>';
+              modalHtml += '<div><label style="display:block;margin-bottom:4px;font-size:13px;font-weight:600">Статус</label><select id="orderSearchModalStatus" style="min-width:180px">' + statusOptsHtml + '</select></div>';
+              modalHtml += '<div><label style="display:block;margin-bottom:4px;font-size:13px;font-weight:600">Клиент</label><select id="orderSearchModalCustomer" style="min-width:220px">' + custOpts + '</select></div>';
+              modalHtml += '<div><button type="button" class="btn btn-primary" id="orderSearchModalBtn">Найти</button></div>';
+              modalHtml += '</div><div style="margin-top:8px"><label><input type="checkbox" id="orderSearchModalNotClosed" checked> Только не закрытые заказы</label></div></div>';
+              modalHtml += '<div id="orderSearchModalResults" style="margin-top:16px;max-height:400px;overflow-y:auto"></div>';
+              modalHtml += '<div id="orderSearchModalErr" class="err" style="margin-top:8px"></div>';
+              modalHtml += '<div class="modal-actions" style="margin-top:16px"><button type="button" class="btn btn-secondary" id="orderSearchModalCancel">Отмена</button></div></div></div>';
+              var modalContainer = document.getElementById('modalContainer');
+              if (!modalContainer) {
+                modalContainer = document.createElement('div');
+                modalContainer.id = 'modalContainer';
+                document.body.appendChild(modalContainer);
+              }
+              modalContainer.innerHTML = modalHtml;
+              var resultsDiv = document.getElementById('orderSearchModalResults');
+              var errDiv = document.getElementById('orderSearchModalErr');
+              
+              function searchOrders() {
+                if (errDiv) errDiv.textContent = '';
+                if (resultsDiv) resultsDiv.innerHTML = '<p style="color:#666;text-align:center;padding:20px">Поиск...</p>';
+                var expeditor = document.getElementById('orderSearchModalExpeditor') ? document.getElementById('orderSearchModalExpeditor').value : '';
+                var status = document.getElementById('orderSearchModalStatus') ? document.getElementById('orderSearchModalStatus').value : '';
+                var customer = document.getElementById('orderSearchModalCustomer') ? document.getElementById('orderSearchModalCustomer').value : '';
+                var notClosed = document.getElementById('orderSearchModalNotClosed') ? document.getElementById('orderSearchModalNotClosed').checked : true;
+                var params = [];
+                if (expeditor && expeditor.trim()) params.push('login_expeditor=' + encodeURIComponent(expeditor.trim()));
+                if (status && status.trim()) params.push('status_code=' + encodeURIComponent(status.trim()));
+                if (customer && customer.trim() && !isNaN(parseInt(customer, 10))) params.push('customer_id=' + encodeURIComponent(customer.trim()));
+                performSearch(params, notClosed);
+              }
+              
+              function performSearch(params, filterNotClosed) {
+                var url = '/api/v1/orders' + (params.length ? '?' + params.join('&') : '');
+                api(url).then(function(data) {
+                  var orders = Array.isArray(data) ? data : (data && data.orders ? data.orders : []);
+                  if (!resultsDiv) return;
+                  
+                  // Только не закрытые: по умолчанию показываем только open и delivery (закрытые — completed и canceled)
+                  if (filterNotClosed && orders && orders.length) {
+                    var openStatusCodes = ['open', 'delivery'];
+                    orders = orders.filter(function(o) {
+                      var code = (o.status_code || '').toLowerCase().trim();
+                      return openStatusCodes.indexOf(code) !== -1;
+                    });
+                  }
+                  
+                  if (!orders || !orders.length) {
+                    resultsDiv.innerHTML = '<p style="color:#666;text-align:center;padding:20px">Заказы не найдены. Измените критерии поиска.</p>';
+                    return;
+                  }
+                  var tableHtml = '<div style="overflow-x:auto"><table style="width:100%"><thead><tr><th>№</th><th>Клиент</th><th>Дата создания</th><th>Статус</th><th>Сумма</th><th>Экспедитор</th><th>Действие</th></tr></thead><tbody>';
+                  orders.forEach(function(o) {
+                    tableHtml += '<tr><td>' + (o.order_no || o.id) + '</td><td>' + escAttr(o.customer_name || '') + '</td><td>' + formatDateTashkent(o.order_date) + '</td><td>' + escAttr(o.status_name || o.status_code || '') + '</td><td>' + (o.total_amount || '0') + '</td><td>' + escAttr(o.login_expeditor || '') + '</td><td><button type="button" class="btn btn-primary btn-small" data-select-order="' + (o.order_no || o.id) + '">Выбрать</button></td></tr>';
+                  });
+                  tableHtml += '</tbody></table></div>';
+                  resultsDiv.innerHTML = tableHtml;
+                  resultsDiv.querySelectorAll('[data-select-order]').forEach(function(btn) {
+                    btn.onclick = function() {
+                      var orderId = this.getAttribute('data-select-order');
+                      document.getElementById('deliveryOrderId').value = orderId;
+                      document.getElementById(modalId).classList.remove('show');
+                      document.getElementById('deliveryOrderId').dispatchEvent(new Event('change'));
+                    };
+                  });
+                }).catch(function(e) {
+                  console.error('Order search error:', e);
+                  var msg = 'Ошибка поиска заказов.';
+                  if (e && e.data) {
+                    var d = e.data.detail;
+                    if (typeof d === 'string') msg = d;
+                    else if (Array.isArray(d) && d.length) msg = d.map(function(x) { return x.msg || x.message || JSON.stringify(x); }).join(' ');
+                    else if (d && typeof d === 'object') msg = JSON.stringify(d);
+                  }
+                  if (e && e.status) msg = 'Код ' + e.status + ': ' + msg;
+                  else if (e && e.message) msg = msg + ' ' + String(e.message);
+                  if (errDiv) errDiv.textContent = msg;
+                  if (resultsDiv) resultsDiv.innerHTML = '';
+                });
+              }
+              
+              document.getElementById('orderSearchModalBtn').onclick = searchOrders;
+              document.getElementById('orderSearchModalCancel').onclick = function() {
+                document.getElementById(modalId).classList.remove('show');
+              };
+              // Закрытие по клику вне модального окна
+              document.getElementById(modalId).onclick = function(e) {
+                if (e.target.id === modalId) {
+                  document.getElementById(modalId).classList.remove('show');
+                }
+              };
+              // Первый поиск без фильтров — проверка, что API отвечает
+              performSearch([], document.getElementById('orderSearchModalNotClosed').checked);
+            });
+          }
+          document.getElementById('deliveryOrderSearchBtn').onclick = showOrderSearchModal;
           document.getElementById('deliveryCancel').onclick = function () { loadSectionOperations(false); };
           document.getElementById('deliverySave').onclick = function () {
             var errEl = document.getElementById('opFormErr');
@@ -2137,8 +2276,15 @@
             var idx = 0;
             function createNext() {
               if (idx >= items.length) {
-                if (msgEl) { msgEl.textContent = 'Операции доставки созданы: ' + createdCount + ' шт.'; msgEl.style.display = 'block'; }
-                setTimeout(function () { loadSectionOperations(false); }, 1500);
+                var done = function () {
+                  if (msgEl) { msgEl.textContent = 'Операции доставки созданы: ' + createdCount + ' шт. Заказ переведён в статус «Доставлен».'; msgEl.style.display = 'block'; }
+                  setTimeout(function () { loadSectionOperations(false); }, 1500);
+                };
+                if (createdCount > 0 && orderId) {
+                  api('/api/v1/orders/' + orderId, { method: 'PATCH', body: JSON.stringify({ status_code: 'completed' }) }).then(done).catch(function () { done(); });
+                } else {
+                  done();
+                }
                 return;
               }
               var it = items[idx++];

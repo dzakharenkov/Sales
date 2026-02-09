@@ -653,13 +653,51 @@ async def create_operation_from_config(
     operation_number = num_result.scalar() or f"OP-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}-000001"
     logger.info(f"  Generated operation_number: {operation_number}")
     
-    # Получаем статус из конфига
+    # Получаем статус из конфига (для доставки — всегда completed)
     default_status = config.default_status
+    if operation_type == "delivery":
+        default_status = "completed"
     logger.info(f"  default_status: {default_status}")
     
     # Получаем текущего пользователя
     created_by = user.login
     logger.info(f"  created_by: {created_by}")
+    
+    # Для доставки: проверить, что заказ не уже доставлен, и что остатков хватает
+    if operation_type == "delivery":
+        order_id_val = data.get("order_id")
+        if order_id_val is not None:
+            order_row = await session.execute(select(Order).where(Order.order_no == order_id_val))
+            order_obj = order_row.scalar_one_or_none()
+            if order_obj and (order_obj.status_code or "").strip().lower() == "completed":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Заказ уже доставлен. Нельзя создать ещё одну операцию доставки по этому заказу.",
+                )
+        wh_from = data.get("warehouse_from")
+        pc = data.get("product_code")
+        bc = data.get("batch_code")
+        qty = data.get("quantity") or 0
+        if wh_from and pc and bc is not None and qty > 0:
+            try:
+                stock_r = await session.execute(
+                    text('''
+                        SELECT COALESCE(total_qty, 0)::int FROM "Sales".v_warehouse_stock
+                        WHERE warehouse_code = :wh AND product_code = :pc AND batch_code = :bc
+                    '''),
+                    {"wh": wh_from, "pc": pc, "bc": bc},
+                )
+                stock_row = stock_r.fetchone()
+                available = int(stock_row[0]) if stock_row and stock_row[0] is not None else 0
+                if available < qty:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Недостаточно остатков на складе: доступно {available}, запрошено {qty}.",
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass  # VIEW может отсутствовать — не блокируем создание
     
     # ШАГ 6: Создать операцию в БД
     logger.info(f"\n[STEP 6] Создаём операцию в БД")

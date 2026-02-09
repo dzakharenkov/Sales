@@ -12,7 +12,7 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.connection import get_db_session
-from src.database.models import Order, Item, Customer, Product, Status, PaymentType, User as UserModel
+from src.database.models import Order, Item, Customer, Product, Status, PaymentType, User as UserModel, Warehouse
 from src.core.deps import get_current_user, require_admin
 from src.database.models import User
 
@@ -583,6 +583,14 @@ async def get_order(
             u2 = await session.execute(select(UserModel).where(UserModel.login == cust.login_expeditor))
             exp_user = u2.scalar_one_or_none()
             expeditor_fio = exp_user.fio if exp_user else None
+    warehouse_from_expeditor = None
+    if cust and cust.login_expeditor:
+        wh_result = await session.execute(
+            select(Warehouse.code).where(Warehouse.expeditor_login == cust.login_expeditor).limit(1)
+        )
+        wh_row = wh_result.scalar_one_or_none()
+        if wh_row is not None:
+            warehouse_from_expeditor = wh_row
     items_result = await session.execute(select(Item).where(Item.order_id == order.order_no))
     items = items_result.scalars().all()
     return {
@@ -597,6 +605,7 @@ async def get_order(
         "created_by": order.created_by,
         "login_agent": cust.login_agent if cust else None,
         "login_expeditor": cust.login_expeditor if cust else None,
+        "warehouse_from_expeditor": warehouse_from_expeditor,
         "agent_fio": agent_fio,
         "expeditor_fio": expeditor_fio,
         "scheduled_delivery_at": order.scheduled_delivery_at.isoformat() if order.scheduled_delivery_at else None,
