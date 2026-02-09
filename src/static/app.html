@@ -675,7 +675,7 @@
       function loadSectionOrders() {
         var content = document.getElementById('content');
         if (!content) return;
-        content.innerHTML = '<div class="card"><h2>Заказы</h2><p style="margin:0 0 12px 0"><button type="button" class="btn btn-primary" id="orderAdd">Создать заказ</button>' + (isAdmin() ? ' <button type="button" class="btn btn-secondary" id="orderExport">Скачать заказы в Excel</button>' : '') + '</p><div class="form-group" style="margin:12px 0"><label>Поиск заказов</label></div><div id="orderSearchRow" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px"></div><div id="sectionOrderErr" class="err"></div><div id="sectionTable"></div></div>';
+        content.innerHTML = '<div class="card"><h2>Заказы</h2><p style="margin:0 0 12px 0"><button type="button" class="btn btn-primary" id="orderAdd">Создать заказ</button>' + (isAdmin() ? ' <button type="button" class="btn btn-secondary" id="orderExport">Скачать заказы в Excel</button>' : '') + '</p><div class="form-group" style="margin:12px 0"><label>Поиск заказов</label></div><div id="orderSearchRow" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px"></div><div id="sectionOrderErr" class="err"></div><div id="orderInfo" style="margin:12px 0;padding:8px;background:#f8f9fa;border-radius:4px;font-size:13px"></div><div id="sectionTable"></div></div>';
         var tableDiv = document.getElementById('sectionTable');
         var errDiv = document.getElementById('sectionOrderErr');
         var searchRow = document.getElementById('orderSearchRow');
@@ -697,9 +697,34 @@
             return d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
           } catch (e) { return isoStr; }
         }
-        function renderOrderTable(list) {
+        function renderOrderTable(data) {
           if (errDiv) errDiv.textContent = '';
-          if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Заказов не найдено. Измените критерии поиска или создайте заказ.</p>'; return; }
+          var list = Array.isArray(data) ? data : (data && data.orders ? data.orders : []);
+          var totalAmount = 0;
+          var totalCount = 0;
+          var infoDiv = document.getElementById('orderInfo');
+          
+          if (data && typeof data === 'object' && !Array.isArray(data)) {
+            totalCount = data.total_count || list.length;
+            totalAmount = data.total_amount || 0;
+          } else {
+            totalCount = list.length;
+            list.forEach(function(o) {
+              totalAmount += (o.total_amount || 0);
+            });
+          }
+          
+          if (infoDiv) {
+            infoDiv.innerHTML = '<strong>Найдено заказов:</strong> ' + totalCount + ' | <strong>Итого сумма:</strong> ' + totalAmount.toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' сум';
+          }
+          
+          if (!list || !list.length) { 
+            tableDiv.innerHTML = '<p>Заказов не найдено. Измените критерии поиска или создайте заказ.</p>'; 
+            if (infoDiv && totalCount === 0) {
+              infoDiv.innerHTML = '<strong>Найдено заказов:</strong> 0 | <strong>Итого сумма:</strong> 0,00 сум';
+            }
+            return; 
+          }
           var t = '<div style="overflow-x:auto"><table><thead><tr><th>Действия</th><th>№</th><th>Клиент</th><th>Дата создания</th><th>Статус</th><th>Тип оплаты</th><th>Сумма</th><th>Агент</th><th>Экспедитор</th><th>Дата поставки</th><th>Перевод в статус «Доставка»</th><th>Дата закрытия</th><th>Последнее изменение</th><th>Кто изменил</th></tr></thead><tbody>';
           list.forEach(function (o) {
             t += '<tr><td><button type="button" class="btn btn-secondary btn-small" data-order-edit data-id="' + (o.order_no != null ? o.order_no : o.id) + '">Изменить</button></td><td>' + (o.order_no != null ? o.order_no : o.id) + '</td><td>' + escAttr(o.customer_name || (o.customer_id != null ? 'ID ' + o.customer_id : '')) + '</td><td>' + formatDateTashkent(o.order_date) + '</td><td>' + escAttr(o.status_name || o.status_code || '') + '</td><td>' + escAttr(o.payment_type_name || o.payment_type_code || '') + '</td><td>' + (o.total_amount != null ? o.total_amount : '') + '</td><td>' + escAttr(o.login_agent || '') + '</td><td>' + escAttr(o.login_expeditor || '') + '</td><td>' + formatDateTashkent(o.scheduled_delivery_at) + '</td><td>' + formatDateTashkent(o.status_delivery_at) + '</td><td>' + formatDateTashkent(o.closed_at) + '</td><td>' + formatDateTashkent(o.last_updated_at) + '</td><td>' + escAttr(o.last_updated_by || '') + '</td></tr>';
@@ -1044,7 +1069,7 @@
       function loadSectionOrderItems() {
         var content = document.getElementById('content');
         if (!content) return;
-        content.innerHTML = '<div class="card"><h2>Позиции заказов</h2><p style="margin:0 0 12px 0">' + (isAdmin() ? '<button type="button" class="btn btn-secondary" id="orderItemsExport">Скачать позиции в Excel</button>' : '') + '</p><div class="form-group" style="margin:12px 0"><label>Поиск позиций заказов</label></div><div id="orderItemsSearchRow" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px"></div><div id="sectionOrderItemsErr" class="err"></div><div id="orderItemsTable"></div></div>';
+        content.innerHTML = '<div class="card"><h2>Позиции заказов</h2><p style="margin:0 0 12px 0">' + (isAdmin() ? '<button type="button" class="btn btn-secondary" id="orderItemsExport">Скачать позиции в Excel</button>' : '') + '</p><div class="form-group" style="margin:12px 0"><label>Поиск позиций заказов</label></div><div id="orderItemsSearchRow" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px"></div><div id="sectionOrderItemsErr" class="err"></div><div id="orderItemsInfo" style="margin:12px 0;padding:8px;background:#f8f9fa;border-radius:4px;font-size:13px"></div><div id="orderItemsTable"></div><div id="orderItemsPagination" style="margin-top:16px;display:flex;justify-content:center;align-items:center;gap:8px"></div></div>';
         var tableDiv = document.getElementById('orderItemsTable');
         var errDiv = document.getElementById('sectionOrderItemsErr');
         var searchRow = document.getElementById('orderItemsSearchRow');
@@ -1077,9 +1102,44 @@
           if (f.last_updated_by) params.push('last_updated_by=' + encodeURIComponent(f.last_updated_by));
           return params.length ? '?' + params.join('&') : '';
         }
-        function renderTable(list) {
+        var currentPage = 1;
+        var pageSize = 100;
+        var totalCount = 0;
+        var totalAmount = 0;
+        function renderTable(data) {
           if (errDiv) errDiv.textContent = '';
-          if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Позиции заказов не найдены. Измените критерии поиска.</p>'; return; }
+          var list = Array.isArray(data) ? data : (data && data.items ? data.items : []);
+          var infoDiv = document.getElementById('orderItemsInfo');
+          var paginationDiv = document.getElementById('orderItemsPagination');
+          
+          if (data && typeof data === 'object' && !Array.isArray(data)) {
+            totalCount = data.total_count || 0;
+            totalAmount = data.total_amount || 0;
+            currentPage = Math.floor((data.offset || 0) / pageSize) + 1;
+          } else {
+            totalCount = list.length;
+            totalAmount = 0;
+            list.forEach(function(r) {
+              var amt = (r.amount != null ? r.amount : ((r.quantity || 0) * (r.price != null ? r.price : 0)));
+              totalAmount += amt;
+            });
+          }
+          
+          if (infoDiv) {
+            var start = totalCount > 0 ? ((currentPage - 1) * pageSize + 1) : 0;
+            var end = totalCount > 0 ? Math.min(currentPage * pageSize, totalCount) : 0;
+            infoDiv.innerHTML = '<strong>Найдено позиций:</strong> ' + totalCount + ' | <strong>Показано:</strong> ' + (totalCount > 0 ? start + '-' + end : '0') + ' | <strong>Общая сумма:</strong> ' + totalAmount.toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' сум';
+          }
+          
+          if (!list || !list.length) { 
+            tableDiv.innerHTML = '<p>Позиции заказов не найдены. Измените критерии поиска.</p>'; 
+            if (paginationDiv) paginationDiv.innerHTML = '';
+            if (infoDiv && totalCount === 0) {
+              infoDiv.innerHTML = '<strong>Найдено позиций:</strong> 0 | <strong>Показано:</strong> 0 | <strong>Общая сумма:</strong> 0,00 сум';
+            }
+            return; 
+          }
+          
           var t = '<div style="overflow-x:auto"><table><thead><tr><th>№ заказа</th><th>Клиент</th><th>Дата заказа</th><th>Статус</th><th>Тип оплаты</th><th>Код товара</th><th>Товар</th><th>Количество</th><th>Цена</th><th>Сумма</th><th>Агент</th><th>Экспедитор</th><th>Дата поставки</th><th>Перевод в статус «Доставка»</th><th>Дата закрытия</th><th>Последнее изменение заказа</th><th>Кто изменил</th></tr></thead><tbody>';
           list.forEach(function (r) {
             var amt = (r.amount != null ? r.amount : ((r.quantity || 0) * (r.price != null ? r.price : 0)));
@@ -1087,13 +1147,49 @@
           });
           t += '</tbody></table></div>';
           tableDiv.innerHTML = t;
+          
+          // Пагинация
+          if (paginationDiv && totalCount > pageSize) {
+            var totalPages = Math.ceil(totalCount / pageSize);
+            var pagHtml = '';
+            if (currentPage > 1) {
+              pagHtml += '<button type="button" class="btn btn-secondary btn-small" id="orderItemsPagePrev">‹ Предыдущая</button>';
+            }
+            pagHtml += '<span style="padding:0 12px">Страница ' + currentPage + ' из ' + totalPages + '</span>';
+            if (currentPage < totalPages) {
+              pagHtml += '<button type="button" class="btn btn-secondary btn-small" id="orderItemsPageNext">Следующая ›</button>';
+            }
+            paginationDiv.innerHTML = pagHtml;
+            var prevBtn = document.getElementById('orderItemsPagePrev');
+            var nextBtn = document.getElementById('orderItemsPageNext');
+            if (prevBtn) prevBtn.onclick = function() { currentPage--; runSearch(false); };
+            if (nextBtn) nextBtn.onclick = function() { currentPage++; runSearch(false); };
+          } else if (paginationDiv) {
+            paginationDiv.innerHTML = '';
+          }
         }
-        function runSearch() {
+        var searchButtonClicked = false;
+        function runSearch(resetPage) {
+          if (resetPage !== false) {
+            currentPage = 1;
+          }
           var f = getFilters();
           var qs = buildQuery(f);
-          api('/api/v1/orders/items' + qs).then(renderTable).catch(function (e) {
+          var offset = (currentPage - 1) * pageSize;
+          if (qs) {
+            qs += '&limit=' + pageSize + '&offset=' + offset;
+          } else {
+            qs = '?limit=' + pageSize + '&offset=' + offset;
+          }
+          api('/api/v1/orders/items' + qs).then(function(data) {
+            renderTable(data);
+          }).catch(function (e) {
             if (errDiv) errDiv.textContent = (e && e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : 'Ошибка загрузки позиций заказов.';
             tableDiv.innerHTML = '<p>Список позиций не загружен.</p>';
+            var infoDiv = document.getElementById('orderItemsInfo');
+            var paginationDiv = document.getElementById('orderItemsPagination');
+            if (infoDiv) infoDiv.innerHTML = '';
+            if (paginationDiv) paginationDiv.innerHTML = '';
           });
         }
         if (exportBtn) {
@@ -1136,7 +1232,14 @@
             if (df) window.flatpickr(df, { locale: 'ru', dateFormat: 'Y-m-d', allowInput: true });
             if (dt) window.flatpickr(dt, { locale: 'ru', dateFormat: 'Y-m-d', allowInput: true });
           }
+          currentPage = 1;
+          totalCount = 0;
+          totalAmount = 0;
           tableDiv.innerHTML = '<p style="color:#666">Укажите критерии поиска и нажмите «Найти».</p>';
+          var infoDiv = document.getElementById('orderItemsInfo');
+          var paginationDiv = document.getElementById('orderItemsPagination');
+          if (infoDiv) infoDiv.innerHTML = '';
+          if (paginationDiv) paginationDiv.innerHTML = '';
         }).catch(function () {
           searchRow.innerHTML = '<button type="button" class="btn btn-primary" id="orderItemsSearchBtn">Загрузить позиции</button>';
           document.getElementById('orderItemsSearchBtn').onclick = runSearch;
@@ -1189,7 +1292,10 @@
                   api('/api/v1/dictionary/payment-types').catch(function () { return []; }),
                   api('/api/v1/dictionary/user-logins').catch(function () { return []; })
                 ]).then(function (results) {
-                  openOperationForm(true, opId, opData, results[0] || [], results[1] || [], results[2] || [], results[3] || [], results[4] || [], results[5] || []);
+                  var types = results[0] || [];
+                  // При редактировании показываем все типы (включая неактивные), чтобы можно было редактировать существующие операции
+                  // Но если операция использует неактивный тип, он всё равно будет доступен
+                  openOperationForm(true, opId, opData, types, results[1] || [], results[2] || [], results[3] || [], results[4] || [], results[5] || []);
                 });
               }).catch(function (e) {
                 if (errDiv) errDiv.textContent = (e && e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : 'Не удалось загрузить операцию.';
@@ -1246,7 +1352,9 @@
           var customers = results[1] || [];
           var products = results[2] || [];
           var userList = results[3] || [];
-          var typeOpts = '<option value="">— Все —</option>'; types.forEach(function (ty) { typeOpts += '<option value="' + escAttr(ty.code) + '">' + escAttr(ty.name || ty.code) + '</option>'; });
+          // Фильтруем только активные типы операций для фильтров
+          var activeTypes = types.filter(function(ty) { return ty.active !== false; });
+          var typeOpts = '<option value="">— Все —</option>'; activeTypes.forEach(function (ty) { typeOpts += '<option value="' + escAttr(ty.code) + '">' + escAttr(ty.name || ty.code) + '</option>'; });
           var statusOpts = '<option value="">— Все —</option><option value="pending">pending</option><option value="completed">completed</option><option value="cancelled">cancelled</option>';
           var custOpts = '<option value="">— Любой —</option>'; customers.forEach(function (c) { custOpts += '<option value="' + (c.id != null ? c.id : '') + '">' + escAttr((c.name_client || c.firm_name || '') + ' (ID ' + (c.id != null ? c.id : '') + ')') + '</option>'; });
           var prodOpts = '<option value="">— Любой —</option>'; products.forEach(function (p) { prodOpts += '<option value="' + escAttr(p.code) + '">' + escAttr((p.code || '') + ' — ' + (p.name || '')) + '</option>'; });
@@ -1266,7 +1374,16 @@
         function openOperationForm(isEdit, operationId, opData, types, customers, products, warehouses, paymentTypes, userList) {
           warehouses = warehouses || []; paymentTypes = paymentTypes || []; userList = userList || [];
           var sel = isEdit && opData ? { type_code: opData.type_code || '', customer_id: opData.customer_id != null ? String(opData.customer_id) : '', product_code: opData.product_code || '', quantity: opData.quantity != null ? opData.quantity : '', amount: opData.amount != null ? opData.amount : '', comment: opData.comment || '', order_id: opData.order_id != null ? opData.order_id : '', operation_date: opData.operation_date ? opData.operation_date.slice(0, 10) : '', warehouse_from: opData.warehouse_from || '', warehouse_to: opData.warehouse_to || '', payment_type_code: opData.payment_type_code || '', status: opData.status || 'pending', expeditor_login: opData.expeditor_login || '', cashier_login: opData.cashier_login || '', storekeeper_login: opData.storekeeper_login || '' } : { type_code: '', customer_id: '', product_code: '', quantity: '1', amount: '', comment: '', order_id: '', operation_date: new Date().toISOString().slice(0, 10), warehouse_from: '', warehouse_to: '', payment_type_code: '', status: 'pending', expeditor_login: '', cashier_login: '', storekeeper_login: '' };
-          var typeOpts = '<option value="">— Выберите тип —</option>'; types.forEach(function (ty) { var o = (ty.code === sel.type_code) ? ' selected' : ''; typeOpts += '<option value="' + escAttr(ty.code) + '"' + o + '>' + escAttr(ty.name || ty.code) + '</option>'; });
+          // Фильтруем только активные типы операций, но при редактировании добавляем текущий тип операции (даже если неактивен)
+          var activeTypes = types.filter(function(ty) { return ty.active !== false; });
+          if (isEdit && opData && opData.type_code) {
+            var currentType = types.find(function(ty) { return ty.code === opData.type_code; });
+            if (currentType && currentType.active === false) {
+              // Добавляем текущий тип операции, даже если он неактивен (чтобы можно было редактировать существующую операцию)
+              activeTypes.push(currentType);
+            }
+          }
+          var typeOpts = '<option value="">— Выберите тип —</option>'; activeTypes.forEach(function (ty) { var o = (ty.code === sel.type_code) ? ' selected' : ''; typeOpts += '<option value="' + escAttr(ty.code) + '"' + o + '>' + escAttr(ty.name || ty.code) + '</option>'; });
           var custOpts = '<option value="">— Не указан —</option>'; customers.forEach(function (c) { var o = (String(c.id) === sel.customer_id) ? ' selected' : ''; custOpts += '<option value="' + (c.id != null ? c.id : '') + '"' + o + '>' + escAttr((c.name_client || c.firm_name || '') + ' (ID ' + (c.id != null ? c.id : '') + ')') + '</option>'; });
           var prodOpts = '<option value="">— Не указан —</option>'; products.forEach(function (p) { var o = (p.code === sel.product_code) ? ' selected' : ''; prodOpts += '<option value="' + escAttr(p.code) + '"' + o + '>' + escAttr((p.code || '') + ' — ' + (p.name || '')) + '</option>'; });
           var whOpts = '<option value="">— Не указан —</option>'; warehouses.forEach(function (w) { whOpts += '<option value="' + escAttr(w.code) + '">' + escAttr(w.name || w.code) + '</option>'; });

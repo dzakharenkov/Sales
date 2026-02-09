@@ -119,6 +119,42 @@ async def list_orders(
         q = q.where(Customer.login_expeditor == login_expeditor.strip())
     if last_updated_by and last_updated_by.strip():
         q = q.where(Order.last_updated_by == last_updated_by.strip())
+    
+    # Подсчет общей суммы заказов (до получения данных)
+    sum_q = (
+        select(func.sum(func.coalesce(Order.total_amount, 0)))
+        .select_from(Order)
+        .outerjoin(Customer, Order.customer_id == Customer.id)
+    )
+    # Применяем те же фильтры
+    if customer_id is not None:
+        sum_q = sum_q.where(Order.customer_id == customer_id)
+    if customer_name and customer_name.strip():
+        name = customer_name.strip()
+        sum_q = sum_q.where(or_(
+            Customer.name_client.ilike(f"%{name}%"),
+            Customer.firm_name.ilike(f"%{name}%"),
+        ))
+    if status_code and status_code.strip():
+        sum_q = sum_q.where(Order.status_code == status_code.strip())
+    if scheduled_delivery_from:
+        dt_from = _parse_optional_datetime(scheduled_delivery_from)
+        if dt_from:
+            sum_q = sum_q.where(Order.scheduled_delivery_at >= dt_from)
+    if scheduled_delivery_to:
+        dt_to = _parse_optional_datetime(scheduled_delivery_to)
+        if dt_to:
+            sum_q = sum_q.where(Order.scheduled_delivery_at <= dt_to)
+    if login_agent and login_agent.strip():
+        sum_q = sum_q.where(Customer.login_agent == login_agent.strip())
+    if login_expeditor and login_expeditor.strip():
+        sum_q = sum_q.where(Customer.login_expeditor == login_expeditor.strip())
+    if last_updated_by and last_updated_by.strip():
+        sum_q = sum_q.where(Order.last_updated_by == last_updated_by.strip())
+    
+    total_amount_result = await session.execute(sum_q)
+    total_amount_all = float(total_amount_result.scalar() or 0)
+    
     result = await session.execute(q)
     rows = result.all()
     out = []
@@ -143,7 +179,12 @@ async def list_orders(
             "last_updated_at": o.last_updated_at.isoformat() if o.last_updated_at else None,
             "last_updated_by": o.last_updated_by,
         })
-    return out
+    
+    return {
+        "orders": out,
+        "total_count": len(out),
+        "total_amount": total_amount_all,
+    }
 
 
 ORDERS_EXPORT_HEADERS_RU = [
@@ -245,12 +286,15 @@ async def list_order_items(
     login_agent: str | None = Query(None, description="Логин агента"),
     login_expeditor: str | None = Query(None, description="Логин экспедитора"),
     last_updated_by: str | None = Query(None, description="Логин пользователя, выполнившего последнее изменение заказа"),
+    limit: int = Query(100, ge=1, le=1000, description="Количество записей на странице"),
+    offset: int = Query(0, ge=0, description="Смещение для пагинации"),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
     """
     Список позиций заказов (items) с теми же фильтрами, что и /orders.
     Каждая строка — одна позиция товара в заказе.
+    Поддерживает пагинацию (limit, offset).
     """
     q = (
         select(Item, Order, Customer, Product, Status, PaymentType)
@@ -288,13 +332,24 @@ async def list_order_items(
     if last_updated_by and last_updated_by.strip():
         q = q.where(Order.last_updated_by == last_updated_by.strip())
 
+    # Подсчет общего количества (до пагинации)
+    from sqlalchemy import func
+    count_q = select(func.count()).select_from(q.subquery())
+    total_count_result = await session.execute(count_q)
+    total_count = total_count_result.scalar() or 0
+
+    # Применяем пагинацию
+    q = q.limit(limit).offset(offset)
+
     result = await session.execute(q)
     rows = result.all()
     out: list[dict] = []
+    total_amount = 0.0
     for it, o, cust, prod, st, pt in rows:
         qty = it.quantity or 0
         price = float(it.price) if it.price is not None else None
         amount = qty * (price or 0)
+        total_amount += amount
         out.append(
             {
                 "item_id": str(it.id),
@@ -320,7 +375,53 @@ async def list_order_items(
                 "order_last_updated_by": o.last_updated_by,
             }
         )
-    return out
+    
+    # Подсчет общей суммы всех позиций (не только текущей страницы)
+    # Для этого нужно выполнить отдельный запрос
+    sum_q = (
+        select(func.sum(Item.quantity * func.coalesce(Item.price, 0)))
+        .select_from(Item)
+        .join(Order, Item.order_id == Order.order_no)
+        .outerjoin(Customer, Order.customer_id == Customer.id)
+    )
+    # Применяем те же фильтры
+    if customer_id is not None:
+        sum_q = sum_q.where(Order.customer_id == customer_id)
+    if customer_name and customer_name.strip():
+        name = customer_name.strip()
+        sum_q = sum_q.where(
+            or_(
+                Customer.name_client.ilike(f"%{name}%"),
+                Customer.firm_name.ilike(f"%{name}%"),
+            )
+        )
+    if status_code and status_code.strip():
+        sum_q = sum_q.where(Order.status_code == status_code.strip())
+    if scheduled_delivery_from:
+        dt_from = _parse_optional_datetime(scheduled_delivery_from)
+        if dt_from:
+            sum_q = sum_q.where(Order.scheduled_delivery_at >= dt_from)
+    if scheduled_delivery_to:
+        dt_to = _parse_optional_datetime(scheduled_delivery_to)
+        if dt_to:
+            sum_q = sum_q.where(Order.scheduled_delivery_at <= dt_to)
+    if login_agent and login_agent.strip():
+        sum_q = sum_q.where(Customer.login_agent == login_agent.strip())
+    if login_expeditor and login_expeditor.strip():
+        sum_q = sum_q.where(Customer.login_expeditor == login_expeditor.strip())
+    if last_updated_by and last_updated_by.strip():
+        sum_q = sum_q.where(Order.last_updated_by == last_updated_by.strip())
+    
+    total_amount_result = await session.execute(sum_q)
+    total_amount_all = float(total_amount_result.scalar() or 0)
+    
+    return {
+        "items": out,
+        "total_count": total_count,
+        "total_amount": total_amount_all,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/orders/items/export")
