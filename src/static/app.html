@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>СДС — Система управления</title>
+  <title>Система управления продажами и дистрибуцией</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
@@ -12,29 +12,49 @@
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; }
     .layout { display: flex; min-height: 100vh; }
-    .sidebar { width: 220px; background: #1a1a2e; color: #eee; padding: 16px 0; flex-shrink: 0; }
-    .sidebar h2 { margin: 0 16px 12px; font-size: 14px; color: #888; text-transform: uppercase; }
-    .sidebar a { display: block; padding: 10px 20px; color: #ccc; text-decoration: none; }
-    .sidebar a:hover, .sidebar a.active { background: #16213e; color: #fff; }
-    .sidebar a { cursor: pointer; }
-    .sidebar .submenu { display: none; padding-left: 12px; }
+    .sidebar { width: 260px; background: #2d2d3a; color: #eee; padding: 20px 0; flex-shrink: 0; }
+    .sidebar-header { display: flex; align-items: center; padding: 20px 20px 24px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .sidebar-header .sidebar-favicon { width: 40px; height: 40px; margin-right: 14px; flex-shrink: 0; border-radius: 8px; object-fit: contain; }
+    .sidebar-header .sidebar-title { font-size: 18px; font-weight: 600; color: #fff; letter-spacing: 0.02em; margin: 0; }
+    .sidebar a { display: flex; align-items: center; padding: 14px 20px; color: #e0e0e0; text-decoration: none; font-size: 16px; font-weight: 500; cursor: pointer; transition: background 0.15s, color 0.15s; }
+    .sidebar a:hover, .sidebar a.active { background: #0d9488; color: #fff; }
+    .sidebar .nav-icon { width: 24px; height: 24px; margin-right: 14px; flex-shrink: 0; opacity: 0.95; display: flex; align-items: center; justify-content: center; }
+    .sidebar .nav-icon svg { width: 100%; height: 100%; display: block; }
+    .sidebar .submenu { display: none; padding-left: 0; background: rgba(0,0,0,0.15); margin: 0 0 4px 0; border-left: 3px solid #0d9488; }
     .sidebar .submenu.open { display: block; }
-    .sidebar a.parent::after { content: ' \25BE'; font-size: 11px; }
-    .sidebar a.parent.open::after { content: ' \25B4'; font-size: 11px; }
-    .main { flex: 1; padding: 24px; overflow: auto; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-    .header h1 { margin: 0; font-size: 20px; }
-    .header .user { color: #666; font-size: 14px; }
-    .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
-    .btn-primary { background: #1877f2; color: #fff; }
-    .btn-primary:hover { background: #166fe5; }
-    .btn-secondary { background: #e0e0e0; color: #333; margin-left: 8px; }
-    .btn-secondary:hover { background: #d0d0d0; }
-    .btn-small { padding: 4px 10px; font-size: 12px; margin-right: 4px; }
-    .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 20px; }
+    .sidebar .submenu a { font-size: 14px; padding: 10px 20px 10px 44px; font-weight: 400; }
+    .sidebar .submenu .nav-icon { width: 18px; height: 18px; margin-right: 10px; }
+    .sidebar a.parent { position: relative; }
+    .sidebar a.parent::after { content: '\25BE'; font-size: 12px; margin-left: auto; opacity: 0.8; }
+    .sidebar a.parent.open::after { content: '\25B4'; }
+    .main { flex: 1; padding: 0; overflow: auto; display: flex; flex-direction: column; }
+    .main .content-inner { padding: 24px; flex: 1; }
+    .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding: 16px 24px; background: #2d2d3a; color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .header-left { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
+    .header .header-logo { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; flex-shrink: 0; }
+    .header h1 { margin: 0; font-size: 20px; font-weight: 600; color: #fff; }
+    .header .user { color: rgba(255,255,255,0.85); font-size: 14px; margin: 4px 0 0 0; }
+    .header .btn-header { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.5); padding: 8px 18px; font-weight: 600; }
+    .header .btn-header:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.7); color: #fff; }
+    .header-right { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+    .header .header-right .user { margin: 0; font-size: 14px; }
+    .btn { padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600; transition: background 0.15s, box-shadow 0.15s; }
+    .btn-primary { background: #0d9488; color: #fff; }
+    .btn-primary:hover { background: #0f766e; box-shadow: 0 2px 8px rgba(13,148,136,0.35); }
+    .btn-secondary { background: #e5e7eb; color: #374151; margin-left: 8px; }
+    .btn-secondary:hover { background: #d1d5db; }
+    .btn-small { padding: 8px 16px; font-size: 14px; font-weight: 600; margin-right: 6px; }
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 24px; margin-bottom: 24px; border: 1px solid rgba(0,0,0,0.04); }
     table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
-    th { background: #f8f9fa; font-weight: 600; font-size: 13px; }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background: #f8fafc; font-weight: 600; font-size: 13px; color: #475569; }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+    .status-badge--completed { background: #d1fae5; color: #065f46; }
+    .status-badge--delivery { background: #dbeafe; color: #1e40af; }
+    .status-badge--open { background: #fef3c7; color: #92400e; }
+    .status-badge--cancelled { background: #fee2e2; color: #991b1b; }
+    .status-badge--pending { background: #e5e7eb; color: #4b5563; }
+    .status-badge--default { background: #f1f5f9; color: #475569; }
     .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
     .modal.show { display: flex; }
     .modal-inner { background: #fff; border-radius: 8px; padding: 24px; max-width: 440px; width: 100%; max-height: 90vh; overflow: auto; }
@@ -42,6 +62,9 @@
     .form-group { margin-bottom: 14px; }
     .form-group label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px; }
     .form-group input, .form-group select { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+    select { accent-color: #0d9488; }
+    select:focus { outline: 2px solid #0d9488; outline-offset: 2px; }
+    option:checked, option:hover { background: #0d9488; color: #fff; }
     .form-readonly { padding: 8px 0; font-size: 14px; color: #555; }
     .modal-actions { margin-top: 20px; display: flex; gap: 8px; }
     .err { color: #c00; font-size: 13px; margin-top: 8px; }
@@ -55,44 +78,80 @@
     #opWhReceiptItemsTable tfoot tr { border-top: 2px solid #ccc; }
     #opWhReceiptItemsTable .op-wh-receipt-price, #opWhReceiptItemsTable .op-wh-receipt-sum { font-family: monospace; }
     .badge { display: inline-block; }
+    .card h2 { margin: 0 0 20px 0; font-size: 20px; font-weight: 600; color: #1e293b; }
+    .content-inner > .card:first-child { margin-top: 0; }
+    #customersMap { width: 100%; height: calc(100vh - 260px); min-height: 400px; border-radius: 8px; background: #e8ecf0; }
+    .map-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+    .map-toolbar label { font-weight: 600; font-size: 13px; }
+    .map-toolbar select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; }
   </style>
 </head>
 <body>
   <div class="layout">
     <nav class="sidebar">
-      <h2>Разделы</h2>
-      <a href="#" data-section="users">Пользователи</a>
-      <a href="#" class="parent" id="refParent" data-section="ref_parent">Справочники</a>
+      <div class="sidebar-header">
+        <img src="/favicon.ico" alt="" class="sidebar-favicon">
+        <span class="sidebar-title">Меню</span>
+      </div>
+      <a href="#" data-section="users"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></span>Пользователи</a>
+      <a href="#" class="parent" id="refParent" data-section="ref_parent"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></span>Справочники</a>
       <div class="submenu" id="refSubmenu">
         <a href="#" data-section="ref_payment">Типы оплат</a>
         <a href="#" data-section="ref_products">Типы продуктов</a>
         <a href="#" data-section="ref_operations">Типы операций</a>
+        <a href="#" data-section="ref_currency">Валюта</a>
         <a href="#" data-section="warehouses">Склады</a>
         <a href="#" data-section="products">Товары</a>
       </div>
-      <a href="#" data-section="customers">Клиенты</a>
-      <a href="#" class="parent" id="ordersParent" data-section="orders_parent">Заказы</a>
+      <a href="#" class="parent" id="customersParent" data-section="customers_parent"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2z"/></svg></span>Клиенты</a>
+      <div class="submenu" id="customersSubmenu">
+        <a href="#" data-section="customers">Поиск клиента</a>
+        <a href="#" data-section="customers_create">Создать клиента</a>
+        <a href="#" data-section="customers_map">Клиенты на карте</a>
+      </div>
+      <a href="#" class="parent" id="visitsParent" data-section="visits_parent"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8 4H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2z"/></svg></span>Визиты</a>
+      <div class="submenu" id="visitsSubmenu">
+        <a href="#" data-section="visits_search">Поиск визита</a>
+        <a href="#" data-section="visits_create">Создать визит</a>
+        <a href="#" data-section="visits_calendar">Календарь визитов</a>
+        <a href="#" data-section="visits_my_calendar">Мой календарь</a>
+      </div>
+      <a href="#" class="parent" id="ordersParent" data-section="orders_parent"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2zm6 16H6V8h2v2c0 .55.45 1 1 1s1-.45 1-1V8h4v12z"/></svg></span>Заказы</a>
       <div class="submenu" id="ordersSubmenu">
         <a href="#" data-section="orders">Поиск заказов</a>
         <a href="#" data-section="orders_create">Создать заказ</a>
         <a href="#" data-section="order_items">Поиск позиций заказов</a>
       </div>
-      <a href="#" class="parent" id="opsParent" data-section="ops_parent">Операции</a>
+      <a href="#" class="parent" id="opsParent" data-section="ops_parent"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg></span>Операции</a>
       <div class="submenu" id="opsSubmenu">
         <a href="#" data-section="operations">Поиск операций</a>
         <a href="#" data-section="operations_create">Создать операцию</a>
       </div>
-      <a href="#" data-section="stock">Остатки</a>
+      <a href="#" data-section="stock"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z"/></svg></span>Остатки</a>
+      <a href="#" class="parent" id="reportsParent" data-section="reports_parent"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg></span>Отчётность</a>
+      <div class="submenu" id="reportsSubmenu">
+        <a href="#" data-section="report_customers">По клиентам</a>
+        <a href="#" data-section="report_agents">По агентам</a>
+        <a href="#" data-section="report_expeditors">По экспедиторам</a>
+        <a href="#" data-section="report_visits">По визитам</a>
+        <a href="#" data-section="report_dashboard">Сводная аналитика</a>
+        <a href="#" data-section="report_photos">Фотографии клиентов</a>
+      </div>
     </nav>
     <div class="main">
       <div class="header">
-        <div>
-          <h1>СДС — Система управления продажами и дистрибуцией</h1>
-          <p class="user">Вы вошли: <strong id="userName">—</strong></p>
+        <div class="header-left">
+          <h1>Система управления продажами и дистрибуцией</h1>
         </div>
-        <button type="button" class="btn btn-secondary" id="btnLogout">Выйти</button>
+        <div class="header-right">
+          <p class="user">Вы вошли: <strong id="userName">—</strong></p>
+          <button type="button" class="btn btn-header" id="btnAbout" style="margin-right:8px">О системе</button>
+          <button type="button" class="btn btn-header" id="btnLogout">Выйти</button>
+        </div>
       </div>
-      <div id="content"></div>
+      <div class="content-inner">
+        <div id="content"></div>
+      </div>
     </div>
   </div>
   <div id="modalContainer"></div>
@@ -169,19 +228,53 @@
         document.querySelectorAll('.sidebar a').forEach(function (a) {
           var s = a.getAttribute('data-section');
           a.classList.toggle('active', s === name);
-          if (a.id === 'refParent') a.classList.toggle('open', (name === 'ref_payment' || name === 'ref_products' || name === 'ref_operations' || name === 'warehouses' || name === 'products'));
-          if (a.id === 'ordersParent') a.classList.toggle('open', (name === 'orders' || name === 'orders_create' || name === 'order_items'));
-          if (a.id === 'opsParent') a.classList.toggle('open', (name === 'operations' || name === 'operations_create'));
+          if (a.id === 'refParent') a.classList.toggle('open', (name === 'ref_parent' || name === 'ref_payment' || name === 'ref_products' || name === 'ref_operations' || name === 'ref_currency' || name === 'warehouses' || name === 'products'));
+          if (a.id === 'customersParent') a.classList.toggle('open', (name === 'customers_parent' || name === 'customers' || name === 'customers_create' || name === 'customers_map'));
+          if (a.id === 'visitsParent') a.classList.toggle('open', (name === 'visits_parent' || name === 'visits_search' || name === 'visits_create' || name === 'visits_calendar' || name === 'visits_my_calendar'));
+          if (a.id === 'ordersParent') a.classList.toggle('open', (name === 'orders_parent' || name === 'orders' || name === 'orders_create' || name === 'order_items'));
+          if (a.id === 'opsParent') a.classList.toggle('open', (name === 'ops_parent' || name === 'operations' || name === 'operations_create'));
+          if (a.id === 'reportsParent') a.classList.toggle('open', (name === 'reports_parent' || name === 'report_customers' || name === 'report_agents' || name === 'report_expeditors' || name === 'report_visits' || name === 'report_dashboard' || name === 'report_photos'));
         });
         var sub = document.getElementById('refSubmenu');
-        if (sub) sub.classList.toggle('open', name === 'ref_payment' || name === 'ref_products' || name === 'ref_operations' || name === 'warehouses' || name === 'products');
+        if (sub) sub.classList.toggle('open', name === 'ref_parent' || name === 'ref_payment' || name === 'ref_products' || name === 'ref_operations' || name === 'ref_currency' || name === 'warehouses' || name === 'products');
+        var customersSub = document.getElementById('customersSubmenu');
+        if (customersSub) customersSub.classList.toggle('open', name === 'customers_parent' || name === 'customers' || name === 'customers_create' || name === 'customers_map');
+        var visitsSub = document.getElementById('visitsSubmenu');
+        if (visitsSub) visitsSub.classList.toggle('open', name === 'visits_parent' || name === 'visits_search' || name === 'visits_create' || name === 'visits_calendar' || name === 'visits_my_calendar');
         var ordersSub = document.getElementById('ordersSubmenu');
-        if (ordersSub) ordersSub.classList.toggle('open', name === 'orders' || name === 'orders_create' || name === 'order_items');
+        if (ordersSub) ordersSub.classList.toggle('open', name === 'orders_parent' || name === 'orders' || name === 'orders_create' || name === 'order_items');
         var opsSub = document.getElementById('opsSubmenu');
-        if (opsSub) opsSub.classList.toggle('open', name === 'operations' || name === 'operations_create');
+        if (opsSub) opsSub.classList.toggle('open', name === 'ops_parent' || name === 'operations' || name === 'operations_create');
+        var reportsSub = document.getElementById('reportsSubmenu');
+        if (reportsSub) reportsSub.classList.toggle('open', name === 'reports_parent' || name === 'report_customers' || name === 'report_agents' || name === 'report_expeditors' || name === 'report_visits' || name === 'report_dashboard' || name === 'report_photos');
         var content = document.getElementById('content');
         if (!content) return;
-        if (name === 'ref_parent' || name === 'ops_parent' || name === 'orders_parent') return;
+        if (name === 'ref_parent' || name === 'ops_parent' || name === 'orders_parent' || name === 'customers_parent' || name === 'visits_parent' || name === 'reports_parent') return;
+        // Для пункта меню "Создать клиента" — форма сразу на странице (без модалки)
+        if (name === 'customers_create') {
+          api('/api/v1/dictionary/user-logins').catch(function () { return []; }).then(function (userList) {
+            userList = userList || [];
+            var content = document.getElementById('content');
+            if (!content) return;
+            var formHtml = custEditFormHtml({ status: 'Активный' }, userList);
+            content.innerHTML = '<div class="card"><h2>Создать клиента</h2><div id="custCreateErr" class="err" style="margin-bottom:12px"></div><div id="custCreateForm">' + formHtml + '</div><div class="modal-actions" style="margin-top:20px"><button type="button" class="btn btn-primary" id="custCreateSave">Сохранить</button><button type="button" class="btn btn-secondary" id="custCreateCancel">Отмена</button></div></div>';
+            document.getElementById('custCreateCancel').onclick = function () { showSection('customers'); };
+            document.getElementById('custCreateSave').onclick = function () {
+              var errEl = document.getElementById('custCreateErr');
+              if (errEl) errEl.textContent = '';
+              api('/api/v1/customers', { method: 'POST', body: JSON.stringify(custFormBody()) }).then(function () { showSection('customers'); }).catch(function (e) {
+                if (!errEl) return;
+                var d = e && e.data && e.data.detail;
+                errEl.textContent = (typeof d === 'string' ? d : (d ? JSON.stringify(d) : 'Ошибка сохранения'));
+              });
+            };
+          });
+          return;
+        }
+        if (name === 'customers_map') {
+          loadSectionCustomersMap();
+          return;
+        }
         // Для пункта меню "Создать операцию" сразу открываем форму без экрана поиска
         if (name === 'operations_create') {
           if (window.openOperationCreate) {
@@ -205,12 +298,23 @@
         else if (name === 'ref_payment') loadSectionRefPayment();
         else if (name === 'ref_products') loadSectionRefProducts();
         else if (name === 'ref_operations') loadSectionRefOperations();
+        else if (name === 'ref_currency') loadSectionRefCurrency();
         else if (name === 'warehouses') loadSectionWarehouses();
         else if (name === 'customers') loadSectionCustomers();
         else if (name === 'orders') loadSectionOrders();
         else if (name === 'order_items') loadSectionOrderItems();
         else if (name === 'operations') loadSectionOperations(false);
         else if (name === 'stock') loadSectionStock();
+        else if (name === 'visits_search') loadSectionVisitsSearch();
+        else if (name === 'visits_create') loadSectionVisitsCreate();
+        else if (name === 'visits_calendar') loadSectionVisitsCalendar(false);
+        else if (name === 'visits_my_calendar') loadSectionVisitsCalendar(true);
+        else if (name === 'report_customers') loadSectionReportCustomers();
+        else if (name === 'report_agents') loadSectionReportAgents();
+        else if (name === 'report_expeditors') loadSectionReportExpeditors();
+        else if (name === 'report_visits') loadSectionReportVisits();
+        else if (name === 'report_dashboard') loadSectionReportDashboard();
+        else if (name === 'report_photos') loadSectionReportPhotos();
       };
 
       function loadSectionUsers() {
@@ -285,34 +389,47 @@
       function loadSectionProducts() {
         Promise.all([
           api('/api/v1/dictionary/products').catch(function () { return []; }),
-          api('/api/v1/dictionary/products/types').catch(function () { return []; })
+          api('/api/v1/dictionary/products/types').catch(function () { return []; }),
+          api('/api/v1/dictionary/currencies').catch(function () { return []; })
         ]).then(function (results) {
           var list = results[0] || [];
           var typeList = results[1] || [];
+          var currencyList = results[2] || [];
           var content = document.getElementById('content');
           if (!content) return;
           var addBtn = isAdmin() ? '<button type="button" class="btn btn-primary" id="prodAdd">Добавить товар</button>' : '';
           content.innerHTML = '<div class="card"><h2>Товары</h2><p style="margin:0 0 12px 0">' + addBtn + '</p><div id="sectionTable"></div><div id="sectionErr" class="err"></div></div>';
           var tableDiv = document.getElementById('sectionTable');
           if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Нет товаров.</p>'; bindProdAdd(typeList); return; }
-          var t = '<table><thead><tr><th>Код</th><th>Название</th><th>Тип</th><th>Вес</th><th>Ед.</th><th>Цена (сум)</th><th>Срок</th><th>Действия</th></tr></thead><tbody>';
+          var t = '<table><thead><tr><th>Код</th><th>Название</th><th>Тип</th><th>Вес</th><th>Ед.</th><th>Цена</th><th>Валюта</th><th>Срок</th><th>Действия</th></tr></thead><tbody>';
           list.forEach(function (p) {
             var code = escAttr(p.code), name = escAttr(p.name), typeId = escAttr(p.type_id), unit = escAttr(p.unit);
-            t += '<tr><td>' + (p.code || '') + '</td><td>' + (p.name || '') + '</td><td>' + (p.type_id || '') + '</td><td>' + (p.weight_g != null ? p.weight_g : '') + '</td><td>' + (p.unit || '') + '</td><td>' + (p.price != null ? p.price : '') + '</td><td>' + (p.expiry_days != null ? p.expiry_days : '') + '</td><td>';
-            if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-prod-edit data-code="' + code + '" data-name="' + name + '" data-type="' + typeId + '" data-weight="' + (p.weight_g != null ? p.weight_g : '') + '" data-unit="' + unit + '" data-price="' + (p.price != null ? p.price : '') + '" data-expiry="' + (p.expiry_days != null ? p.expiry_days : '') + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-prod-del data-code="' + code + '">Удалить</button>';
+            var curr = (p.currency_code || 'sum');
+            t += '<tr><td>' + (p.code || '') + '</td><td>' + (p.name || '') + '</td><td>' + (p.type_id || '') + '</td><td>' + (p.weight_g != null ? p.weight_g : '') + '</td><td>' + (p.unit || '') + '</td><td>' + (p.price != null ? p.price : '') + '</td><td>' + escAttr(curr) + '</td><td>' + (p.expiry_days != null ? p.expiry_days : '') + '</td><td>';
+            if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-prod-edit data-code="' + code + '" data-name="' + name + '" data-type="' + typeId + '" data-weight="' + (p.weight_g != null ? p.weight_g : '') + '" data-unit="' + unit + '" data-price="' + (p.price != null ? p.price : '') + '" data-expiry="' + (p.expiry_days != null ? p.expiry_days : '') + '" data-currency="' + escAttr(curr) + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-prod-del data-code="' + code + '">Удалить</button>';
             t += '</td></tr>';
           });
           t += '</tbody></table>';
           tableDiv.innerHTML = t;
-          bindProdAdd(typeList);
+          bindProdAdd(typeList, currencyList);
           tableDiv.querySelectorAll('[data-prod-edit]').forEach(function (el) {
             el.onclick = function () {
               var unesc = function (x) { return (x || '').replace(/&quot;/g, '"'); };
               var code = unesc(el.getAttribute('data-code'));
               var typeOpts = productTypeSelectHtml(typeList, unesc(el.getAttribute('data-type')));
-              var bodyHtml = '<div class="form-group"><label>Код (не изменяется)</label><input type="text" id="prod_code" value="' + escAttr(code) + '" readonly></div><div class="form-group"><label>Название</label><input type="text" id="prod_name" value="' + (unesc(el.getAttribute('data-name')) || '').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '"></div><div class="form-group"><label>Тип</label><select id="prod_type">' + typeOpts + '</select></div><div class="form-group"><label>Вес (г)</label><input type="number" id="prod_weight" value="' + (el.getAttribute('data-weight') || '') + '"></div><div class="form-group"><label>Ед.</label><input type="text" id="prod_unit" value="' + (unesc(el.getAttribute('data-unit')) || '').replace(/"/g, '&quot;') + '" placeholder="ШТ"></div><div class="form-group"><label>Цена (сум)</label><input type="number" step="0.01" id="prod_price" value="' + (el.getAttribute('data-price') || '') + '"></div><div class="form-group"><label>Срок годности (дней)</label><input type="number" id="prod_expiry" value="' + (el.getAttribute('data-expiry') || '') + '"></div>';
+              var currSelected = unesc(el.getAttribute('data-currency') || 'sum');
+              var currOpts = '<option value>—</option>';
+              (currencyList || []).forEach(function (c) {
+                var codeCur = escAttr(c.code);
+                var label = c.code + (c.symbol ? ' (' + c.symbol + ')' : '') + (c.name ? ' — ' + c.name : '');
+                currOpts += '<option value="' + codeCur + '"' + (c.code === currSelected ? ' selected' : '') + '>' + escAttr(label) + '</option>';
+              });
+              if (!currencyList.length) {
+                currOpts += '<option value="sum"' + (currSelected === 'sum' ? ' selected' : '') + '>sum — сум</option>';
+              }
+              var bodyHtml = '<div class="form-group"><label>Код (не изменяется)</label><input type="text" id="prod_code" value="' + escAttr(code) + '" readonly></div><div class="form-group"><label>Название</label><input type="text" id="prod_name" value="' + (unesc(el.getAttribute('data-name')) || '').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '"></div><div class="form-group"><label>Тип</label><select id="prod_type">' + typeOpts + '</select></div><div class="form-group"><label>Вес (г)</label><input type="number" id="prod_weight" value="' + (el.getAttribute('data-weight') || '') + '"></div><div class="form-group"><label>Ед.</label><input type="text" id="prod_unit" value="' + (unesc(el.getAttribute('data-unit')) || '').replace(/"/g, '&quot;') + '" placeholder="ШТ"></div><div class="form-group"><label>Цена</label><input type="number" step="0.01" id="prod_price" value="' + (el.getAttribute('data-price') || '') + '"></div><div class="form-group"><label>Валюта</label><select id="prod_currency">' + currOpts + '</select></div><div class="form-group"><label>Срок годности (дней)</label><input type="number" id="prod_expiry" value="' + (el.getAttribute('data-expiry') || '') + '"></div>';
               showModal('Изменить товар', bodyHtml, function (errEl) {
-                return api('/api/v1/dictionary/products/' + encodeURIComponent(code), { method: 'PUT', body: JSON.stringify({ name: document.getElementById('prod_name').value.trim(), type_id: document.getElementById('prod_type').value || null, weight_g: document.getElementById('prod_weight').value ? parseInt(document.getElementById('prod_weight').value, 10) : null, unit: document.getElementById('prod_unit').value.trim() || null, price: document.getElementById('prod_price').value ? parseFloat(document.getElementById('prod_price').value) : null, expiry_days: document.getElementById('prod_expiry').value ? parseInt(document.getElementById('prod_expiry').value, 10) : null }) }).then(function () { loadSectionProducts(); });
+                return api('/api/v1/dictionary/products/' + encodeURIComponent(code), { method: 'PUT', body: JSON.stringify({ name: document.getElementById('prod_name').value.trim(), type_id: document.getElementById('prod_type').value || null, weight_g: document.getElementById('prod_weight').value ? parseInt(document.getElementById('prod_weight').value, 10) : null, unit: document.getElementById('prod_unit').value.trim() || null, price: document.getElementById('prod_price').value ? parseFloat(document.getElementById('prod_price').value) : null, expiry_days: document.getElementById('prod_expiry').value ? parseInt(document.getElementById('prod_expiry').value, 10) : null, currency_code: document.getElementById('prod_currency').value || null }) }).then(function () { loadSectionProducts(); });
               });
             };
           });
@@ -326,22 +443,40 @@
         }).catch(function (e) {
           document.getElementById('content').innerHTML = '<div class="card"><p class="err">Ошибка загрузки товаров.</p></div>';
         });
-        function bindProdAdd(typeList) {
+        function bindProdAdd(typeList, currencyList) {
           var btn = document.getElementById('prodAdd');
           if (!btn || !isAdmin()) return;
           btn.onclick = function () {
             var typeOpts = productTypeSelectHtml(typeList, '');
-            var bodyHtml = '<div class="form-group"><label>Название</label><input type="text" id="prod_name" placeholder="Название"></div><div class="form-group"><label>Тип</label><select id="prod_type">' + typeOpts + '</select></div><div class="form-group"><label>Вес (г)</label><input type="number" id="prod_weight" placeholder="0"></div><div class="form-group"><label>Ед.</label><input type="text" id="prod_unit" value="ШТ" placeholder="ШТ"></div><div class="form-group"><label>Цена (сум)</label><input type="number" step="0.01" id="prod_price" placeholder="0"></div><div class="form-group"><label>Срок годности (дней)</label><input type="number" id="prod_expiry" placeholder="0"></div>';
+            var currOpts = '<option value="sum">sum — сум (по умолчанию)</option>';
+            (currencyList || []).forEach(function (c) {
+              if (c.code === 'sum') return;
+              var label = c.code + (c.symbol ? ' (' + c.symbol + ')' : '') + (c.name ? ' — ' + c.name : '');
+              currOpts += '<option value="' + escAttr(c.code) + '">' + escAttr(label) + '</option>';
+            });
+            var bodyHtml = '<div class="form-group"><label>Название</label><input type="text" id="prod_name" placeholder="Название"></div><div class="form-group"><label>Тип</label><select id="prod_type">' + typeOpts + '</select></div><div class="form-group"><label>Вес (г)</label><input type="number" id="prod_weight" placeholder="0"></div><div class="form-group"><label>Ед.</label><input type="text" id="prod_unit" value="ШТ" placeholder="ШТ"></div><div class="form-group"><label>Цена</label><input type="number" step="0.01" id="prod_price" placeholder="0"></div><div class="form-group"><label>Валюта</label><select id="prod_currency">' + currOpts + '</select></div><div class="form-group"><label>Срок годности (дней)</label><input type="number" id="prod_expiry" placeholder="0"></div>';
             showModal('Добавить товар', bodyHtml, function (errEl) {
               var name = document.getElementById('prod_name').value.trim();
               if (!name) return Promise.reject({ data: { detail: 'Укажите название.' } });
-              return api('/api/v1/dictionary/products', { method: 'POST', body: JSON.stringify({ name: name, type_id: document.getElementById('prod_type').value || null, weight_g: document.getElementById('prod_weight').value ? parseInt(document.getElementById('prod_weight').value, 10) : null, unit: document.getElementById('prod_unit').value.trim() || 'ШТ', price: document.getElementById('prod_price').value ? parseFloat(document.getElementById('prod_price').value) : null, expiry_days: document.getElementById('prod_expiry').value ? parseInt(document.getElementById('prod_expiry').value, 10) : null }) }).then(function () { loadSectionProducts(); });
+              var currency = document.getElementById('prod_currency').value || 'sum';
+              return api('/api/v1/dictionary/products', { method: 'POST', body: JSON.stringify({ name: name, type_id: document.getElementById('prod_type').value || null, weight_g: document.getElementById('prod_weight').value ? parseInt(document.getElementById('prod_weight').value, 10) : null, unit: document.getElementById('prod_unit').value.trim() || 'ШТ', price: document.getElementById('prod_price').value ? parseFloat(document.getElementById('prod_price').value) : null, expiry_days: document.getElementById('prod_expiry').value ? parseInt(document.getElementById('prod_expiry').value, 10) : null, currency_code: currency }) }).then(function () { loadSectionProducts(); });
             });
           };
         }
       }
 
       function escAttr(s) { var str = (s == null || s === undefined) ? '' : String(s); return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+      function formatStatusBadge(statusCode, statusName) {
+        var text = statusName || statusCode || '';
+        var code = (statusCode || '').toLowerCase().trim();
+        var cls = 'status-badge--default';
+        if (code === 'completed' || code === 'delivered' || code === 'доставлен') cls = 'status-badge--completed';
+        else if (code === 'delivery' || code === 'доставка') cls = 'status-badge--delivery';
+        else if (code === 'open' || code === 'создан' || code === 'новый') cls = 'status-badge--open';
+        else if (code === 'cancelled' || code === 'canceled' || code === 'отменен') cls = 'status-badge--cancelled';
+        else if (code === 'pending') cls = 'status-badge--pending';
+        return '<span class="status-badge ' + cls + '">' + escAttr(text) + '</span>';
+      }
       function loadSectionRefPayment() {
         api('/api/v1/dictionary/payment-types').then(function (list) {
           var content = document.getElementById('content');
@@ -382,6 +517,84 @@
             });
           };
         }
+      }
+
+      function loadSectionRefCurrency() {
+        api('/api/v1/dictionary/currencies').then(function (list) {
+          var content = document.getElementById('content');
+          if (!content) return;
+          var addBtn = isAdmin() ? '<button type="button" class="btn btn-primary" id="curAdd">Добавить валюту</button>' : '';
+          var html = '<div class="card"><h2>Валюта</h2><p style="margin:0 0 12px 0">' + addBtn + '</p><div id="sectionTable"></div><div id="sectionErr" class="err"></div></div>';
+          content.innerHTML = html;
+          var tableDiv = document.getElementById('sectionTable');
+          if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Нет валют.</p>'; }
+          else {
+            var t = '<table><thead><tr><th>Код</th><th>Название</th><th>Страна</th><th>Символ</th><th>По умолчанию</th><th>Действия</th></tr></thead><tbody>';
+            list.forEach(function (c) {
+              t += '<tr><td>' + escAttr(c.code || '') + '</td><td>' + escAttr(c.name || '') + '</td><td>' + escAttr(c.country || '') + '</td><td>' + escAttr(c.symbol || '') + '</td><td>' + (c.is_default ? 'Да' : '') + '</td><td>';
+              if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-cur-edit data-code="' + escAttr(c.code || '') + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-cur-del data-code="' + escAttr(c.code || '') + '">Удалить</button>';
+              t += '</td></tr>';
+            });
+            t += '</tbody></table>';
+            tableDiv.innerHTML = t;
+          }
+          if (isAdmin()) {
+            var addBtnEl = document.getElementById('curAdd');
+            if (addBtnEl) addBtnEl.onclick = function () {
+              var bodyHtml = '<div class="form-group"><label>Код</label><input type="text" id="cur_code" placeholder="sum"></div><div class="form-group"><label>Название</label><input type="text" id="cur_name" placeholder="сум"></div><div class="form-group"><label>Страна</label><input type="text" id="cur_country" placeholder="Узбекистан"></div><div class="form-group"><label>Символ</label><input type="text" id="cur_symbol" placeholder="сум"></div><div class="form-group"><label><input type="checkbox" id="cur_default"> Валюта по умолчанию</label></div>';
+              showModal('Добавить валюту', bodyHtml, function (errEl) {
+                var code = document.getElementById('cur_code').value.trim();
+                var name = document.getElementById('cur_name').value.trim();
+                if (!code || !name) { if (errEl) errEl.textContent = 'Код и название обязательны.'; return; }
+                var payload = {
+                  code: code,
+                  name: name,
+                  country: document.getElementById('cur_country').value.trim() || null,
+                  symbol: document.getElementById('cur_symbol').value.trim() || null,
+                  is_default: document.getElementById('cur_default').checked,
+                };
+                return api('/api/v1/dictionary/currencies', { method: 'POST', body: JSON.stringify(payload) }).then(function () { loadSectionRefCurrency(); });
+              });
+            };
+            var tableDiv = document.getElementById('sectionTable');
+            if (tableDiv) {
+              tableDiv.querySelectorAll('[data-cur-edit]').forEach(function (el) {
+                el.onclick = function () {
+                  var code = el.getAttribute('data-code');
+                  var row = el.closest('tr');
+                  var name = row ? row.children[1].textContent : '';
+                  var country = row ? row.children[2].textContent : '';
+                  var symbol = row ? row.children[3].textContent : '';
+                  var isDefault = row ? (row.children[4].textContent.trim() === 'Да') : false;
+                  var bodyHtml = '<div class="form-group"><label>Код (нельзя изменить)</label><input type="text" id="cur_code" value="' + escAttr(code) + '" readonly></div><div class="form-group"><label>Название</label><input type="text" id="cur_name" value="' + escAttr(name) + '"></div><div class="form-group"><label>Страна</label><input type="text" id="cur_country" value="' + escAttr(country) + '"></div><div class="form-group"><label>Символ</label><input type="text" id="cur_symbol" value="' + escAttr(symbol) + '"></div><div class="form-group"><label><input type="checkbox" id="cur_default"' + (isDefault ? ' checked' : '') + '> Валюта по умолчанию</label></div>';
+                  showModal('Изменить валюту', bodyHtml, function (errEl) {
+                    var nameNew = document.getElementById('cur_name').value.trim();
+                    if (!nameNew) { if (errEl) errEl.textContent = 'Укажите название.'; return; }
+                    var payload = {
+                      name: nameNew,
+                      country: document.getElementById('cur_country').value.trim() || null,
+                      symbol: document.getElementById('cur_symbol').value.trim() || null,
+                      is_default: document.getElementById('cur_default').checked,
+                    };
+                    return api('/api/v1/dictionary/currencies/' + encodeURIComponent(code), { method: 'PUT', body: JSON.stringify(payload) }).then(function () { loadSectionRefCurrency(); });
+                  });
+                };
+              });
+              tableDiv.querySelectorAll('[data-cur-del]').forEach(function (el) {
+                el.onclick = function () {
+                  var code = el.getAttribute('data-code');
+                  if (!confirm('Удалить валюту «' + code + '»?')) return;
+                  api('/api/v1/dictionary/currencies/' + encodeURIComponent(code), { method: 'DELETE' }).then(function () { loadSectionRefCurrency(); }).catch(function (e) {
+                    alert((e && e.data && e.data.detail) ? e.data.detail : 'Ошибка удаления валюты');
+                  });
+                };
+              });
+            }
+          }
+        }).catch(function (e) {
+          var content = document.getElementById('content');
+          if (content) content.innerHTML = '<div class="card"><p class="err">Ошибка загрузки валют.</p></div>';
+        });
       }
       function loadSectionRefProducts() {
         api('/api/v1/dictionary/products/types').then(function (list) {
@@ -634,7 +847,8 @@
                 var id = c.id;
                 var custJson = escAttr(JSON.stringify(c));
                 t += '<tr><td>';
-                if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-cust-edit data-id="' + id + '" data-cust-json="' + custJson + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-cust-del data-id="' + id + '">Удалить</button>';
+                t += ' <button type="button" class="btn btn-secondary btn-small" data-cust-visits data-id="' + id + '" data-name="' + escAttr((c.name_client || c.firm_name || '').toString()) + '">Визиты</button> <button type="button" class="btn btn-secondary btn-small" data-cust-photos data-id="' + id + '" data-name="' + escAttr((c.name_client || c.firm_name || '').toString()) + '">Фото</button>';
+                if (isAdmin()) t += ' <button type="button" class="btn btn-secondary btn-small" data-cust-edit data-id="' + id + '" data-cust-json="' + custJson + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-cust-del data-id="' + id + '">Удалить</button>';
                 t += '</td><td>' + (c.id != null ? c.id : '') + '</td><td>' + (c.name_client || '') + '</td><td>' + (c.firm_name || '') + '</td><td>' + (c.category_client || '') + '</td><td>' + (c.address || '') + '</td><td>' + (c.city || '') + '</td><td>' + (c.territory || '') + '</td><td>' + (c.landmark || '') + '</td><td>' + (c.phone || '') + '</td><td>' + (c.contact_person || '') + '</td><td>' + (c.tax_id || '') + '</td><td>' + (c.status || '') + '</td><td>' + (c.login_agent || '') + '</td><td>' + (c.login_expeditor || '') + '</td><td>' + (c.latitude != null ? c.latitude : '') + '</td><td>' + (c.longitude != null ? c.longitude : '') + '</td><td>' + (c.PINFL || '') + '</td><td>' + (c.contract_no || '') + '</td><td>' + (c.account_no || '') + '</td><td>' + (c.bank || '') + '</td><td>' + (c.MFO || '') + '</td><td>' + (c.OKED || '') + '</td><td>' + (c.VAT_code || '') + '</td></tr>';
               });
               t += '</tbody></table></div>';
@@ -656,6 +870,95 @@
                   api('/api/v1/customers/' + id, { method: 'DELETE' }).then(function () { loadSectionCustomers(); }).catch(function (e) { alert((e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : 'Ошибка'); });
                 };
               });
+              tableDiv.querySelectorAll('[data-cust-visits]').forEach(function (el) {
+                el.onclick = function () {
+                  var cid = el.getAttribute('data-id');
+                  var cname = (el.getAttribute('data-name') || '').replace(/&quot;/g, '"') || ('Клиент #' + cid);
+                  var html = '<div id="visitsModalBody"><p>Загрузка...</p></div><p style="margin-top:12px"><button type="button" class="btn btn-primary" id="btnAddVisitModal">Добавить визит</button></p>';
+                  showModal('Визиты: ' + cname, html, function () { return Promise.resolve(); });
+                  var container = document.getElementById('visitsModalBody');
+                  var refreshVisits = function () {
+                    if (!container) return;
+                    api('/api/v1/customers/' + cid + '/visits?limit=100').then(function (r) {
+                      var data = (r && r.data) || [];
+                      if (!container) return;
+                      if (!data.length) { container.innerHTML = '<p>Нет визитов.</p>'; return; }
+                      var tbl = '<table style="width:100%"><thead><tr><th>Дата</th><th>Время</th><th>Статус</th><th>Ответственный</th><th>Комментарий</th><th></th></tr></thead><tbody>';
+                      data.forEach(function (v) {
+                        var statusRu = (v.status === 'planned' ? 'Запланирован' : v.status === 'completed' ? 'Завершён' : 'Отменён');
+                        var canEdit = v.status !== 'cancelled';
+                        tbl += '<tr><td>' + (v.visit_date || '') + '</td><td>' + (v.visit_time || '—') + '</td><td>' + statusRu + '</td><td>' + (v.responsible_name || v.responsible_login || '—') + '</td><td>' + (v.comment || '').substring(0, 50) + (v.comment && v.comment.length > 50 ? '…' : '') + '</td><td>' + (canEdit ? '<button type="button" class="btn btn-secondary btn-small" data-visit-edit data-vid="' + v.id + '">Изменить</button> ' : '') + '<button type="button" class="btn btn-secondary btn-small" data-visit-del data-vid="' + v.id + '">Удалить</button></td></tr>';
+                      });
+                      tbl += '</tbody></table>';
+                      container.innerHTML = tbl;
+                      container.querySelectorAll('[data-visit-del]').forEach(function (b) {
+                        b.onclick = function () {
+                          if (!confirm('Удалить визит?')) return;
+                          api('/api/v1/visits/' + b.getAttribute('data-vid'), { method: 'DELETE' }).then(refreshVisits).catch(function (e) { alert(e.data && e.data.detail ? e.data.detail : 'Ошибка'); });
+                        };
+                      });
+                      container.querySelectorAll('[data-visit-edit]').forEach(function (b) {
+                        b.onclick = function () {
+                          var vid = b.getAttribute('data-vid');
+                          api('/api/v1/visits/' + vid).then(function (visit) {
+                            openVisitEditModal(cid, visit, userList, refreshVisits);
+                          }).catch(function (e) { alert(e.data && e.data.detail ? e.data.detail : 'Ошибка загрузки'); });
+                        };
+                      });
+                    }).catch(function () { if (container) container.innerHTML = '<p class="err">Ошибка загрузки визитов.</p>'; });
+                  };
+                  refreshVisits();
+                  setTimeout(function () {
+                    var addBtn = document.getElementById('btnAddVisitModal');
+                    if (addBtn) addBtn.onclick = function () {
+                      openVisitAddModal(cid, userList, refreshVisits);
+                    };
+                  }, 100);
+                };
+              });
+              tableDiv.querySelectorAll('[data-cust-photos]').forEach(function (el) {
+                el.onclick = function () {
+                  var cid = el.getAttribute('data-id');
+                  var cname = (el.getAttribute('data-name') || '').replace(/&quot;/g, '"') || ('Клиент #' + cid);
+                  var html = '<div id="photosModalBody"><p>Загрузка...</p></div><p style="margin-top:12px"><label>Загрузить фото:</label> <input type="file" id="photoFile" accept="image/*"> <input type="text" id="photoDesc" placeholder="Описание"> <button type="button" class="btn btn-primary" id="btnUploadPhoto">Загрузить</button></p>';
+                  showModal('Фото: ' + cname, html, function () { return Promise.resolve(); });
+                  var container = document.getElementById('photosModalBody');
+                  var refreshPhotos = function () {
+                    if (!container) return;
+                    api('/api/v1/customers/' + cid + '/photos').then(function (r) {
+                      var data = (r && r.data) || [];
+                      if (!container) return;
+                      if (!data.length) { container.innerHTML = '<p>Нет фотографий.</p>'; return; }
+                      var div = '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+                      data.forEach(function (p) {
+                        var url = window.location.origin + '/api/v1/photos/download/' + (p.download_token || '');
+                        div += '<div style="flex:0 0 auto"><a href="' + url + '" target="_blank"><img src="' + url + '" alt="" style="max-width:120px;max-height:120px;object-fit:cover;border-radius:6px"></a><p style="font-size:11px;margin:4px 0 0 0">' + (p.description || '—') + '</p></div>';
+                      });
+                      div += '</div>';
+                      container.innerHTML = div;
+                    }).catch(function () { if (container) container.innerHTML = '<p class="err">Ошибка загрузки фото.</p>'; });
+                  };
+                  refreshPhotos();
+                  setTimeout(function () {
+                    var uploadBtn = document.getElementById('btnUploadPhoto');
+                    if (uploadBtn) uploadBtn.onclick = function () {
+                      var fileInput = document.getElementById('photoFile');
+                      if (!fileInput || !fileInput.files || !fileInput.files[0]) { alert('Выберите файл'); return; }
+                      var fd = new FormData();
+                      fd.append('file', fileInput.files[0]);
+                      fd.append('description', (document.getElementById('photoDesc') || {}).value || '');
+                      fd.append('is_main', 'false');
+                      var token = localStorage.getItem('sds_token');
+                      fetch(window.location.origin + '/api/v1/customers/' + cid + '/photos', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd }).then(function (res) {
+                        if (!res.ok) return res.json().then(function (d) { throw d; });
+                        fileInput.value = '';
+                        if (document.getElementById('photoDesc')) document.getElementById('photoDesc').value = '';
+                        refreshPhotos();
+                      }).catch(function (e) { alert(e.detail || (e.message || 'Ошибка загрузки')); });
+                    };
+                  }, 100);
+                };
+              });
             });
           }
           document.getElementById('btnCustSearch').onclick = runCustomerSearch;
@@ -671,6 +974,112 @@
             });
           };
         }
+      }
+
+      function loadSectionCustomersMap() {
+        var content = document.getElementById('content');
+        if (!content) return;
+        content.innerHTML = '<div class="card"><h2>Клиенты на карте</h2><div class="map-toolbar"><label>Карта:</label><select id="mapProvider"><option value="yandex">Яндекс.Карты</option><option value="osm">OpenStreetMap</option></select></div><p id="customersMapInfo" style="margin:0 0 12px 0;font-size:14px;color:#555">Загрузка...</p><div id="customersMap"></div></div>';
+        api('/api/v1/config').catch(function () { return {}; }).then(function (config) {
+          var yandexKey = (config && config.yandexMapsApiKey) ? config.yandexMapsApiKey : '';
+          api('/api/v1/customers?limit=2000').catch(function () { return []; }).then(function (list) {
+            list = list || [];
+            var withCoords = list.filter(function (c) { return c.latitude != null && c.longitude != null && !isNaN(Number(c.latitude)) && !isNaN(Number(c.longitude)); });
+            var infoEl = document.getElementById('customersMapInfo');
+            var noCoordsMsg = withCoords.length === 0 ? ' Нет клиентов с координатами — укажите широту и долготу в карточке клиента (Поиск клиента → Изменить).' : '';
+            if (infoEl) infoEl.innerHTML = 'Отображено клиентов на карте: ' + withCoords.length + (list.length ? ' (из ' + list.length + ')' : '') + (noCoordsMsg ? '<br><span style="color:#856404">' + noCoordsMsg + '</span>' : '');
+            var defaultCenter = [41.2995, 69.2401];
+            var zoom = 10;
+            if (withCoords.length === 1) { defaultCenter = [Number(withCoords[0].latitude), Number(withCoords[0].longitude)]; }
+            if (withCoords.length > 1) {
+              var minLat = Math.min.apply(null, withCoords.map(function (c) { return Number(c.latitude); }));
+              var maxLat = Math.max.apply(null, withCoords.map(function (c) { return Number(c.latitude); }));
+              var minLon = Math.min.apply(null, withCoords.map(function (c) { return Number(c.longitude); }));
+              var maxLon = Math.max.apply(null, withCoords.map(function (c) { return Number(c.longitude); }));
+              defaultCenter = [(minLat + maxLat) / 2, (minLon + maxLon) / 2];
+            }
+            var center = defaultCenter;
+            var leafletMap = null;
+            function destroyCurrentMap() {
+              if (window._customersLeafletMap) {
+                try { window._customersLeafletMap.remove(); } catch (e) {}
+                window._customersLeafletMap = null;
+              }
+              var container = document.getElementById('customersMap');
+              if (container) container.innerHTML = '';
+            }
+            function initOsmMap() {
+              destroyCurrentMap();
+              var container = document.getElementById('customersMap');
+              if (!container) return;
+              function doInit() {
+                if (window._customersLeafletMap) return;
+                var map = L.map('customersMap').setView(center, zoom);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+                withCoords.forEach(function (c) {
+                  var lat = Number(c.latitude);
+                  var lon = Number(c.longitude);
+                  var name = (c.name_client || c.firm_name || 'Клиент #' + (c.id || '')).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                  var addr = (c.address || '') + (c.city ? ', ' + c.city : '') + (c.territory ? ', ' + c.territory : '');
+                  var popup = '<div style="padding:4px 0"><strong>' + name + '</strong></div>' + (addr ? '<div style="font-size:12px;color:#666">' + addr.replace(/</g, '&lt;') + '</div>' : '') + (c.phone ? '<div style="font-size:12px">' + (c.phone + '').replace(/</g, '&lt;') + '</div>' : '');
+                  L.marker([lat, lon]).addTo(map).bindPopup(popup);
+                });
+                if (withCoords.length > 1) map.fitBounds(withCoords.map(function (c) { return [Number(c.latitude), Number(c.longitude)]; }), { padding: [50, 50] });
+                window._customersLeafletMap = map;
+              }
+              if (typeof L !== 'undefined') { doInit(); return; }
+              var link = document.createElement('link');
+              link.rel = 'stylesheet'; link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='; link.crossOrigin = '';
+              document.head.appendChild(link);
+              var script = document.createElement('script');
+              script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+              script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='; script.crossOrigin = '';
+              script.onload = doInit;
+              document.head.appendChild(script);
+            }
+            function initYandexMap() {
+              destroyCurrentMap();
+              var container = document.getElementById('customersMap');
+              if (container) container.innerHTML = '<div id="customersMapInner" style="width:100%;height:100%;min-height:400px"></div>';
+              if (typeof ymaps === 'undefined' && !yandexKey) {
+                if (infoEl) infoEl.innerHTML = 'Отображено клиентов на карте: ' + withCoords.length + '. <span style="color:#c00">Для Яндекс.Карт задайте YANDEX_MAPS_API_KEY на сервере или выберите OpenStreetMap.</span>';
+                return;
+              }
+              function doYandex() {
+                if (typeof ymaps === 'undefined') {
+                  var script = document.createElement('script');
+                  script.src = 'https://api-maps.yandex.ru/2.1/?apikey=' + encodeURIComponent(yandexKey) + '&lang=ru_RU';
+                  script.onload = doYandex; script.onerror = function () { if (infoEl) infoEl.innerHTML = 'Ошибка загрузки Яндекс.Карт.'; };
+                  document.head.appendChild(script);
+                  return;
+                }
+                ymaps.ready(function () {
+                  var mapDiv = document.getElementById('customersMapInner') || document.getElementById('customersMap');
+                  if (!mapDiv) return;
+                  var map = new ymaps.Map(mapDiv, { center: center, zoom: zoom, controls: ['zoomControl', 'searchControl', 'typeSelector', 'fullscreenControl'] });
+                  withCoords.forEach(function (c) {
+                    var lat = Number(c.latitude);
+                    var lon = Number(c.longitude);
+                    var name = (c.name_client || c.firm_name || 'Клиент #' + (c.id || '')).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    var addr = (c.address || '') + (c.city ? ', ' + c.city : '') + (c.territory ? ', ' + c.territory : '');
+                    var balloon = '<div style="padding:4px 0"><strong>' + name + '</strong></div>' + (addr ? '<div style="font-size:12px;color:#666">' + addr.replace(/</g, '&lt;') + '</div>' : '') + (c.phone ? '<div style="font-size:12px">' + (c.phone + '').replace(/</g, '&lt;') + '</div>' : '');
+                    var placemark = new ymaps.Placemark([lat, lon], { balloonContent: balloon }, { preset: 'islands#redCircleIcon' });
+                    map.geoObjects.add(placemark);
+                  });
+                  if (withCoords.length > 1) map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 50 });
+                });
+              }
+              doYandex();
+            }
+            function renderMap() {
+              var sel = document.getElementById('mapProvider');
+              var provider = (sel && sel.value) ? sel.value : 'osm';
+              if (provider === 'osm') initOsmMap(); else initYandexMap();
+            }
+            document.getElementById('mapProvider').onchange = renderMap;
+            renderMap();
+          });
+        });
       }
 
       function loadSectionOrders() {
@@ -728,7 +1137,7 @@
           }
           var t = '<div style="overflow-x:auto"><table><thead><tr><th>Действия</th><th>№</th><th>Клиент</th><th>Дата создания</th><th>Статус</th><th>Тип оплаты</th><th>Сумма</th><th>Агент</th><th>Экспедитор</th><th>Дата поставки</th><th>Перевод в статус «Доставка»</th><th>Дата закрытия</th><th>Последнее изменение</th><th>Кто изменил</th></tr></thead><tbody>';
           list.forEach(function (o) {
-            t += '<tr><td><button type="button" class="btn btn-secondary btn-small" data-order-edit data-id="' + (o.order_no != null ? o.order_no : o.id) + '">Изменить</button></td><td>' + (o.order_no != null ? o.order_no : o.id) + '</td><td>' + escAttr(o.customer_name || (o.customer_id != null ? 'ID ' + o.customer_id : '')) + '</td><td>' + formatDateTashkent(o.order_date) + '</td><td>' + escAttr(o.status_name || o.status_code || '') + '</td><td>' + escAttr(o.payment_type_name || o.payment_type_code || '') + '</td><td>' + (o.total_amount != null ? o.total_amount : '') + '</td><td>' + escAttr(o.login_agent || '') + '</td><td>' + escAttr(o.login_expeditor || '') + '</td><td>' + formatDateTashkent(o.scheduled_delivery_at) + '</td><td>' + formatDateTashkent(o.status_delivery_at) + '</td><td>' + formatDateTashkent(o.closed_at) + '</td><td>' + formatDateTashkent(o.last_updated_at) + '</td><td>' + escAttr(o.last_updated_by || '') + '</td></tr>';
+            t += '<tr><td><button type="button" class="btn btn-secondary btn-small" data-order-edit data-id="' + (o.order_no != null ? o.order_no : o.id) + '">Изменить</button></td><td>' + (o.order_no != null ? o.order_no : o.id) + '</td><td>' + escAttr(o.customer_name || (o.customer_id != null ? 'ID ' + o.customer_id : '')) + '</td><td>' + formatDateTashkent(o.order_date) + '</td><td>' + formatStatusBadge(o.status_code, o.status_name) + '</td><td>' + escAttr(o.payment_type_name || o.payment_type_code || '') + '</td><td>' + (o.total_amount != null ? o.total_amount : '') + '</td><td>' + escAttr(o.login_agent || '') + '</td><td>' + escAttr(o.login_expeditor || '') + '</td><td>' + formatDateTashkent(o.scheduled_delivery_at) + '</td><td>' + formatDateTashkent(o.status_delivery_at) + '</td><td>' + formatDateTashkent(o.closed_at) + '</td><td>' + formatDateTashkent(o.last_updated_at) + '</td><td>' + escAttr(o.last_updated_by || '') + '</td></tr>';
           });
           t += '</tbody></table></div>';
           tableDiv.innerHTML = t;
@@ -1144,7 +1553,7 @@
           var t = '<div style="overflow-x:auto"><table><thead><tr><th>№ заказа</th><th>Клиент</th><th>Дата заказа</th><th>Статус</th><th>Тип оплаты</th><th>Код товара</th><th>Товар</th><th>Количество</th><th>Цена</th><th>Сумма</th><th>Агент</th><th>Экспедитор</th><th>Дата поставки</th><th>Перевод в статус «Доставка»</th><th>Дата закрытия</th><th>Последнее изменение заказа</th><th>Кто изменил</th></tr></thead><tbody>';
           list.forEach(function (r) {
             var amt = (r.amount != null ? r.amount : ((r.quantity || 0) * (r.price != null ? r.price : 0)));
-            t += '<tr><td>' + (r.order_no != null ? r.order_no : '') + '</td><td>' + escAttr(r.customer_name || (r.customer_id != null ? 'ID ' + r.customer_id : '')) + '</td><td>' + formatDateTashkent(r.order_date) + '</td><td>' + escAttr(r.status_name || r.status_code || '') + '</td><td>' + escAttr(r.payment_type_name || r.payment_type_code || '') + '</td><td>' + escAttr(r.product_code || '') + '</td><td>' + escAttr(r.product_name || '') + '</td><td>' + (r.quantity != null ? r.quantity : '') + '</td><td>' + (r.price != null ? r.price : '') + '</td><td>' + (amt != null ? amt : '') + '</td><td>' + escAttr(r.login_agent || '') + '</td><td>' + escAttr(r.login_expeditor || '') + '</td><td>' + formatDateTashkent(r.scheduled_delivery_at) + '</td><td>' + formatDateTashkent(r.status_delivery_at) + '</td><td>' + formatDateTashkent(r.closed_at) + '</td><td>' + formatDateTashkent(r.order_last_updated_at) + '</td><td>' + escAttr(r.order_last_updated_by || '') + '</td></tr>';
+            t += '<tr><td>' + (r.order_no != null ? r.order_no : '') + '</td><td>' + escAttr(r.customer_name || (r.customer_id != null ? 'ID ' + r.customer_id : '')) + '</td><td>' + formatDateTashkent(r.order_date) + '</td><td>' + formatStatusBadge(r.status_code, r.status_name) + '</td><td>' + escAttr(r.payment_type_name || r.payment_type_code || '') + '</td><td>' + escAttr(r.product_code || '') + '</td><td>' + escAttr(r.product_name || '') + '</td><td>' + (r.quantity != null ? r.quantity : '') + '</td><td>' + (r.price != null ? r.price : '') + '</td><td>' + (amt != null ? amt : '') + '</td><td>' + escAttr(r.login_agent || '') + '</td><td>' + escAttr(r.login_expeditor || '') + '</td><td>' + formatDateTashkent(r.scheduled_delivery_at) + '</td><td>' + formatDateTashkent(r.status_delivery_at) + '</td><td>' + formatDateTashkent(r.closed_at) + '</td><td>' + formatDateTashkent(r.order_last_updated_at) + '</td><td>' + escAttr(r.order_last_updated_by || '') + '</td></tr>';
           });
           t += '</tbody></table></div>';
           tableDiv.innerHTML = t;
@@ -1277,7 +1686,7 @@
           if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Операций не найдено. Измените критерии поиска или создайте операцию.</p>'; return; }
           var t = '<div style="overflow-x:auto"><table><thead><tr><th>Действия</th><th>№ операции</th><th>Дата</th><th>Тип</th><th>Статус</th><th>Клиент</th><th>Товар</th><th>Кол-во</th><th>Сумма</th><th>Заказ №</th><th>Кто создал</th></tr></thead><tbody>';
           list.forEach(function (o) {
-            t += '<tr><td><button type="button" class="btn btn-secondary btn-small" data-op-edit data-id="' + escAttr(o.id) + '">Изменить</button></td><td>' + escAttr(o.operation_number || '') + '</td><td>' + formatDateOp(o.operation_date) + '</td><td>' + escAttr(o.type_name || o.type_code || '') + '</td><td>' + escAttr(o.status || '') + '</td><td>' + escAttr(o.customer_name || (o.customer_id != null ? 'ID ' + o.customer_id : '')) + '</td><td>' + escAttr(o.product_code || '') + '</td><td>' + (o.quantity != null ? o.quantity : '') + '</td><td>' + (o.amount != null ? o.amount : '') + '</td><td>' + (o.order_id != null ? o.order_id : '') + '</td><td>' + escAttr(o.created_by || '') + '</td></tr>';
+            t += '<tr><td><button type="button" class="btn btn-secondary btn-small" data-op-edit data-id="' + escAttr(o.id) + '">Изменить</button></td><td>' + escAttr(o.operation_number || '') + '</td><td>' + formatDateOp(o.operation_date) + '</td><td>' + escAttr(o.type_name || o.type_code || '') + '</td><td>' + formatStatusBadge(o.status, o.status) + '</td><td>' + escAttr(o.customer_name || (o.customer_id != null ? 'ID ' + o.customer_id : '')) + '</td><td>' + escAttr(o.product_code || '') + '</td><td>' + (o.quantity != null ? o.quantity : '') + '</td><td>' + (o.amount != null ? o.amount : '') + '</td><td>' + (o.order_id != null ? o.order_id : '') + '</td><td>' + escAttr(o.created_by || '') + '</td></tr>';
           });
           t += '</tbody></table></div>';
           tableDiv.innerHTML = t;
@@ -2191,7 +2600,7 @@
                   }
                   var tableHtml = '<div style="overflow-x:auto"><table style="width:100%"><thead><tr><th>№</th><th>Клиент</th><th>Дата создания</th><th>Статус</th><th>Сумма</th><th>Экспедитор</th><th>Действие</th></tr></thead><tbody>';
                   orders.forEach(function(o) {
-                    tableHtml += '<tr><td>' + (o.order_no || o.id) + '</td><td>' + escAttr(o.customer_name || '') + '</td><td>' + formatDateTashkent(o.order_date) + '</td><td>' + escAttr(o.status_name || o.status_code || '') + '</td><td>' + (o.total_amount || '0') + '</td><td>' + escAttr(o.login_expeditor || '') + '</td><td><button type="button" class="btn btn-primary btn-small" data-select-order="' + (o.order_no || o.id) + '">Выбрать</button></td></tr>';
+                    tableHtml += '<tr><td>' + (o.order_no || o.id) + '</td><td>' + escAttr(o.customer_name || '') + '</td><td>' + formatDateTashkent(o.order_date) + '</td><td>' + formatStatusBadge(o.status_code, o.status_name) + '</td><td>' + (o.total_amount || '0') + '</td><td>' + escAttr(o.login_expeditor || '') + '</td><td><button type="button" class="btn btn-primary btn-small" data-select-order="' + (o.order_no || o.id) + '">Выбрать</button></td></tr>';
                   });
                   tableHtml += '</tbody></table></div>';
                   resultsDiv.innerHTML = tableHtml;
@@ -2597,7 +3006,577 @@
         };
       }
 
+      function loadSectionVisitsSearch() {
+        var content = document.getElementById('content');
+        content.innerHTML = '<div class="card"><h2>Поиск визита</h2><div class="form-group"><label>Клиент</label><input type="text" id="vs_customer_search" placeholder="Начните вводить название клиента или ИНН (мин. 2 символа)" style="margin-bottom:6px"><select id="vs_customer_pick"><option value="">— Все клиенты —</option></select></div><div class="form-group"><label>Статус</label><select id="vs_status"><option value="">Все</option><option value="planned">Запланированы</option><option value="completed">Завершён</option><option value="cancelled">Отменён</option></select></div><div class="form-group"><label>Ответственный</label><select id="vs_responsible"><option value="">Все сотрудники</option></select></div><div class="form-group"><label>Дата от</label><input type="date" id="vs_from"></div><div class="form-group"><label>Дата до</label><input type="date" id="vs_to"></div><p><button type="button" class="btn btn-primary" id="vs_find">Найти</button> <button type="button" class="btn btn-secondary" id="vs_reset">Сбросить</button></p><p><strong>Результаты</strong> (<span id="vs_total">0</span>):</p><div id="vs_table"></div></div>';
+        api('/api/v1/dictionary/user-logins').catch(function () { return []; }).then(function (userList) {
+          userList = userList || [];
+          var sel = document.getElementById('vs_responsible');
+          if (sel) userList.forEach(function (u) { var o = document.createElement('option'); o.value = u.login; o.textContent = (u.login || '') + (u.fio ? ' — ' + u.fio : ''); sel.appendChild(o); });
+        });
+        // Расширенный поиск клиентов (name_client + tax_id), запрос с 2 символов
+        var vsSearch = document.getElementById('vs_customer_search');
+        var vsPick = document.getElementById('vs_customer_pick');
+        if (vsSearch && vsPick) {
+          var lookupTimer = null;
+          var runLookup = function (q) {
+            q = (q || '').trim();
+            if (q.length < 2) return;
+            api('/api/v1/customers?search=' + encodeURIComponent(q) + '&limit=20').then(function (list) {
+              list = list || [];
+              vsPick.innerHTML = '<option value="">— Все клиенты —</option>';
+              list.forEach(function (c) {
+                var name = (c.name_client || c.firm_name || '').trim() || ('Клиент #' + c.id);
+                var label = '○ ' + name + (c.tax_id ? ' (ИНН ' + c.tax_id + ')' : '');
+                var o = document.createElement('option');
+                o.value = c.id;
+                o.textContent = label;
+                vsPick.appendChild(o);
+              });
+              if (list.length === 1) vsPick.value = list[0].id;
+            }).catch(function () { /* ignore */ });
+          };
+          vsSearch.oninput = function () {
+            var q = vsSearch.value || '';
+            if (lookupTimer) clearTimeout(lookupTimer);
+            if (q.trim().length < 2) return;
+            lookupTimer = setTimeout(function () { runLookup(q); }, 300);
+          };
+        }
+        function runSearch() {
+          var params = ['limit=50', 'offset=0'];
+          var customer_id = document.getElementById('vs_customer_pick') && document.getElementById('vs_customer_pick').value;
+          var customer_name = document.getElementById('vs_customer_search') && document.getElementById('vs_customer_search').value.trim();
+          var status = document.getElementById('vs_status') && document.getElementById('vs_status').value;
+          var responsible = document.getElementById('vs_responsible') && document.getElementById('vs_responsible').value;
+          var from = document.getElementById('vs_from') && document.getElementById('vs_from').value;
+          var to = document.getElementById('vs_to') && document.getElementById('vs_to').value;
+          if (customer_id) params.push('customer_id=' + encodeURIComponent(customer_id));
+          else if (customer_name) params.push('customer_name=' + encodeURIComponent(customer_name));
+          if (status) params.push('status=' + encodeURIComponent(status));
+          if (responsible) params.push('responsible_login=' + encodeURIComponent(responsible));
+          if (from) params.push('from_date=' + encodeURIComponent(from));
+          if (to) params.push('to_date=' + encodeURIComponent(to));
+          document.getElementById('vs_table').innerHTML = '<p>Загрузка...</p>';
+          api('/api/v1/visits/search?' + params.join('&')).then(function (res) {
+            var total = (res && res.total != null) ? res.total : 0;
+            var data = (res && res.data) ? res.data : [];
+            document.getElementById('vs_total').textContent = total;
+            if (!data.length) { document.getElementById('vs_table').innerHTML = '<p>Нет визитов.</p>'; return; }
+            var t = '<div style="overflow-x:auto"><table><thead><tr><th>Дата</th><th>Время</th><th>Клиент</th><th>Статус</th><th>Ответственный</th><th>Действия</th></tr></thead><tbody>';
+            data.forEach(function (v) {
+              var statusClass = 'status-badge--default';
+              if (v.status === 'completed') statusClass = 'status-badge--completed';
+              else if (v.status === 'cancelled') statusClass = 'status-badge--cancelled';
+              else if (v.status === 'planned') statusClass = 'status-badge--delivery';
+              var dateStr = v.visit_date ? formatDateOnly(v.visit_date) : '—';
+              var timeStr = (v.visit_time || '').toString().substring(0, 5) || '—';
+              t += '<tr><td>' + escAttr(dateStr) + '</td><td>' + escAttr(timeStr) + '</td><td>' + escAttr(v.customer_name || '') + '</td><td><span class="status-badge ' + statusClass + '">' + escAttr(v.status || '') + '</span></td><td>' + escAttr(v.responsible_name || v.responsible_login || '') + '</td><td><button type="button" class="btn btn-secondary btn-small" data-visit-id="' + (v.id || '') + '" data-visit-customer="' + (v.customer_id || '') + '">Открыть</button></td></tr>';
+            });
+            t += '</tbody></table></div>';
+            document.getElementById('vs_table').innerHTML = t;
+            document.getElementById('vs_table').querySelectorAll('[data-visit-id]').forEach(function (btn) {
+              btn.onclick = function () { var cid = btn.getAttribute('data-visit-customer'); if (cid) showSection('customers'); }
+            });
+          }).catch(function (e) {
+            var msg = (e && e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : 'Ошибка';
+            document.getElementById('vs_table').innerHTML = '<p class="err">' + escAttr(msg) + '</p>';
+          });
+        }
+        document.getElementById('vs_find').onclick = runSearch;
+        document.getElementById('vs_reset').onclick = function () {
+          document.getElementById('vs_customer_search').value = '';
+          document.getElementById('vs_customer_pick').innerHTML = '<option value="">— Все клиенты —</option>';
+          document.getElementById('vs_status').value = '';
+          document.getElementById('vs_responsible').value = '';
+          document.getElementById('vs_from').value = '';
+          document.getElementById('vs_to').value = '';
+          document.getElementById('vs_table').innerHTML = '';
+          document.getElementById('vs_total').textContent = '0';
+        };
+        runSearch();
+      }
+
+      function openVisitAddModal(customerId, userList, refreshVisits) {
+        var respOpts = '<option value="">— Не назначен —</option>';
+        (userList || []).forEach(function (u) { respOpts += '<option value="' + escAttr(u.login) + '">' + escAttr((u.fio || u.login) + '') + '</option>'; });
+        var formHtml = '<div class="form-group"><label>Дата визита *</label><input type="text" id="v_date" placeholder="Выберите дату" readonly style="cursor:pointer;background:#fff"></div><div class="form-group"><label>Время</label><input type="time" id="v_time"></div><div class="form-group"><label>Статус</label><select id="v_status"><option value="planned">Запланирован</option><option value="completed">Завершён</option><option value="cancelled">Отменён</option></select></div><div class="form-group"><label>Ответственный</label><select id="v_resp">' + respOpts + '</select></div><div class="form-group"><label>Комментарий</label><textarea id="v_comment" rows="3" maxlength="5000" placeholder="При статусе «Завершён» укажите, что было сделано (мин. 10 символов)"></textarea><p id="v_comment_cnt" style="font-size:12px;color:#666">0 / 5000</p></div>';
+        showModal('Добавить визит', formHtml, function (errEl) {
+          var d = document.getElementById('v_date') && document.getElementById('v_date').value;
+          var t = document.getElementById('v_time') && document.getElementById('v_time').value;
+          var s = document.getElementById('v_status') && document.getElementById('v_status').value;
+          var r = document.getElementById('v_resp') && document.getElementById('v_resp').value;
+          var c = (document.getElementById('v_comment') && document.getElementById('v_comment').value.trim()) || null;
+          if (!d) { if (errEl) errEl.textContent = 'Укажите дату визита.'; return; }
+          if (s === 'completed' && (!c || c.length < 10)) { if (errEl) errEl.textContent = 'При статусе «Завершён» укажите, что было сделано на визите (минимум 10 символов).'; return; }
+          if (s === 'completed' && c.length > 5000) { if (errEl) errEl.textContent = 'Комментарий не более 5000 символов.'; return; }
+          var body = { visit_date: d, status: s, responsible_login: r || null, comment: c };
+          if (t) body.visit_time = t + (t.length === 5 ? ':00' : '');
+          return api('/api/v1/customers/' + customerId + '/visits', { method: 'POST', body: JSON.stringify(body) }).then(refreshVisits);
+        });
+        setTimeout(function () {
+          var vDate = document.getElementById('v_date');
+          if (vDate && window.flatpickr) window.flatpickr(vDate, { locale: 'ru', dateFormat: 'Y-m-d' });
+          var vResp = document.getElementById('v_resp');
+          if (vResp && currentUser && currentUser.login) vResp.value = currentUser.login;
+          var vComment = document.getElementById('v_comment');
+          var vCnt = document.getElementById('v_comment_cnt');
+          if (vComment && vCnt) { vComment.oninput = function () { vCnt.textContent = vComment.value.length + ' / 5000'; }; vCnt.textContent = vComment.value.length + ' / 5000'; }
+        }, 100);
+      }
+
+      function openVisitEditModal(customerId, visit, userList, refreshVisits) {
+        if (visit.status === 'cancelled') {
+          showModal('Визит отменён', '<p>Отменённый визит нельзя редактировать. Создайте новый визит при необходимости.</p>', function () { return Promise.resolve(); });
+          return;
+        }
+        var respOpts = '';
+        (userList || []).forEach(function (u) { respOpts += '<option value="' + escAttr(u.login) + '">' + escAttr((u.fio || u.login) + '') + '</option>'; });
+        var locked = visit.status === 'completed';
+        var dateReadonly = locked ? ' readonly style="cursor:not-allowed;background:#f0f0f0"' : ' readonly style="cursor:pointer;background:#fff"';
+        var formHtml = '<div class="form-group"><label>Дата визита</label><input type="text" id="ve_date" value="' + escAttr(visit.visit_date || '') + '"' + dateReadonly + '></div><div class="form-group"><label>Время</label><input type="time" id="ve_time" value="' + (visit.visit_time ? (visit.visit_time + '').substring(0, 5) : '') + '"' + (locked ? ' readonly' : '') + '></div><div class="form-group"><label>Статус</label><select id="ve_status"' + (locked ? '' : '') + '><option value="planned"' + (visit.status === 'planned' ? ' selected' : '') + '>Запланирован</option><option value="completed"' + (visit.status === 'completed' ? ' selected' : '') + '>Завершён</option><option value="cancelled"' + (visit.status === 'cancelled' ? ' selected' : '') + '>Отменён</option></select></div><div class="form-group"><label>Ответственный</label><select id="ve_resp"' + (locked ? ' disabled' : '') + '>' + respOpts + '</select></div><div class="form-group"><label>Комментарий</label><textarea id="ve_comment" rows="3" maxlength="5000">' + escAttr(visit.comment || '') + '</textarea><p id="ve_comment_cnt" style="font-size:12px;color:#666">' + (visit.comment ? visit.comment.length : 0) + ' / 5000</p></div>';
+        showModal('Изменить визит', formHtml, function (errEl) {
+          var d = document.getElementById('ve_date') && document.getElementById('ve_date').value;
+          var t = document.getElementById('ve_time') && document.getElementById('ve_time').value;
+          var s = document.getElementById('ve_status') && document.getElementById('ve_status').value;
+          var r = document.getElementById('ve_resp');
+          var rVal = r ? (r.disabled ? visit.responsible_login : r.value) : visit.responsible_login;
+          var c = (document.getElementById('ve_comment') && document.getElementById('ve_comment').value.trim()) || null;
+          if (!d) { if (errEl) errEl.textContent = 'Укажите дату.'; return; }
+          if (s === 'completed' && (!c || c.length < 10)) { if (errEl) errEl.textContent = 'При статусе «Завершён» укажите, что было сделано (минимум 10 символов).'; return; }
+          if (s === 'completed' && c.length > 5000) { if (errEl) errEl.textContent = 'Комментарий не более 5000 символов.'; return; }
+          var body = { status: s, comment: c };
+          if (!locked) { body.visit_date = d; body.responsible_login = rVal || null; if (t) body.visit_time = t + (t.length === 5 ? ':00' : ''); else body.visit_time = null; }
+          return api('/api/v1/visits/' + visit.id, { method: 'PUT', body: JSON.stringify(body) }).then(refreshVisits);
+        });
+        setTimeout(function () {
+          var veDate = document.getElementById('ve_date');
+          if (veDate && window.flatpickr && !locked) window.flatpickr(veDate, { locale: 'ru', dateFormat: 'Y-m-d' });
+          var veResp = document.getElementById('ve_resp');
+          if (veResp && visit.responsible_login) veResp.value = visit.responsible_login;
+          var veComment = document.getElementById('ve_comment');
+          var veCnt = document.getElementById('ve_comment_cnt');
+          if (veComment && veCnt) veComment.oninput = function () { veCnt.textContent = veComment.value.length + ' / 5000'; };
+        }, 100);
+      }
+
+      function loadSectionVisitsCreate() {
+        var content = document.getElementById('content');
+        content.innerHTML = '<div class="card"><h2>Создать визит</h2><div id="vc_err" class="err"></div><div class="form-group"><label>Клиент *</label><input type="hidden" id="vc_customer"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="text" id="vc_customer_display" readonly placeholder="Не выбран" style="flex:1;min-width:260px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px"><button type="button" class="btn btn-secondary btn-small" id="vc_customer_pick">Выбрать клиента</button></div></div><div class="form-group"><label>Дата визита *</label><input type="text" id="vc_date" placeholder="Выберите дату" readonly style="cursor:pointer;background:#fff"></div><div class="form-group"><label>Время визита</label><input type="time" id="vc_time"></div><div class="form-group"><label>Агент (ответственный) *</label><div id="vc_agent_badge" style="font-size:13px;margin-bottom:4px;color:#065f46;"></div><select id="vc_responsible"><option value=\"\">—</option></select></div><div class="form-group"><label>Статус *</label><div><label><input type="radio" name="vc_status" value="planned" checked> Запланирован</label> <label><input type="radio" name="vc_status" value="completed"> Завершён</label> <label><input type="radio" name="vc_status" value="cancelled"> Отменён</label> <label><input type="radio" name="vc_status" value="postponed"> На рассмотрении</label></div></div><div class="form-group"><label>Комментарий</label><textarea id="vc_comment" rows="3" maxlength="5000" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px" placeholder="При статусе «Завершён» обязательно укажите, что было сделано (мин. 10 символов)"></textarea><p id="vc_comment_counter" style="font-size:12px;color:#666;margin:4px 0 0 0">0 / 5000</p><p id="vc_comment_hint" class="err" style="display:none;margin-top:4px">При статусе «Завершён» комментарий обязателен (минимум 10 символов). Укажите, что было сделано на визите.</p></div><p><button type="button" class="btn btn-primary" id="vc_save">Сохранить</button> <button type="button" class="btn btn-secondary" id="vc_cancel">Отмена</button></p></div>';
+        Promise.all([api('/api/v1/dictionary/user-logins').catch(function () { return []; })]).then(function (arr) {
+          var userList = arr[0] || [];
+          var respSel = document.getElementById('vc_responsible');
+          var vcAgentBadge = document.getElementById('vc_agent_badge');
+          var agents = (userList || []).filter(function (u) {
+            var r = (u.role || '').toLowerCase();
+            return r === 'agent' || r === 'expeditor';
+          });
+          if (respSel) {
+            agents.forEach(function (u) {
+              var o = document.createElement('option');
+              o.value = u.login;
+              var label = (u.login || '') + (u.fio ? ' — ' + u.fio : '');
+              if (currentUser && u.login === currentUser.login) label += ' (Текущий)';
+              o.textContent = label;
+              respSel.appendChild(o);
+            });
+            if (currentUser && currentUser.login) {
+              respSel.value = currentUser.login;
+            }
+          }
+          function updateAgentBadge() {
+            if (!respSel || !vcAgentBadge) return;
+            var login = respSel.value;
+            if (!login) { vcAgentBadge.textContent = ''; return; }
+            var u = agents.find(function (a) { return a.login === login; });
+            var text = '✓ ' + (u ? (u.login + (u.fio ? ' — ' + u.fio : '')) : login);
+            if (currentUser && login === currentUser.login) text += ' (Текущий пользователь)';
+            vcAgentBadge.textContent = text;
+          }
+          if (respSel) respSel.onchange = updateAgentBadge;
+          updateAgentBadge();
+          var vcDateEl = document.getElementById('vc_date');
+          if (window.flatpickr && vcDateEl) {
+            window.flatpickr(vcDateEl, { locale: 'ru', dateFormat: 'Y-m-d', allowInput: false });
+          }
+          var vcCustomerId = document.getElementById('vc_customer');
+          var vcCustomerDisplay = document.getElementById('vc_customer_display');
+          var pickBtn = document.getElementById('vc_customer_pick');
+          var openCustomerPicker = function () {
+            var agentOptions = '<option value=\"\">— Все агенты —</option>';
+            agents.forEach(function (u) {
+              var label = (u.login || '') + (u.fio ? ' — ' + u.fio : '');
+              var sel = (currentUser && u.login === currentUser.login) ? ' selected' : '';
+              agentOptions += '<option value=\"' + escAttr(u.login || '') + '\"' + sel + '>' + escAttr(label) + '</option>';
+            });
+            var bodyHtml = '<div class=\"form-group\"><label>Поиск по клиенту / ИНН</label><input type=\"text\" id=\"vp_search\" placeholder=\"Название или ИНН (мин. 2 символа)\"></div><div class=\"form-group\"><label>Агент</label><select id=\"vp_agent\">' + agentOptions + '</select></div><p><button type=\"button\" class=\"btn btn-primary btn-small\" id=\"vp_find\">Найти</button></p><div id=\"vp_results\"><p>Введите не менее 2 символов для поиска.</p></div>';
+            showModal('Выбрать клиента', bodyHtml, function (errEl) {
+              var checked = document.querySelector('input[name=\"vp_cust_id\"]:checked');
+              if (!checked) { if (errEl) errEl.textContent = 'Выберите клиента.'; return; }
+              var id = checked.value;
+              var name = checked.getAttribute('data-name') || ('Клиент #' + id);
+              if (vcCustomerId) vcCustomerId.value = id;
+              if (vcCustomerDisplay) vcCustomerDisplay.value = name;
+              return Promise.resolve();
+            });
+            setTimeout(function () {
+              var searchEl = document.getElementById('vp_search');
+              var agentEl = document.getElementById('vp_agent');
+              var resultsEl = document.getElementById('vp_results');
+              var findBtn = document.getElementById('vp_find');
+              var runSearch = function () {
+                if (!resultsEl) return;
+                var q = (searchEl && searchEl.value || '').trim();
+                var agent = agentEl && agentEl.value;
+                if (!q && !agent) {
+                  resultsEl.innerHTML = '<p>Укажите хотя бы 2 символа в поиске или выберите агента.</p>';
+                  return;
+                }
+                if (q && q.length < 2) {
+                  resultsEl.innerHTML = '<p>Введите не менее 2 символов.</p>';
+                  return;
+                }
+                var params = ['limit=50'];
+                if (q) params.push('search=' + encodeURIComponent(q));
+                if (agent) params.push('login_agent=' + encodeURIComponent(agent));
+                resultsEl.innerHTML = '<p>Загрузка...</p>';
+                api('/api/v1/customers?' + params.join('&')).then(function (list) {
+                  list = list || [];
+                  if (!list.length) { resultsEl.innerHTML = '<p>Клиенты не найдены.</p>'; return; }
+                  var t = '<div style=\"max-height:380px;overflow:auto\"><table><thead><tr><th></th><th>Клиент</th><th>ИНН</th><th>Агент</th></tr></thead><tbody>';
+                  list.forEach(function (c) {
+                    var id = c.id;
+                    var name = (c.name_client || c.firm_name || '').trim() || ('Клиент #' + id);
+                    var tax = c.tax_id || '';
+                    t += '<tr><td><input type=\"radio\" name=\"vp_cust_id\" value=\"' + id + '\" data-name=\"' + escAttr(name + (tax ? ' (ИНН ' + tax + ')' : '')) + '\"></td><td>' + escAttr(name) + '</td><td>' + escAttr(tax) + '</td><td>' + escAttr(c.login_agent || '') + '</td></tr>';
+                  });
+                  t += '</tbody></table></div>';
+                  resultsEl.innerHTML = t;
+                }).catch(function () {
+                  resultsEl.innerHTML = '<p class=\"err\">Ошибка поиска клиентов.</p>';
+                });
+              };
+              if (findBtn) findBtn.onclick = runSearch;
+              if (searchEl) searchEl.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } };
+              runSearch();
+            }, 50);
+          };
+          if (pickBtn) pickBtn.onclick = openCustomerPicker;
+          var vcComment = document.getElementById('vc_comment');
+          var vcCounter = document.getElementById('vc_comment_counter');
+          var vcHint = document.getElementById('vc_comment_hint');
+          function updateCommentUI() {
+            var len = (vcComment && vcComment.value) ? vcComment.value.length : 0;
+            if (vcCounter) vcCounter.textContent = len + ' / 5000';
+            var statusEl = document.querySelector('input[name="vc_status"]:checked');
+            var needComment = statusEl && statusEl.value === 'completed';
+            if (vcHint) vcHint.style.display = (needComment && len < 10) ? 'block' : 'none';
+          }
+          if (vcComment) { vcComment.oninput = updateCommentUI; vcComment.onchange = updateCommentUI; }
+          document.querySelectorAll('input[name="vc_status"]').forEach(function (r) { r.onchange = updateCommentUI; });
+          updateCommentUI();
+          document.getElementById('vc_cancel').onclick = function () { showSection('visits_search'); };
+          document.getElementById('vc_save').onclick = function () {
+            var errEl = document.getElementById('vc_err');
+            if (errEl) errEl.textContent = '';
+            var customerId = document.getElementById('vc_customer').value;
+            var dateVal = (document.getElementById('vc_date') && document.getElementById('vc_date').value) || '';
+            var timeVal = document.getElementById('vc_time').value;
+            var responsible = document.getElementById('vc_responsible').value;
+            var statusEl = document.querySelector('input[name="vc_status"]:checked');
+            var status = statusEl ? statusEl.value : 'planned';
+            var comment = document.getElementById('vc_comment').value.trim() || null;
+            if (!customerId) { if (errEl) errEl.textContent = 'Выберите клиента.'; return; }
+            if (!dateVal) { if (errEl) errEl.textContent = 'Укажите дату визита.'; return; }
+            if (!responsible) { if (errEl) errEl.textContent = 'Выберите агента.'; return; }
+            if (!status) { if (errEl) errEl.textContent = 'Выберите статус.'; return; }
+            if (status === 'completed') {
+              if (!comment || comment.length < 10) { if (errEl) errEl.textContent = 'Комментарий должен быть минимум 10 символов (сейчас: ' + (comment ? comment.length : 0) + ').'; if (vcHint) vcHint.style.display = 'block'; return; }
+              if (comment.length > 5000) { if (errEl) errEl.textContent = 'Комментарий не должен превышать 5000 символов.'; return; }
+            }
+            var body = { visit_date: dateVal, status: status, responsible_login: responsible || null, comment: comment };
+            if (timeVal) body.visit_time = timeVal + (timeVal.length === 5 ? ':00' : '');
+            api('/api/v1/customers/' + customerId + '/visits', { method: 'POST', body: JSON.stringify(body) }).then(function () { showSection('visits_search'); }).catch(function (e) {
+              if (errEl) errEl.textContent = (e && e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : 'Ошибка сохранения';
+            });
+          };
+        });
+      }
+
+      function loadSectionVisitsCalendar(myCalendar) {
+        var content = document.getElementById('content');
+        var title = myCalendar ? 'Мой календарь' : 'Календарь визитов';
+        content.innerHTML = '<div class="card"><h2>' + title + '</h2><p><button type="button" class="btn btn-secondary" id="vcal_prev">◄ Пред.</button> <span id="vcal_title" style="margin:0 12px;font-weight:600"></span> <button type="button" class="btn btn-secondary" id="vcal_next">След. ►</button> <select id="vcal_responsible" style="margin-left:12px"><option value="">Все</option></select></p><div id="vcal_grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px"></div><p style="margin-top:16px"><strong>По дате: <span id="vcal_sel_date"></span></strong> (<span id="vcal_day_count">0</span> визитов)</p><div id="vcal_day_list"></div></div>';
+        if (myCalendar) document.getElementById('vcal_responsible').value = currentUser.login || '';
+        api('/api/v1/dictionary/user-logins').catch(function () { return []; }).then(function (userList) {
+          var sel = document.getElementById('vcal_responsible');
+          if (sel) userList.forEach(function (u) { var o = document.createElement('option'); o.value = u.login; o.textContent = (u.login || '') + (u.fio ? ' — ' + u.fio : ''); sel.appendChild(o); });
+        });
+        var cur = new Date();
+        var viewYear = cur.getFullYear();
+        var viewMonth = cur.getMonth() + 1;
+        function monthName() { return new Date(viewYear, viewMonth - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }); }
+        function load() {
+          var responsible = (myCalendar ? currentUser.login : null) || (document.getElementById('vcal_responsible') && document.getElementById('vcal_responsible').value) || '';
+          var url = '/api/v1/visits/calendar?year=' + viewYear + '&month=' + viewMonth;
+          if (responsible) url += '&responsible_login=' + encodeURIComponent(responsible);
+          document.getElementById('vcal_title').textContent = monthName();
+          api(url).then(function (res) {
+            var events = (res && res.events) ? res.events : [];
+            var daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+            var firstDow = new Date(viewYear, viewMonth - 1, 1).getDay();
+            var dow = firstDow === 0 ? 7 : firstDow;
+            var html = '';
+            for (var i = 1; i < dow; i++) html += '<div style="padding:8px;background:#f0f0f0;border-radius:4px;min-height:40px"></div>';
+            var byDate = {};
+            events.forEach(function (ev) {
+              var d = (ev.date || '').substring(0, 10);
+              if (!byDate[d]) byDate[d] = []; byDate[d].push(ev);
+            });
+            for (var d = 1; d <= daysInMonth; d++) {
+              var key = viewYear + '-' + (viewMonth < 10 ? '0' : '') + viewMonth + '-' + (d < 10 ? '0' : '') + d;
+              var list = byDate[key] || [];
+              var color = list.length ? '#0d9488' : '#f8f9fa';
+              html += '<div class="vcal-day" data-date="' + key + '" style="padding:8px;background:' + color + ';color:' + (list.length ? '#fff' : '#333') + ';border-radius:4px;min-height:40px;cursor:pointer">' + d + (list.length ? ' (' + list.length + ')' : '') + '</div>';
+            }
+            document.getElementById('vcal_grid').innerHTML = html;
+            document.querySelectorAll('.vcal-day').forEach(function (el) {
+              el.onclick = function () {
+                var key = el.getAttribute('data-date');
+                document.getElementById('vcal_sel_date').textContent = key;
+                var list = byDate[key] || [];
+                document.getElementById('vcal_day_count').textContent = list.length;
+                if (!list.length) { document.getElementById('vcal_day_list').innerHTML = '<p>Нет визитов.</p>'; return; }
+                var t = '<ul style="list-style:none;padding:0;margin:0">';
+                list.forEach(function (ev) {
+                  var time = (ev.time || '').substring(0, 5) || '—';
+                  t += '<li style="padding:8px;border-bottom:1px solid #eee">' + escAttr(time) + ' — ' + escAttr(ev.customer_name || '') + ' (' + escAttr(ev.responsible_login || '') + ')</li>';
+                });
+                t += '</ul>';
+                document.getElementById('vcal_day_list').innerHTML = t;
+              };
+            });
+          }).catch(function (e) {
+            document.getElementById('vcal_grid').innerHTML = '<p class="err">Ошибка загрузки</p>';
+          });
+        }
+        document.getElementById('vcal_prev').onclick = function () { viewMonth--; if (viewMonth < 1) { viewMonth = 12; viewYear--; } load(); };
+        document.getElementById('vcal_next').onclick = function () { viewMonth++; if (viewMonth > 12) { viewMonth = 1; viewYear++; } load(); };
+        document.getElementById('vcal_responsible').onchange = load;
+        if (myCalendar) document.getElementById('vcal_responsible').style.display = 'none';
+        load();
+      }
+
+      function loadSectionReportCustomers() {
+        var content = document.getElementById('content');
+        content.innerHTML = '<div class="card"><h2>Отчёт: По клиентам</h2><p><label>Статус </label><select id="rc_status"><option value="all">Все</option><option value="active">Активные</option><option value="inactive">Неактивные</option></select> <label>Агент </label><select id="rc_agent"><option value="">Все</option></select> <label>Месяц </label><input type="text" id="rc_month" placeholder="ГГГГ-ММ" style="max-width:130px"> <button type="button" class="btn btn-primary" id="rc_load">Показать</button> <button type="button" class="btn btn-secondary" id="rc_export">Экспорт в Excel</button></p><div id="rc_table"></div></div>';
+        api('/api/v1/dictionary/user-logins').catch(function () { return []; }).then(function (userList) {
+          var sel = document.getElementById('rc_agent');
+          if (sel) userList.forEach(function (u) { var o = document.createElement('option'); o.value = u.login; o.textContent = (u.login || '') + (u.fio ? ' — ' + u.fio : ''); sel.appendChild(o); });
+        });
+        var rcMonth = document.getElementById('rc_month');
+        if (rcMonth && window.flatpickr) {
+          window.flatpickr(rcMonth, { locale: 'ru', dateFormat: 'Y-m', allowInput: true });
+        }
+        function run() {
+          var params = [];
+          var status = document.getElementById('rc_status') && document.getElementById('rc_status').value;
+          var agent = document.getElementById('rc_agent') && document.getElementById('rc_agent').value;
+          var monthVal = document.getElementById('rc_month') && document.getElementById('rc_month').value;
+          var month = monthVal ? monthVal.toString().substring(0, 7) : '';
+          if (status && status !== 'all') params.push('status=' + encodeURIComponent(status));
+          if (agent) params.push('agent_login=' + encodeURIComponent(agent));
+          if (month) params.push('month=' + encodeURIComponent(month));
+          document.getElementById('rc_table').innerHTML = '<p>Загрузка...</p>';
+          api('/api/v1/reports/customers?' + params.join('&')).then(function (res) {
+            var total = (res && res.total != null) ? res.total : 0;
+            var data = (res && res.data) ? res.data : [];
+            if (!data.length) { document.getElementById('rc_table').innerHTML = '<p>Нет данных.</p>'; return; }
+            var t = '<div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Клиент</th><th>Агент</th><th>Визитов</th><th>Завершено</th><th>Кол-во заказов</th><th>Сумма заказов</th><th>Последний визит</th><th>Статус</th></tr></thead><tbody>';
+            data.forEach(function (r, i) {
+              var ordersCount = r.orders_count || 0;
+              var ordersAmount = (r.orders_amount != null) ? Number(r.orders_amount) : 0;
+              t += '<tr><td>' + (i + 1) + '</td><td>' + escAttr(r.name_client || '') + '</td><td>' + escAttr(r.agent_login || '') + '</td><td>' + (r.total_visits || 0) + '</td><td>' + (r.completed_visits || 0) + '</td><td>' + ordersCount + '</td><td>' + (ordersAmount ? ordersAmount.toFixed(2) : '0.00') + '</td><td>' + (r.last_visit_date ? formatDateOnly(r.last_visit_date) : '—') + '</td><td>' + escAttr(r.status || '') + '</td></tr>';
+            });
+            t += '</tbody></table></div><p><strong>Итого клиентов: ' + total + '</strong></p>';
+            document.getElementById('rc_table').innerHTML = t;
+          }).catch(function (e) {
+            document.getElementById('rc_table').innerHTML = '<p class="err">Ошибка загрузки</p>';
+          });
+        }
+        document.getElementById('rc_load').onclick = run;
+        var exportBtn = document.getElementById('rc_export');
+        if (exportBtn) {
+          exportBtn.onclick = function () {
+            var params = [];
+            var status = document.getElementById('rc_status') && document.getElementById('rc_status').value;
+            var agent = document.getElementById('rc_agent') && document.getElementById('rc_agent').value;
+            var monthVal = document.getElementById('rc_month') && document.getElementById('rc_month').value;
+            var month = monthVal ? monthVal.toString().substring(0, 7) : '';
+            if (status && status !== 'all') params.push('status=' + encodeURIComponent(status));
+            if (agent) params.push('agent_login=' + encodeURIComponent(agent));
+            if (month) params.push('month=' + encodeURIComponent(month));
+            var url = '/api/v1/reports/customers/export';
+            if (params.length) url += '?' + params.join('&');
+            fetch(url, { method: 'GET', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) {
+              if (!r.ok) throw new Error('Ошибка выгрузки');
+              return r.blob();
+            }).then(function (blob) {
+              var a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = 'report_customers.xlsx';
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }).catch(function () { alert('Ошибка выгрузки отчёта.'); });
+          };
+        }
+        run();
+      }
+
+      function loadSectionReportAgents() {
+        var content = document.getElementById('content');
+        content.innerHTML = '<div class="card"><h2>Отчёт: Эффективность агентов</h2><p><label>Месяц </label><input type="text" id="ra_month" placeholder="ГГГГ-ММ" style="max-width:130px"> <button type="button" class="btn btn-primary" id="ra_load">Показать</button></p><div id="ra_list"></div></div>';
+        var raMonth = document.getElementById('ra_month');
+        if (raMonth && window.flatpickr) {
+          window.flatpickr(raMonth, { locale: 'ru', dateFormat: 'Y-m', allowInput: true });
+        }
+        function run() {
+          var monthVal = document.getElementById('ra_month') && document.getElementById('ra_month').value;
+          var month = monthVal ? monthVal.toString().substring(0, 7) : '';
+          var url = '/api/v1/reports/agents'; if (month) url += '?month=' + encodeURIComponent(month);
+          document.getElementById('ra_list').innerHTML = '<p>Загрузка...</p>';
+          api(url).then(function (res) {
+            var data = (res && res.data) ? res.data : [];
+            if (!data.length) { document.getElementById('ra_list').innerHTML = '<p>Нет данных.</p>'; return; }
+            var html = '';
+            data.forEach(function (r) {
+              var rate = (r.completion_rate != null) ? r.completion_rate : 0;
+              html += '<div style="margin-bottom:16px;padding:12px;background:#f8f9fa;border-radius:8px"><strong>' + escAttr(r.login || '') + '</strong> ' + (r.fio ? escAttr(r.fio) : '') + '<br>Клиентов: ' + (r.customer_count || 0) + ', Визитов: ' + (r.total_visits || 0) + ', Завершено: ' + (r.completed_visits || 0) + ' (' + rate + '%)</div>';
+            });
+            document.getElementById('ra_list').innerHTML = html;
+          }).catch(function (e) { document.getElementById('ra_list').innerHTML = '<p class="err">Ошибка загрузки</p>'; });
+        }
+        document.getElementById('ra_load').onclick = run;
+        run();
+      }
+
+      function loadSectionReportExpeditors() {
+        var content = document.getElementById('content');
+        content.innerHTML = '<div class="card"><h2>Отчёт: Эффективность экспедиторов</h2><p><label>Месяц </label><input type="text" id="re_month" placeholder="ГГГГ-ММ" style="max-width:130px"> <button type="button" class="btn btn-primary" id="re_load">Показать</button></p><div id="re_list"></div></div>';
+        var reMonth = document.getElementById('re_month');
+        if (reMonth && window.flatpickr) {
+          window.flatpickr(reMonth, { locale: 'ru', dateFormat: 'Y-m', allowInput: true });
+        }
+        function run() {
+          var monthVal = document.getElementById('re_month') && document.getElementById('re_month').value;
+          var month = monthVal ? monthVal.toString().substring(0, 7) : '';
+          var url = '/api/v1/reports/expeditors'; if (month) url += '?month=' + encodeURIComponent(month);
+          document.getElementById('re_list').innerHTML = '<p>Загрузка...</p>';
+          api(url).then(function (res) {
+            var data = (res && res.data) ? res.data : [];
+            if (!data.length) { document.getElementById('re_list').innerHTML = '<p>Нет данных.</p>'; return; }
+            var html = '';
+            data.forEach(function (r) {
+              var rate = (r.completion_rate != null) ? r.completion_rate : 0;
+              html += '<div style="margin-bottom:16px;padding:12px;background:#f8f9fa;border-radius:8px"><strong>' + escAttr(r.login || '') + '</strong><br>Клиентов: ' + (r.customer_count || 0) + ', Визитов: ' + (r.total_visits || 0) + ', Завершено: ' + (r.completed_visits || 0) + ' (' + rate + '%)</div>';
+            });
+            document.getElementById('re_list').innerHTML = html;
+          }).catch(function (e) { document.getElementById('re_list').innerHTML = '<p class="err">Ошибка загрузки</p>'; });
+        }
+        document.getElementById('re_load').onclick = run;
+        run();
+      }
+
+      function loadSectionReportVisits() {
+        var content = document.getElementById('content');
+        content.innerHTML = '<div class="card"><h2>Отчёт: Аналитика визитов</h2><p><label>Период от </label><input type="text" id="rv_from" placeholder="ГГГГ-ММ-ДД" style="max-width:140px"> <label>до </label><input type="text" id="rv_to" placeholder="ГГГГ-ММ-ДД" style="max-width:140px"> <button type="button" class="btn btn-primary" id="rv_load">Показать</button></p><div id="rv_summary"></div><div id="rv_table"></div></div>';
+        var rvFrom = document.getElementById('rv_from');
+        var rvTo = document.getElementById('rv_to');
+        if (window.flatpickr) {
+          if (rvFrom) window.flatpickr(rvFrom, { locale: 'ru', dateFormat: 'Y-m-d', allowInput: true });
+          if (rvTo) window.flatpickr(rvTo, { locale: 'ru', dateFormat: 'Y-m-d', allowInput: true });
+        }
+        function run() {
+          var from = document.getElementById('rv_from') && document.getElementById('rv_from').value;
+          var to = document.getElementById('rv_to') && document.getElementById('rv_to').value;
+          var url = '/api/v1/reports/visits'; if (from) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'from_date=' + encodeURIComponent(from); if (to) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'to_date=' + encodeURIComponent(to);
+          document.getElementById('rv_summary').innerHTML = ''; document.getElementById('rv_table').innerHTML = '<p>Загрузка...</p>';
+          api(url).then(function (res) {
+            var sum = (res && res.summary) ? res.summary : {};
+            document.getElementById('rv_summary').innerHTML = '<p><strong>Всего визитов:</strong> ' + (sum.total_visits || 0) + ', Завершено: ' + (sum.completed || 0) + ' (' + (sum.completion_rate != null ? sum.completion_rate : 0) + '%)</p>';
+            var byDate = (res && res.by_date) ? res.by_date : [];
+            if (!byDate.length) { document.getElementById('rv_table').innerHTML = '<p>Нет данных по датам.</p>'; return; }
+            var t = '<div style="overflow-x:auto"><table><thead><tr><th>Дата</th><th>Всего</th><th>Завершено</th><th>Запланировано</th><th>Отменено</th></tr></thead><tbody>';
+            byDate.forEach(function (r) { t += '<tr><td>' + escAttr(r.date || '') + '</td><td>' + (r.total_visits || 0) + '</td><td>' + (r.completed || 0) + '</td><td>' + (r.planned || 0) + '</td><td>' + (r.cancelled || 0) + '</td></tr>'; });
+            t += '</tbody></table></div>';
+            document.getElementById('rv_table').innerHTML = t;
+          }).catch(function (e) { document.getElementById('rv_table').innerHTML = '<p class="err">Ошибка загрузки</p>'; });
+        }
+        document.getElementById('rv_load').onclick = run;
+        run();
+      }
+
+      function loadSectionReportDashboard() {
+        var content = document.getElementById('content');
+        content.innerHTML = '<div class="card"><h2>Сводная аналитика</h2><div id="rd_kpi"></div><div id="rd_inactive"></div><div id="rd_tops"></div></div>';
+        api('/api/v1/reports/dashboard').then(function (res) {
+          var kpi = (res && res.kpi) ? res.kpi : {};
+          document.getElementById('rd_kpi').innerHTML = '<p><strong>Клиентов всего:</strong> ' + (kpi.total_customers || 0) + ' &nbsp; <strong>Визитов в месяце:</strong> ' + (kpi.visits_this_month || 0) + ' &nbsp; <strong>Активных клиентов:</strong> ' + (kpi.active_customers || 0) + '% &nbsp; <strong>Завершённость:</strong> ' + (kpi.completion_rate || 0) + '%</p>';
+          var inc = (res && res.inactive_customers) ? res.inactive_customers : {};
+          document.getElementById('rd_inactive').innerHTML = '<p><strong>Неактивные клиенты (30+ дней):</strong> ' + (inc.count || 0) + '</p>';
+          var tops = '<p><strong>Топ агентов и клиентов</strong> — см. отчёты по агентам и по клиентам.</p>';
+          document.getElementById('rd_tops').innerHTML = tops;
+        }).catch(function (e) {
+          document.getElementById('rd_kpi').innerHTML = '<p class="err">Ошибка загрузки дашборда</p>';
+        });
+      }
+
+      function loadSectionReportPhotos() {
+        var content = document.getElementById('content');
+        content.innerHTML = '<div class="card"><h2>Отчёт: Фотографии клиентов</h2><div id="rp_stats"></div><div id="rp_without"></div><div id="rp_recent"></div></div>';
+        api('/api/v1/reports/photos').then(function (res) {
+          var stats = (res && res.statistics) ? res.statistics : {};
+          document.getElementById('rp_stats').innerHTML = '<p><strong>Всего фото:</strong> ' + (stats.total_photos || 0) + ', Клиентов с фото: ' + (stats.customers_with_photos || 0) + ', Без фото: ' + (stats.customers_without_photos || 0) + '</p>';
+          var without = (res && res.customers_without_photos) ? res.customers_without_photos : [];
+          document.getElementById('rp_without').innerHTML = without.length ? '<p><strong>Клиенты без фото:</strong> ' + without.length + '</p><ul>' + without.slice(0, 20).map(function (c) { return '<li>' + escAttr(c.name || c.name_client || '') + '</li>'; }).join('') + '</ul>' : '<p>Все клиенты с фото или список пуст.</p>';
+          var recent = (res && res.recent_uploads) ? res.recent_uploads : [];
+          document.getElementById('rp_recent').innerHTML = recent.length ? '<p><strong>Последние загрузки:</strong></p><ul>' + recent.slice(0, 10).map(function (p) { return '<li>' + escAttr(p.customer_name || '') + ' — ' + (p.uploaded_at || '') + ' (' + (p.uploaded_by || '') + ')</li>'; }).join('') + '</ul>' : '<p>Нет недавних загрузок.</p>';
+        }).catch(function (e) {
+          document.getElementById('rp_stats').innerHTML = '<p class="err">Ошибка загрузки</p>';
+        });
+      }
+
       document.getElementById('btnLogout').onclick = function () { localStorage.removeItem('sds_token'); window.location.href = '/login'; };
+      var btnAbout = document.getElementById('btnAbout');
+      if (btnAbout) {
+        btnAbout.onclick = function () {
+          var bodyHtml = '' +
+            '<p><strong>Система управления продажами и дистрибуцией</strong></p>' +
+            '<p style="margin-top:8px;margin-bottom:4px">Разработано:</p>' +
+            '<p style="margin:0 0 12px 0">Захаренков Дмитрий</p>' +
+            '<p style="margin:0 0 4px 0"><strong>Контакты разработчика:</strong></p>' +
+            '<p style="margin:0 0 4px 0">📧 Email: <a href="mailto:dima@zakharenkov.ru">dima@zakharenkov.ru</a></p>' +
+            '<p style="margin:0 0 4px 0">🌐 Сайт: <a href="https://zakharenkov.ru" target="_blank" rel="noopener">zakharenkov.ru</a></p>' +
+            '<p style="margin:0 0 4px 0">💼 LinkedIn: <a href="https://www.linkedin.com/in/dmity-zakharenkov/" target="_blank" rel="noopener">linkedin.com/in/dmity-zakharenkov</a></p>' +
+            '<p style="margin:0 0 0 0">📱 Telegram: <a href="https://t.me/dmitry_zakharenkov" target="_blank" rel="noopener">@dmitry_zakharenkov</a></p>';
+          showModal('О системе', bodyHtml, function () { return Promise.resolve(); });
+        };
+      }
+      var btnAbout = document.getElementById('btnAbout');
+      if (btnAbout) {
+        btnAbout.onclick = function () {
+          var bodyHtml = '' +
+            '<p><strong>Система управления продажами и дистрибуцией</strong></p>' +
+            '<p style=\"margin-top:8px;margin-bottom:4px\">Разработано:</p>' +
+            '<p style=\"margin:0 0 12px 0\">Захаренков Дмитрий</p>' +
+            '<p style=\"margin:0 0 4px 0\"><strong>Контакты разработчика:</strong></p>' +
+            '<p style=\"margin:0 0 4px 0\">📧 Email: <a href=\"mailto:dima@zakharenkov.ru\">dima@zakharenkov.ru</a></p>' +
+            '<p style=\"margin:0 0 4px 0\">🌐 Сайт: <a href=\"https://zakharenkov.ru\" target=\"_blank\" rel=\"noopener\">zakharenkov.ru</a></p>' +
+            '<p style=\"margin:0 0 4px 0\">💼 LinkedIn: <a href=\"https://www.linkedin.com/in/dmity-zakharenkov/\" target=\"_blank\" rel=\"noopener\">linkedin.com/in/dmity-zakharenkov</a></p>' +
+            '<p style=\"margin:0 0 0 0\">📱 Telegram: <a href=\"https://t.me/dmitry_zakharenkov\" target=\"_blank\" rel=\"noopener\">@dmitry_zakharenkov</a></p>';
+          showModal('О системе', bodyHtml, function () { return Promise.resolve(); });
+        };
+      }
       document.querySelectorAll('.sidebar a').forEach(function (a) {
         a.onclick = function (e) {
           e.preventDefault();

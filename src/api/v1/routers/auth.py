@@ -1,7 +1,10 @@
 """
 Авторизация: логин + пароль (проверка по БД), возврат JWT.
 Эндпоинт /auth/me — кто сейчас вошёл (по токену).
+Эндпоинт /config — публичная конфигурация для фронта (ключи карт и т.п.).
 """
+import os
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -62,3 +65,11 @@ async def login(
 async def me(user: User = Depends(get_current_user)):
     """Текущий пользователь по токену (для страницы после входа)."""
     return UserResponse(login=user.login, fio=user.fio or "", role=user.role or "")
+
+
+@router.get("/config")
+async def get_config(_: User = Depends(get_current_user)):
+    """Конфигурация для фронта (ключи и т.п.). Только для авторизованных."""
+    return {
+        "yandexMapsApiKey": os.environ.get("YANDEX_MAPS_API_KEY", ""),
+    }

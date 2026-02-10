@@ -3,31 +3,137 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Вход — SDS</title>
+  <title>Система управления продажами и дистрибуцией</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
   <style>
     * { box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; background: #f0f2f5; margin: 0; padding: 40px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-    .box { background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 100%; max-width: 360px; }
-    h1 { margin: 0 0 24px 0; font-size: 22px; color: #1a1a1a; }
-    label { display: block; margin-bottom: 6px; font-weight: 600; color: #333; }
-    input { width: 100%; padding: 10px 12px; margin-bottom: 16px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; }
-    button { width: 100%; padding: 12px; background: #1877f2; color: #fff; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; }
-    button:hover { background: #166fe5; }
-    .error { color: #c00; margin-top: 12px; font-size: 14px; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(145deg, #e8eeef 0%, #f0f2f5 50%, #e2e8ea 100%);
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .login-page {
+      width: 100%;
+      max-width: 400px;
+    }
+    .login-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .login-card-header {
+      background: #2d2d3a;
+      color: #fff;
+      padding: 28px 32px 24px;
+      text-align: center;
+    }
+    .login-card-header .logo {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 14px;
+      display: block;
+      border-radius: 12px;
+      object-fit: contain;
+      background: rgba(255,255,255,0.1);
+    }
+    .login-card-header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #fff;
+    }
+    .login-card-header p {
+      margin: 6px 0 0 0;
+      font-size: 13px;
+      color: rgba(255,255,255,0.75);
+    }
+    .login-card-body {
+      padding: 32px;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-group:last-of-type { margin-bottom: 22px; }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      color: #374151;
+    }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 15px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus {
+      outline: none;
+      border-color: #0d9488;
+      box-shadow: 0 0 0 3px rgba(13,148,136,0.2);
+    }
+    input::placeholder { color: #9ca3af; }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: #0d9488;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    button:hover {
+      background: #0f766e;
+      box-shadow: 0 2px 12px rgba(13,148,136,0.35);
+    }
+    button:active { background: #0c7a6f; }
+    .error {
+      color: #b91c1c;
+      margin-top: 14px;
+      font-size: 14px;
+      padding: 10px 12px;
+      background: #fef2f2;
+      border-radius: 8px;
+      border: 1px solid #fecaca;
+    }
+    .error:empty { display: none !important; }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h1>Вход в систему SDS</h1>
-    <form id="form">
-      <label for="login">Логин</label>
-      <input type="text" id="login" name="login" required autocomplete="username">
-      <label for="password">Пароль</label>
-      <input type="password" id="password" name="password" required autocomplete="current-password">
-      <button type="submit">Войти</button>
-    </form>
-    <p id="error" class="error" style="display:none;"></p>
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-card-header">
+        <img src="/favicon.ico" alt="" class="logo">
+        <h1>Вход в систему управления продажами и дистрибуцией</h1>
+      </div>
+      <div class="login-card-body">
+        <form id="form">
+          <div class="form-group">
+            <label for="login">Логин</label>
+            <input type="text" id="login" name="login" required autocomplete="username" placeholder="Введите логин">
+          </div>
+          <div class="form-group">
+            <label for="password">Пароль</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="Введите пароль">
+          </div>
+          <button type="submit">Войти</button>
+        </form>
+        <p id="error" class="error" style="display:none;"></p>
+      </div>
+    </div>
   </div>
   <script>
     const form = document.getElementById('form');
@@ -35,6 +141,7 @@
     form.onsubmit = async (e) => {
       e.preventDefault();
       errEl.style.display = 'none';
+      errEl.textContent = '';
       const login = document.getElementById('login').value.trim();
       const password = document.getElementById('password').value;
       try {

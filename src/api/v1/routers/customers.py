@@ -98,6 +98,10 @@ class CustomerUpdate(BaseModel):
 
 @router.get("/customers")
 async def list_customers(
+    search: str | None = Query(
+        None,
+        description="Расширенный поиск по названию клиента И по ИНН (частичное совпадение, OR)",
+    ),
     name_client: str | None = Query(None, description="Поиск по названию клиента (частичное совпадение)"),
     firm_name: str | None = Query(None, description="Поиск по названию фирмы"),
     city: str | None = Query(None),
@@ -113,6 +117,10 @@ async def list_customers(
     sql = 'SELECT id, name_client, firm_name, category_client, address, city, territory, landmark, phone, contact_person, tax_id, status, login_agent, login_expeditor, latitude, longitude, pinfl, contract_no, account_no, bank, mfo, oked, vat_code FROM "Sales".customers'
     conditions = []
     params = {}
+    # Расширенный поиск: одно поле search ищет и по name_client, и по tax_id (OR)
+    if search and search.strip():
+        conditions.append("(name_client ILIKE :search OR tax_id ILIKE :search)")
+        params["search"] = "%" + search.strip() + "%"
     if name_client and name_client.strip():
         conditions.append(" name_client ILIKE :name_client ")
         params["name_client"] = "%" + name_client.strip() + "%"

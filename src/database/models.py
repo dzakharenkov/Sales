@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     ForeignKey,
     Date,
+    Time,
     TIMESTAMP,
     func,
     text,
@@ -72,6 +73,7 @@ class Product(Base):
     active = Column(Boolean, default=True)
     last_updated_by_login = Column(String, ForeignKey("Sales.users.login"), nullable=True)
     last_updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    currency_code = Column(String, ForeignKey("Sales.currency.code"), nullable=True)
 
 
 class Batch(Base):
@@ -154,6 +156,44 @@ class Customer(Base):
     MFO = Column("mfo", Text, nullable=True)
     OKED = Column("oked", Text, nullable=True)
     VAT_code = Column("vat_code", Text, nullable=True)
+    main_photo_id = Column(Integer, ForeignKey("Sales.customer_photo.id", use_alter=True, name="customers_main_photo_id_fkey"), nullable=True)
+
+
+class CustomerVisit(Base):
+    """Визиты клиентам (ТЗ 3.0)."""
+    __tablename__ = "customers_visits"
+    __table_args__ = {"schema": "Sales"}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(Integer, ForeignKey("Sales.customers.id", ondelete="CASCADE"), nullable=False)
+    visit_date = Column(Date, nullable=False)
+    visit_time = Column(Time, nullable=True)
+    status = Column(Text, nullable=False)  # planned | completed | cancelled
+    responsible_login = Column(String, ForeignKey("Sales.users.login", ondelete="SET NULL"), nullable=True)
+    comment = Column(Text, nullable=True)
+    public_token = Column(Text, unique=True, nullable=False, server_default=text("md5(random()::text)"))
+    created_by = Column(String, ForeignKey("Sales.users.login"), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_by = Column(String, ForeignKey("Sales.users.login"), nullable=True)
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class CustomerPhoto(Base):
+    """Фотографии клиентов (ТЗ 3.0)."""
+    __tablename__ = "customer_photo"
+    __table_args__ = {"schema": "Sales"}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(Integer, ForeignKey("Sales.customers.id", ondelete="CASCADE"), nullable=False)
+    photo_path = Column(Text, nullable=False)
+    original_filename = Column(Text, nullable=True)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    download_token = Column(Text, unique=True, nullable=False, server_default=text("md5(random()::text)"))
+    is_main = Column(Boolean, default=False)
+    uploaded_by = Column(String, ForeignKey("Sales.users.login"), nullable=False)
+    uploaded_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
 
 class OperationType(Base):
@@ -190,6 +230,17 @@ class PaymentType(Base):
     code = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
+
+
+class Currency(Base):
+    __tablename__ = "currency"
+    __table_args__ = {"schema": "Sales"}
+
+    code = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    country = Column(String, nullable=True)
+    symbol = Column(String, nullable=True)
+    is_default = Column(Boolean, default=False)
 
 
 class Status(Base):

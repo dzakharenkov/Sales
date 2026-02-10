@@ -1,10 +1,10 @@
 -- Схема БД Sales (актуальное состояние)
--- Обновлено: 2026-02. Таблицы: users, product_type, product, batches,
+-- Обновлено: 2026-02-10 (при каждом изменении указывать полную дату ГГГГ-ММ-ДД). Таблицы: users, product_type, product, batches,
 -- product_batches, warehouse, warehouse_stock, customers, operation_types,
 -- operation_config, expiry_date_config, payment_type, status, orders,
--- items, operations.
--- VIEW: v_warehouse_stock, v_financial_ledger, v_operations_lifecycle.
--- Функция: generate_operation_number().
+-- items, operations, customers_visits, customer_photo.
+-- VIEW: v_warehouse_stock, v_financial_ledger, v_operations_lifecycle, v_visits_statistics, v_upcoming_visits.
+-- Функция: generate_operation_number(). Доп. миграция визитов/фото: migration_visits_photos.sql
 -- ============================================================
 
 -- Расширение для UUID (PostgreSQL 13+ можно использовать gen_random_uuid() без расширения)
@@ -36,6 +36,20 @@ CREATE TABLE "Sales".product_type (
   description TEXT NOT NULL
 );
 
+-- Валюта
+CREATE TABLE IF NOT EXISTS "Sales".currency (
+  code TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  country TEXT,
+  symbol TEXT,
+  is_default BOOLEAN DEFAULT FALSE
+);
+
+-- Базовая валюта: сум (Узбекистан)
+INSERT INTO "Sales".currency (code, name, country, symbol, is_default)
+VALUES ('sum', 'сум', 'Узбекистан', 'сум', TRUE)
+ON CONFLICT (code) DO NOTHING;
+
 -- Товары
 CREATE TABLE "Sales".product (
   code VARCHAR(50) PRIMARY KEY,
@@ -47,7 +61,8 @@ CREATE TABLE "Sales".product (
   expiry_days INT,
   active BOOLEAN DEFAULT TRUE,
   last_updated_by_login TEXT REFERENCES "Sales".users(login),
-  last_updated_at TIMESTAMPTZ DEFAULT now()
+  last_updated_at TIMESTAMPTZ DEFAULT now(),
+  currency_code TEXT REFERENCES "Sales".currency(code)
 );
 
 -- Партии
@@ -445,6 +460,219 @@ LEFT JOIN "Sales".batches b ON o.batch_id = b.id
 LEFT JOIN "Sales".customers c ON o.customer_id = c.id
 LEFT JOIN "Sales".operations related_op ON o.related_operation_id = related_op.id
 ORDER BY o.operation_date DESC;
+
+-- ============================================================
+-- Визиты клиентам и фотографии (ТЗ 3.0, 2026-02-10)
+-- ============================================================
+
+-- Таблица customers_visits
+CREATE TABLE IF NOT EXISTS "Sales".customers_visits (
+  id SERIAL PRIMARY KEY,
+  customer_id INT NOT NULL REFERENCES "Sales".customers(id) ON DELETE CASCADE,
+  visit_date DATE NOT NULL,
+  visit_time TIME,
+  status TEXT NOT NULL CHECK (status IN ('planned', 'completed', 'cancelled', 'postponed')),
+  responsible_login TEXT REFERENCES "Sales".users(login) ON DELETE SET NULL,
+  comment TEXT,
+  public_token TEXT UNIQUE NOT NULL DEFAULT md5(random()::text),
+  created_by TEXT NOT NULL REFERENCES "Sales".users(login),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_by TEXT REFERENCES "Sales".users(login),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_customers_visits_customer_id ON "Sales".customers_visits(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customers_visits_status ON "Sales".customers_visits(status);
+CREATE INDEX IF NOT EXISTS idx_customers_visits_date ON "Sales".customers_visits(visit_date DESC);
+CREATE INDEX IF NOT EXISTS idx_customers_visits_customer_date ON "Sales".customers_visits(customer_id, visit_date DESC);
+CREATE INDEX IF NOT EXISTS idx_customers_visits_responsible ON "Sales".customers_visits(responsible_login);
+CREATE INDEX IF NOT EXISTS idx_customers_visits_created_at ON "Sales".customers_visits(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_customers_visits_public_token ON "Sales".customers_visits(public_token);
+
+-- Таблица customer_photo
+CREATE TABLE IF NOT EXISTS "Sales".customer_photo (
+  id SERIAL PRIMARY KEY,
+  customer_id INT NOT NULL REFERENCES "Sales".customers(id) ON DELETE CASCADE,
+  photo_path TEXT NOT NULL,
+  original_filename TEXT,
+  file_size INT,
+  mime_type TEXT,
+  description TEXT,
+  download_token TEXT UNIQUE NOT NULL DEFAULT md5(random()::text),
+  is_main BOOLEAN DEFAULT FALSE,
+  uploaded_by TEXT NOT NULL REFERENCES "Sales".users(login),
+  uploaded_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_customer_photo_customer_id ON "Sales".customer_photo(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_photo_is_main ON "Sales".customer_photo(customer_id, is_main) WHERE is_main = TRUE;
+CREATE INDEX IF NOT EXISTS idx_customer_photo_uploaded_at ON "Sales".customer_photo(uploaded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_customer_photo_download_token ON "Sales".customer_photo(download_token);
+
+-- Поле main_photo_id в customers
+ALTER TABLE "Sales".customers ADD COLUMN IF NOT EXISTS main_photo_id INT;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'customers_main_photo_id_fkey'
+    AND table_schema = 'Sales' AND table_name = 'customers'
+  ) THEN
+    ALTER TABLE "Sales".customers ADD CONSTRAINT customers_main_photo_id_fkey
+      FOREIGN KEY (main_photo_id) REFERENCES "Sales".customer_photo(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+-- VIEW статистики визитов
+CREATE OR REPLACE VIEW "Sales".v_visits_statistics AS
+SELECT
+  c.id AS customer_id,
+  c.name_client,
+  c.firm_name,
+  COUNT(cv.id) AS total_visits,
+  SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END) AS completed_visits,
+  SUM(CASE WHEN cv.status = 'planned' THEN 1 ELSE 0 END) AS planned_visits,
+  SUM(CASE WHEN cv.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_visits,
+  MAX(cv.visit_date) AS last_visit_date,
+  MIN(cv.visit_date) AS first_visit_date
+FROM "Sales".customers c
+LEFT JOIN "Sales".customers_visits cv ON c.id = cv.customer_id
+GROUP BY c.id, c.name_client, c.firm_name
+ORDER BY last_visit_date DESC NULLS LAST;
+
+-- VIEW предстоящие визиты
+CREATE OR REPLACE VIEW "Sales".v_upcoming_visits AS
+SELECT
+  cv.id,
+  cv.public_token,
+  cv.customer_id,
+  c.name_client,
+  c.phone,
+  cv.visit_date,
+  cv.visit_time,
+  cv.status,
+  cv.responsible_login,
+  cv.comment,
+  u.fio AS responsible_name
+FROM "Sales".customers_visits cv
+JOIN "Sales".customers c ON cv.customer_id = c.id
+LEFT JOIN "Sales".users u ON cv.responsible_login = u.login
+WHERE cv.visit_date >= CURRENT_DATE
+  AND cv.status IN ('planned', 'completed')
+ORDER BY cv.visit_date ASC, cv.visit_time ASC NULLS LAST;
+
+-- ============================================================
+-- VIEWs для отчётности (ТЗ: меню и отчётность)
+-- ============================================================
+
+-- Дополнительная миграция: валюты и поле currency_code в product
+ALTER TABLE "Sales".product ADD COLUMN IF NOT EXISTS currency_code TEXT;
+UPDATE "Sales".product SET currency_code = 'sum' WHERE currency_code IS NULL;
+
+-- 1. По клиентам
+CREATE OR REPLACE VIEW "Sales".v_report_customers AS
+SELECT
+  c.id,
+  c.name_client,
+  c.firm_name,
+  c.login_agent,
+  COUNT(DISTINCT cv.id) AS total_visits,
+  SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END) AS completed_visits,
+  SUM(CASE WHEN cv.status = 'planned' THEN 1 ELSE 0 END) AS planned_visits,
+  SUM(CASE WHEN cv.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_visits,
+  MAX(cv.visit_date) AS last_visit_date,
+  CASE
+    WHEN MAX(cv.visit_date) >= CURRENT_DATE - INTERVAL '30 days' THEN 'Активен'
+    ELSE 'Неактивен'
+  END AS status,
+  COUNT(DISTINCT cp.id) AS total_photos
+FROM "Sales".customers c
+LEFT JOIN "Sales".customers_visits cv ON c.id = cv.customer_id
+LEFT JOIN "Sales".customer_photo cp ON c.id = cp.customer_id
+GROUP BY c.id, c.name_client, c.firm_name, c.login_agent;
+
+-- 2. По агентам — эффективность
+CREATE OR REPLACE VIEW "Sales".v_report_agents AS
+SELECT
+  u.login,
+  u.fio,
+  COUNT(DISTINCT cv.customer_id) AS customer_count,
+  COUNT(DISTINCT cv.id) AS total_visits,
+  SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END) AS completed_visits,
+  SUM(CASE WHEN cv.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_visits,
+  ROUND(
+    SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(DISTINCT cv.id), 0) * 100,
+    1
+  ) AS completion_rate,
+  MAX(cv.visit_date) AS last_visit_date,
+  ROUND(
+    COUNT(DISTINCT cv.id)::NUMERIC / NULLIF((MAX(cv.visit_date) - MIN(cv.visit_date)) + 1, 0),
+    2
+  ) AS avg_visits_per_day
+FROM "Sales".users u
+LEFT JOIN "Sales".customers_visits cv ON u.login = cv.responsible_login
+WHERE LOWER(u.role::text) IN ('agent', 'expeditor', 'admin')
+GROUP BY u.login, u.fio;
+
+-- 3. По визитам — статистика по датам
+CREATE OR REPLACE VIEW "Sales".v_report_visits_stats AS
+SELECT
+  DATE(cv.visit_date) AS visit_date,
+  EXTRACT(DOW FROM cv.visit_date) AS day_of_week,
+  TO_CHAR(cv.visit_date, 'Day') AS day_name,
+  COUNT(*) AS total_visits,
+  SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END) AS completed,
+  SUM(CASE WHEN cv.status = 'planned' THEN 1 ELSE 0 END) AS planned,
+  SUM(CASE WHEN cv.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+  COUNT(DISTINCT cv.customer_id) AS unique_customers,
+  COUNT(DISTINCT cv.responsible_login) AS unique_agents
+FROM "Sales".customers_visits cv
+GROUP BY DATE(cv.visit_date), EXTRACT(DOW FROM cv.visit_date), TO_CHAR(cv.visit_date, 'Day')
+ORDER BY visit_date DESC;
+
+-- 4. Клиенты без фотографий
+CREATE OR REPLACE VIEW "Sales".v_customers_without_photos AS
+SELECT
+  c.id,
+  c.name_client,
+  c.firm_name,
+  c.login_agent,
+  COUNT(DISTINCT cv.id) AS visit_count,
+  MAX(cv.visit_date) AS last_visit
+FROM "Sales".customers c
+LEFT JOIN "Sales".customers_visits cv ON c.id = cv.customer_id
+LEFT JOIN "Sales".customer_photo cp ON c.id = cp.customer_id
+WHERE cp.id IS NULL
+GROUP BY c.id, c.name_client, c.firm_name, c.login_agent
+ORDER BY visit_count DESC;
+
+-- 5. Статистика фотографий по дате и загрузившему
+CREATE OR REPLACE VIEW "Sales".v_report_photos_stats AS
+SELECT
+  DATE(cp.uploaded_at) AS upload_date,
+  cp.uploaded_by,
+  u.fio,
+  COUNT(*) AS photos_count,
+  COUNT(DISTINCT cp.customer_id) AS unique_customers,
+  SUM(cp.file_size) AS total_size_bytes
+FROM "Sales".customer_photo cp
+LEFT JOIN "Sales".users u ON cp.uploaded_by = u.login
+GROUP BY DATE(cp.uploaded_at), cp.uploaded_by, u.fio
+ORDER BY upload_date DESC;
+
+-- 6. Неактивные клиенты (30+ дней без визитов)
+CREATE OR REPLACE VIEW "Sales".v_inactive_customers AS
+SELECT
+  c.id,
+  c.name_client,
+  c.firm_name,
+  c.login_agent,
+  MAX(cv.visit_date) AS last_visit_date,
+  (CURRENT_DATE - MAX(cv.visit_date)) AS days_since_visit,
+  COUNT(DISTINCT cv.id) AS total_visits_all_time
+FROM "Sales".customers c
+LEFT JOIN "Sales".customers_visits cv ON c.id = cv.customer_id
+GROUP BY c.id, c.name_client, c.firm_name, c.login_agent
+HAVING (CURRENT_DATE - MAX(cv.visit_date)) >= 30 OR MAX(cv.visit_date) IS NULL
+ORDER BY days_since_visit DESC;
 
 -- ============================================================
 -- Конец файла

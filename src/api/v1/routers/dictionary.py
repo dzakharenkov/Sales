@@ -1,5 +1,5 @@
 """
-Справочники: товары (CRUD), типы продукции, склады.
+Справочники: товары (CRUD), типы продукции, склады, типы оплат, валюта.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.connection import get_db_session
-from src.database.models import Product, ProductType, Warehouse, PaymentType, User
+from src.database.models import Product, ProductType, Warehouse, PaymentType, User, Currency
 from src.core.deps import get_current_user, require_admin
 
 router = APIRouter()
@@ -57,6 +57,7 @@ async def list_products(
             "price": float(p.price) if p.price is not None else None,
             "expiry_days": p.expiry_days,
             "active": p.active,
+            "currency_code": getattr(p, "currency_code", None),
         }
         for p in rows
     ]
@@ -227,6 +228,118 @@ async def delete_payment_type(
     return {"code": code, "message": "deleted"}
 
 
+# --- Валюта ---
+
+
+@router.get("/currencies")
+async def list_currencies(
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Справочник валют: код, название, страна, символ, признак валюты по умолчанию."""
+    result = await session.execute(select(Currency).order_by(Currency.code))
+    rows = result.scalars().all()
+    return [
+        {
+            "code": c.code,
+            "name": c.name,
+            "country": c.country,
+            "symbol": c.symbol,
+            "is_default": bool(c.is_default),
+        }
+        for c in rows
+    ]
+
+
+class CurrencyCreate(BaseModel):
+    code: str
+    name: str
+    country: str | None = None
+    symbol: str | None = None
+    is_default: bool | None = False
+
+
+class CurrencyUpdate(BaseModel):
+    name: str | None = None
+    country: str | None = None
+    symbol: str | None = None
+    is_default: bool | None = None
+
+
+@router.post("/currencies")
+async def create_currency(
+    body: CurrencyCreate,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_admin),
+):
+    """Добавить валюту. Только admin."""
+    code = body.code.strip()
+    result = await session.execute(select(Currency).where(Currency.code == code))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Валюта с таким кодом уже существует")
+    if body.is_default:
+        # Сбрасываем флаг у других валют
+        await session.execute(Currency.__table__.update().values(is_default=False))
+    cur = Currency(
+        code=code,
+        name=body.name.strip(),
+        country=(body.country or "").strip() or None,
+        symbol=(body.symbol or "").strip() or None,
+        is_default=bool(body.is_default),
+    )
+    session.add(cur)
+    await session.commit()
+    await session.refresh(cur)
+    return {"code": cur.code, "message": "created"}
+
+
+@router.put("/currencies/{code}")
+async def update_currency(
+    code: str,
+    body: CurrencyUpdate,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_admin),
+):
+    """Изменить валюту. Только admin."""
+    result = await session.execute(select(Currency).where(Currency.code == code))
+    cur = result.scalar_one_or_none()
+    if not cur:
+        raise HTTPException(status_code=404, detail="Валюта не найдена")
+    if body.name is not None:
+        cur.name = body.name.strip()
+    if body.country is not None:
+        cur.country = body.country.strip() or None
+    if body.symbol is not None:
+        cur.symbol = body.symbol.strip() or None
+    if body.is_default is not None:
+        if body.is_default:
+            await session.execute(Currency.__table__.update().values(is_default=False))
+        cur.is_default = bool(body.is_default)
+    await session.commit()
+    await session.refresh(cur)
+    return {"code": cur.code, "message": "updated"}
+
+
+@router.delete("/currencies/{code}")
+async def delete_currency(
+    code: str,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_admin),
+):
+    """Удалить валюту. Только admin. Не удалит, если есть товары с этой валютой."""
+    result = await session.execute(select(Currency).where(Currency.code == code))
+    cur = result.scalar_one_or_none()
+    if not cur:
+        raise HTTPException(status_code=404, detail="Валюта не найдена")
+    # Проверка использования в товарах
+    prod = await session.execute(select(Product).where(Product.currency_code == code))
+    if prod.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Нельзя удалить: есть товары с этой валютой")
+    await session.delete(cur)
+    await session.commit()
+    return {"code": code, "message": "deleted"}
+
+
 @router.get("/warehouses")
 async def list_warehouses(
     session: AsyncSession = Depends(get_db_session),
@@ -371,6 +484,7 @@ class ProductCreate(BaseModel):
     unit: str | None = None
     price: float | None = None
     expiry_days: int | None = None
+    currency_code: str | None = None
 
 
 class ProductUpdate(BaseModel):
@@ -381,6 +495,7 @@ class ProductUpdate(BaseModel):
     price: float | None = None
     expiry_days: int | None = None
     active: bool | None = None
+    currency_code: str | None = None
 
 
 @router.post("/products")
@@ -410,6 +525,7 @@ async def create_product(
         expiry_days=body.expiry_days,
         active=True,
         last_updated_by_login=user.login,
+        currency_code=body.currency_code or "sum",
     )
     session.add(product)
     await session.commit()
@@ -443,6 +559,10 @@ async def update_product(
         product.expiry_days = body.expiry_days
     if body.active is not None:
         product.active = body.active
+    if body.currency_code is not None:
+        product.currency_code = body.currency_code or None
+    if getattr(product, "currency_code", None) is None:
+        product.currency_code = "sum"
     product.last_updated_by_login = user.login
     await session.commit()
     await session.refresh(product)
