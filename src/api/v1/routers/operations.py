@@ -28,11 +28,14 @@ async def list_operation_types(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Типы операций: приход, расход, продажа, возврат и т.д. (code PK) + активность из operation_config."""
+    """Типы операций: приход, расход, продажа, возврат и т.д. (code PK) + активность из operation_config.
+    active=True только если есть operation_config и oc.active=TRUE. has_config=True если конфиг есть (для создания операции)."""
     result = await session.execute(
         text(
             '''
-            SELECT ot.code, ot.name, ot.description, COALESCE(oc.active, TRUE) AS active
+            SELECT ot.code, ot.name, ot.description,
+                   (oc.operation_type_code IS NOT NULL AND COALESCE(oc.active, TRUE) = TRUE) AS active,
+                   (oc.operation_type_code IS NOT NULL) AS has_config
             FROM "Sales".operation_types ot
             LEFT JOIN "Sales".operation_config oc
               ON oc.operation_type_code = ot.code
@@ -42,7 +45,7 @@ async def list_operation_types(
     )
     rows = result.fetchall()
     return [
-        {"code": r[0], "name": r[1], "description": r[2], "active": bool(r[3])}
+        {"code": r[0], "name": r[1], "description": r[2], "active": bool(r[3]), "has_config": bool(r[4])}
         for r in rows
     ]
 
@@ -566,7 +569,7 @@ async def create_operation_from_config(
     operation_type: str,
     body: OperationCreateFromConfig,
     session: AsyncSession = Depends(get_db_session),
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
 ):
     """
     Создать операцию с валидацией по конфигу из operation_config.
@@ -594,7 +597,24 @@ async def create_operation_from_config(
             status_code=404,
             detail=f"Configuration for '{operation_type}' not found"
         )
-    
+    role = (user.role or "").lower()
+    if operation_type == "payment_receipt_from_customer":
+        if role not in ("admin", "expeditor"):
+            raise HTTPException(status_code=403, detail="Только экспедитор или администратор может создать эту операцию")
+    elif operation_type == "cash_receipt":
+        if role not in ("admin", "paymaster"):
+            raise HTTPException(status_code=403, detail="Только кассир или администратор может создать эту операцию")
+    elif operation_type in ("warehouse_receipt", "allocation", "transfer", "write_off"):
+        if role not in ("admin", "stockman"):
+            raise HTTPException(status_code=403, detail="Только кладовщик или администратор может создать эту операцию")
+    elif operation_type == "delivery":
+        if role not in ("admin", "expeditor"):
+            raise HTTPException(status_code=403, detail="Только экспедитор или администратор может создать эту операцию")
+    elif operation_type == "promotional_sample":
+        if role not in ("admin", "stockman", "expeditor"):
+            raise HTTPException(status_code=403, detail="Только кладовщик, экспедитор или администратор может создать эту операцию")
+    elif role != "admin":
+        raise HTTPException(status_code=403, detail="Только администратор может создать эту операцию")
     logger.info(f"✓ Конфиг найден")
     
     # ШАГ 2: Парсить required_fields из конфига
@@ -757,6 +777,23 @@ async def create_operation_from_config(
     )
     
     session.add(op)
+    await session.flush()
+    if operation_type == "payment_receipt_from_customer":
+        num2 = (await session.execute(text('SELECT "Sales".generate_operation_number()'))).scalar() or "OP-000000"
+        handover = Operation(
+            operation_number=num2,
+            type_code="cash_handover_from_expeditor",
+            status="pending",
+            operation_date=datetime.now(timezone.utc),
+            created_by=op.created_by,
+            amount=op.amount,
+            expeditor_login=op.expeditor_login,
+            customer_id=op.customer_id,
+            order_id=op.order_id,
+            related_operation_id=op.id,
+        )
+        session.add(handover)
+        logger.info(f"  Автосоздана cash_handover_from_expeditor: {num2}")
     try:
         await session.commit()
         await session.refresh(op)

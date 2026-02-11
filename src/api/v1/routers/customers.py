@@ -3,6 +3,7 @@
 """
 import csv
 import io
+from datetime import date, time
 from decimal import Decimal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
@@ -12,7 +13,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.connection import get_db_session
-from src.database.models import Customer, User, Operation
+from src.database.models import Customer, User, Operation, CustomerVisit
 from src.core.deps import get_current_user, require_admin
 
 router = APIRouter()
@@ -371,6 +372,87 @@ async def create_customer(
     await session.commit()
     await session.refresh(c)
     return _customer_to_dict(c)
+
+
+@router.get("/customers/{customer_id}/visits")
+async def list_customer_visits(
+    customer_id: int,
+    limit: int = Query(100, le=500),
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Список визитов клиента."""
+    r = await session.execute(select(Customer).where(Customer.id == customer_id))
+    if r.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+    r2 = await session.execute(
+        select(CustomerVisit, User.fio)
+        .outerjoin(User, CustomerVisit.responsible_login == User.login)
+        .where(CustomerVisit.customer_id == customer_id)
+        .order_by(CustomerVisit.visit_date.desc(), CustomerVisit.visit_time.desc().nullslast())
+        .limit(limit)
+    )
+    rows = r2.all()
+    out = []
+    for v, resp_fio in rows:
+        out.append({
+            "id": v.id,
+            "visit_date": v.visit_date.isoformat() if v.visit_date else None,
+            "visit_time": v.visit_time.strftime("%H:%M") if v.visit_time else None,
+            "status": v.status,
+            "responsible_login": v.responsible_login,
+            "responsible_name": resp_fio or v.responsible_login or "",
+            "comment": v.comment,
+        })
+    return out
+
+
+class VisitCreateBody(BaseModel):
+    visit_date: str
+    visit_time: str | None = None
+    status: str = "planned"
+    responsible_login: str | None = None
+    comment: str | None = None
+
+
+@router.post("/customers/{customer_id}/visits")
+async def create_customer_visit(
+    customer_id: int,
+    body: VisitCreateBody,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Создать визит для клиента."""
+    r = await session.execute(select(Customer).where(Customer.id == customer_id))
+    if r.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+    try:
+        visit_date = date.fromisoformat(body.visit_date[:10])
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Некорректная дата визита")
+    visit_time = None
+    if body.visit_time and body.visit_time.strip():
+        s = body.visit_time.strip()[:8]
+        parts = s.split(":")
+        if len(parts) >= 2:
+            try:
+                h, m = int(parts[0]), int(parts[1])
+                visit_time = time(h, m, int(parts[2]) if len(parts) > 2 else 0)
+            except (ValueError, TypeError, IndexError):
+                pass
+    v = CustomerVisit(
+        customer_id=customer_id,
+        visit_date=visit_date,
+        visit_time=visit_time,
+        status=body.status or "planned",
+        responsible_login=body.responsible_login or None,
+        comment=body.comment or None,
+        created_by=user.login,
+    )
+    session.add(v)
+    await session.commit()
+    await session.refresh(v)
+    return {"id": v.id, "visit_date": body.visit_date, "status": v.status, "message": "created"}
 
 
 @router.get("/customers/{customer_id}")
