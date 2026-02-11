@@ -179,7 +179,7 @@ class CustomerVisit(Base):
 
 
 class CustomerPhoto(Base):
-    """Фотографии клиентов (ТЗ 3.0)."""
+    """Фотографии клиентов. Привязка только к клиенту. Имя файла: КОД_ДДММГГГГ_ЧЧММСС.ext"""
     __tablename__ = "customer_photo"
     __table_args__ = {"schema": "Sales"}
 
@@ -194,6 +194,7 @@ class CustomerPhoto(Base):
     is_main = Column(Boolean, default=False)
     uploaded_by = Column(String, ForeignKey("Sales.users.login"), nullable=False)
     uploaded_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    photo_datetime = Column(TIMESTAMP(timezone=True), nullable=True)  # Дата и время съёмки
 
 
 class OperationType(Base):

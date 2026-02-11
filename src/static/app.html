@@ -1036,14 +1036,14 @@
                   var refreshVisits = function () {
                     if (!container) return;
                     api('/api/v1/customers/' + cid + '/visits?limit=100').then(function (r) {
-                      var data = (r && r.data) || [];
+                      var data = Array.isArray(r) ? r : (r && r.data) || [];
                       if (!container) return;
                       if (!data.length) { container.innerHTML = '<p>Нет визитов.</p>'; return; }
                       var tbl = '<table style="width:100%"><thead><tr><th>Дата</th><th>Время</th><th>Статус</th><th>Ответственный</th><th>Комментарий</th><th></th></tr></thead><tbody>';
                       data.forEach(function (v) {
                         var statusRu = (v.status === 'planned' ? 'Запланирован' : v.status === 'completed' ? 'Завершён' : 'Отменён');
                         var canEdit = v.status !== 'cancelled';
-                        tbl += '<tr><td>' + (v.visit_date || '') + '</td><td>' + (v.visit_time || '—') + '</td><td>' + statusRu + '</td><td>' + (v.responsible_name || v.responsible_login || '—') + '</td><td>' + (v.comment || '').substring(0, 50) + (v.comment && v.comment.length > 50 ? '…' : '') + '</td><td>' + (canEdit ? '<button type="button" class="btn btn-secondary btn-small" data-visit-edit data-vid="' + v.id + '">Изменить</button> ' : '') + '<button type="button" class="btn btn-secondary btn-small" data-visit-del data-vid="' + v.id + '">Удалить</button></td></tr>';
+                        tbl += '<tr><td>' + (v.visit_date || '') + '</td><td>' + (v.visit_time || '—') + '</td><td>' + statusRu + '</td><td>' + (v.responsible_name || v.responsible_login || '—') + '</td><td>' + (v.comment || '').substring(0, 50) + (v.comment && v.comment.length > 50 ? '…' : '') + '</td><td><button type="button" class="btn btn-secondary btn-small" data-visit-open data-vid="' + v.id + '">Открыть</button> ' + (canEdit ? '<button type="button" class="btn btn-secondary btn-small" data-visit-edit data-vid="' + v.id + '">Изменить</button> ' : '') + '<button type="button" class="btn btn-secondary btn-small" data-visit-del data-vid="' + v.id + '">Удалить</button></td></tr>';
                       });
                       tbl += '</tbody></table>';
                       container.innerHTML = tbl;
@@ -1051,6 +1051,23 @@
                         b.onclick = function () {
                           if (!confirm('Удалить визит?')) return;
                           api('/api/v1/visits/' + b.getAttribute('data-vid'), { method: 'DELETE' }).then(refreshVisits).catch(function (e) { alert(e.data && e.data.detail ? e.data.detail : 'Ошибка'); });
+                        };
+                      });
+                      container.querySelectorAll('[data-visit-open]').forEach(function (b) {
+                        b.onclick = function () {
+                          var vid = b.getAttribute('data-vid');
+                          api('/api/v1/visits/' + vid).then(function (visit) {
+                            var dateStr = visit.visit_date ? formatDateOnly(visit.visit_date) : '—';
+                            var timeStr = (visit.visit_time || '').toString().substring(0, 5) || '—';
+                            var statusRu = (visit.status === 'planned' ? 'Запланирован' : visit.status === 'completed' ? 'Завершён' : visit.status === 'cancelled' ? 'Отменён' : 'На рассмотрении');
+                            var body = '<div class="form-group"><label>Клиент</label><div>' + escAttr(visit.customer_name || '') + '</div></div><div class="form-group"><label>Дата</label><div>' + escAttr(dateStr) + '</div></div><div class="form-group"><label>Время</label><div>' + escAttr(timeStr) + '</div></div><div class="form-group"><label>Статус</label><div>' + escAttr(statusRu) + '</div></div><div class="form-group"><label>Ответственный</label><div>' + escAttr(visit.responsible_name || visit.responsible_login || '') + '</div></div>' + (visit.comment ? '<div class="form-group"><label>Комментарий</label><div>' + escAttr(visit.comment) + '</div></div>' : '') + '<p><button type="button" class="btn btn-secondary" id="vcard_edit_inner">Изменить</button></p>';
+                            showModal('Карточка визита', body, function () { return Promise.resolve(); });
+                            var editBtn = document.getElementById('vcard_edit_inner');
+                            if (editBtn) editBtn.onclick = function () {
+                              document.querySelector('#modalContainer .modal.show') && document.querySelector('#modalContainer .modal.show').classList.remove('show');
+                              openVisitEditModal(cid, visit, userList, refreshVisits);
+                            };
+                          });
                         };
                       });
                       container.querySelectorAll('[data-visit-edit]').forEach(function (b) {
@@ -1076,7 +1093,7 @@
                 el.onclick = function () {
                   var cid = el.getAttribute('data-id');
                   var cname = (el.getAttribute('data-name') || '').replace(/&quot;/g, '"') || ('Клиент #' + cid);
-                  var html = '<div id="photosModalBody"><p>Загрузка...</p></div><p style="margin-top:12px"><label>Загрузить фото:</label> <input type="file" id="photoFile" accept="image/*"> <input type="text" id="photoDesc" placeholder="Описание"> <button type="button" class="btn btn-primary" id="btnUploadPhoto">Загрузить</button></p>';
+                  var html = '<div id="photosModalBody"><p>Загрузка...</p></div><p style="margin-top:12px"><strong>Загрузка фото</strong> (клиент: ' + escAttr(cname) + ')</p><p style="display:flex;flex-wrap:wrap;align-items:center;gap:12px"><span style="position:relative"><input type="file" id="photoFile" accept="image/*" style="position:absolute;left:0;top:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:0"><button type="button" class="btn btn-secondary" style="pointer-events:none">ВЫБРАТЬ ФАЙЛ!</button></span><span id="photoFileName" style="font-size:13px;color:#64748b;min-width:120px"></span><label>Описание:</label><input type="text" id="photoDesc" placeholder="Описание" style="max-width:200px"><button type="button" class="btn btn-primary" id="btnUploadPhoto">Загрузить</button></p>';
                   showModal('Фото: ' + cname, html, function () { return Promise.resolve(); });
                   var container = document.getElementById('photosModalBody');
                   var refreshPhotos = function () {
@@ -1084,18 +1101,36 @@
                     api('/api/v1/customers/' + cid + '/photos').then(function (r) {
                       var data = (r && r.data) || [];
                       if (!container) return;
-                      if (!data.length) { container.innerHTML = '<p>Нет фотографий.</p>'; return; }
+                        if (!data.length) { container.innerHTML = '<p>Нет фотографий.</p>'; return; }
                       var div = '<div style="display:flex;flex-wrap:wrap;gap:8px">';
                       data.forEach(function (p) {
                         var url = window.location.origin + '/api/v1/photos/download/' + (p.download_token || '');
-                        div += '<div style="flex:0 0 auto"><a href="' + url + '" target="_blank"><img src="' + url + '" alt="" style="max-width:120px;max-height:120px;object-fit:cover;border-radius:6px"></a><p style="font-size:11px;margin:4px 0 0 0">' + (p.description || '—') + '</p></div>';
+                        var dtStr = p.photo_datetime ? (p.photo_datetime.slice(0, 16).replace('T', ' ')) : '—';
+                        div += '<div style="flex:0 0 auto"><a href="' + url + '" target="_blank"><img src="' + url + '" alt="" style="max-width:120px;max-height:120px;object-fit:cover;border-radius:6px"></a><p style="font-size:11px;margin:4px 0 0 0">Съёмка: ' + dtStr + '</p><p style="font-size:11px;margin:2px 0 0 0">' + (p.description || '—') + '</p></div>';
                       });
                       div += '</div>';
                       container.innerHTML = div;
-                    }).catch(function () { if (container) container.innerHTML = '<p class="err">Ошибка загрузки фото.</p>'; });
+                    }).catch(function (e) {
+                      if (!container) return;
+                      var msg = 'Не удалось загрузить список фотографий.';
+                      if (e && e.data) {
+                        var d = e.data;
+                        if (typeof d === 'string') msg += ' ' + d;
+                        else if (d && d.detail) msg += ' ' + (typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail));
+                        else if (e.status) msg += ' (HTTP ' + e.status + ')';
+                      } else if (e && e.status) msg += ' (HTTP ' + e.status + ')';
+                      container.innerHTML = '<p class="err">' + msg + '</p><p style="margin-top:8px"><button type="button" class="btn btn-secondary" id="btnRetryPhotos">Повторить</button></p>';
+                      var retryBtn = document.getElementById('btnRetryPhotos');
+                      if (retryBtn) retryBtn.onclick = refreshPhotos;
+                    });
                   };
                   refreshPhotos();
                   setTimeout(function () {
+                    var fileInput = document.getElementById('photoFile');
+                    var photoFileNameEl = document.getElementById('photoFileName');
+                    if (fileInput && photoFileNameEl) fileInput.addEventListener('change', function () {
+                      photoFileNameEl.textContent = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : '';
+                    });
                     var uploadBtn = document.getElementById('btnUploadPhoto');
                     if (uploadBtn) uploadBtn.onclick = function () {
                       var fileInput = document.getElementById('photoFile');
@@ -1106,11 +1141,15 @@
                       fd.append('is_main', 'false');
                       var token = localStorage.getItem('sds_token');
                       fetch(window.location.origin + '/api/v1/customers/' + cid + '/photos', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd }).then(function (res) {
-                        if (!res.ok) return res.json().then(function (d) { throw d; });
+                        if (!res.ok) return res.json().then(function (d) { throw d; }).catch(function (parseErr) { throw { detail: res.status + ' ' + res.statusText }; });
                         fileInput.value = '';
                         if (document.getElementById('photoDesc')) document.getElementById('photoDesc').value = '';
+                        if (document.getElementById('photoFileName')) document.getElementById('photoFileName').textContent = '';
                         refreshPhotos();
-                      }).catch(function (e) { alert(e.detail || (e.message || 'Ошибка загрузки')); });
+                      }).catch(function (e) {
+                        var msg = (e && e.detail) ? (typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail)) : (e && e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : (e && e.message) ? e.message : 'Ошибка загрузки фото';
+                        alert(msg);
+                      });
                     };
                   }, 100);
                 };
@@ -4260,7 +4299,7 @@
 
       function loadSectionReportCustomers() {
         var content = document.getElementById('content');
-        content.innerHTML = '<div class="card"><h2>Отчёт: По клиентам</h2><p><label>Статус </label><select id="rc_status"><option value="all">Все</option><option value="active">Активные</option><option value="inactive">Неактивные</option></select> <label>Агент </label><select id="rc_agent"><option value="">Все</option></select> <label>Дата с </label><input type="text" id="rc_date_from" placeholder="дд.мм.гггг" style="max-width:120px"> <label>по </label><input type="text" id="rc_date_to" placeholder="дд.мм.гггг" style="max-width:120px"> <button type="button" class="btn btn-primary" id="rc_load">Показать</button> <button type="button" class="btn btn-secondary" id="rc_export">Экспорт в Excel</button></p><div id="rc_table"></div></div>';
+        content.innerHTML = '<div class="card"><h2>Отчёт: По клиентам</h2><p><label>Статус </label><select id="rc_status"><option value="all">Все</option><option value="active">Активные</option><option value="inactive">Неактивные</option></select> <label>Агент </label><select id="rc_agent"><option value="">Все</option></select> <label>Дата с </label><input type="text" id="rc_date_from" placeholder="дд.мм.гггг" style="max-width:120px"> <label>по </label><input type="text" id="rc_date_to" placeholder="дд.мм.гггг" style="max-width:120px"> <button type="button" class="btn btn-primary" id="rc_load">Показать</button> <button type="button" class="btn btn-secondary" id="rc_export">Экспорт в Excel</button></p><div id="rc_table"><p style="color:#64748b">Укажите фильтры и нажмите «Показать».</p></div></div>';
         api('/api/v1/dictionary/user-logins').catch(function () { return []; }).then(function (userList) {
           var sel = document.getElementById('rc_agent');
           if (sel) userList.forEach(function (u) { var o = document.createElement('option'); o.value = u.login; o.textContent = (u.login || '') + (u.fio ? ' — ' + u.fio : ''); sel.appendChild(o); });
@@ -4275,8 +4314,8 @@
           var params = [];
           var status = document.getElementById('rc_status') && document.getElementById('rc_status').value;
           var agent = document.getElementById('rc_agent') && document.getElementById('rc_agent').value;
-          var df = document.getElementById('rc_date_from') && document.getElementById('rc_date_from').value;
-          var dt = document.getElementById('rc_date_to') && document.getElementById('rc_date_to').value;
+          var df = dateToApiFormat((document.getElementById('rc_date_from') && document.getElementById('rc_date_from').value) || '');
+          var dt = dateToApiFormat((document.getElementById('rc_date_to') && document.getElementById('rc_date_to').value) || '');
           if (status && status !== 'all') params.push('status=' + encodeURIComponent(status));
           if (agent) params.push('agent_login=' + encodeURIComponent(agent));
           if (df) params.push('date_from=' + encodeURIComponent(df));
@@ -4289,21 +4328,30 @@
             var rcSortCol = 'name_client';
             var rcSortDir = 1;
             var lastRcData = data;
+            function clientDisplay(r) {
+              var n = (r.name_client || '').trim();
+              var f = (r.firm_name || '').trim();
+              if (f && f !== n) return n + (n ? ' (' + f + ')' : f);
+              return n || f || '—';
+            }
+            function visitCompletedDisplay(r) {
+              return ((r.completed_visits | 0) > 0) ? 'Визит завершён' : '—';
+            }
             function renderRc(data) {
               var sorted = data.slice().sort(function (a, b) {
                 return tableSortCompare(a, b, rcSortCol, rcSortDir, function (r, c) {
-                  if (c === 'total_visits' || c === 'completed_visits' || c === 'orders_count') return (r[c] != null ? String(Number(r[c])).padStart(10, '0') : '');
+                  if (c === 'orders_count') return (r[c] != null ? String(Number(r[c])).padStart(10, '0') : '');
                   if (c === 'orders_amount') return (r.orders_amount != null ? String(Number(r.orders_amount)).padStart(20, '0') : '');
                   return (r[c] || '').toString().toLowerCase();
                 });
               });
               var arrow = rcSortDir > 0 ? ' ▲' : ' ▼';
               var th = function (col, lbl) { return '<th class="sortable" data-col="' + col + '" style="cursor:pointer">' + lbl + (rcSortCol === col ? arrow : '') + '</th>'; };
-              var tb = '<div style="overflow-x:auto"><table><thead><tr><th>#</th>' + th('name_client', 'Клиент') + th('agent_login', 'Агент') + th('total_visits', 'Визитов') + th('completed_visits', 'Завершено') + th('orders_count', 'Кол-во заказов') + th('orders_amount', 'Сумма заказов') + th('last_visit_date', 'Последний визит') + th('status', 'Статус') + '</tr></thead><tbody>';
+              var tb = '<div style="overflow-x:auto"><table><thead><tr><th>#</th>' + th('name_client', 'Клиент') + th('agent_fio', 'ФИО Агента') + th('expeditor_fio', 'ФИО Экспедитора') + th('completed_visits', 'Визит завершён') + th('orders_count', 'Кол-во заказов') + th('orders_amount', 'Сумма заказов') + '</tr></thead><tbody>';
               sorted.forEach(function (r, i) {
                 var ordersCount = r.orders_count || 0;
                 var ordersAmount = (r.orders_amount != null) ? Number(r.orders_amount) : 0;
-                tb += '<tr><td>' + (i + 1) + '</td><td>' + escAttr(r.name_client || '') + '</td><td>' + escAttr(r.agent_login || '') + '</td><td>' + (r.total_visits || 0) + '</td><td>' + (r.completed_visits || 0) + '</td><td>' + ordersCount + '</td><td>' + (ordersAmount ? ordersAmount.toFixed(2) : '0.00') + '</td><td>' + (r.last_visit_date ? formatDateOnly(r.last_visit_date) : '—') + '</td><td>' + escAttr(r.status || '') + '</td></tr>';
+                tb += '<tr><td>' + (i + 1) + '</td><td>' + escAttr(clientDisplay(r)) + '</td><td>' + escAttr(r.agent_fio || '') + '</td><td>' + escAttr(r.expeditor_fio || '') + '</td><td>' + visitCompletedDisplay(r) + '</td><td>' + ordersCount + '</td><td>' + (ordersAmount ? ordersAmount.toFixed(2) : '0.00') + '</td></tr>';
               });
               tb += '</tbody></table></div><p><strong>Итого клиентов: ' + total + '</strong></p>';
               document.getElementById('rc_table').innerHTML = tb;
@@ -4323,8 +4371,8 @@
             var params = [];
             var status = document.getElementById('rc_status') && document.getElementById('rc_status').value;
             var agent = document.getElementById('rc_agent') && document.getElementById('rc_agent').value;
-            var df = document.getElementById('rc_date_from') && document.getElementById('rc_date_from').value;
-            var dt = document.getElementById('rc_date_to') && document.getElementById('rc_date_to').value;
+            var df = dateToApiFormat((document.getElementById('rc_date_from') && document.getElementById('rc_date_from').value) || '');
+            var dt = dateToApiFormat((document.getElementById('rc_date_to') && document.getElementById('rc_date_to').value) || '');
             if (status && status !== 'all') params.push('status=' + encodeURIComponent(status));
             if (agent) params.push('agent_login=' + encodeURIComponent(agent));
             if (df) params.push('date_from=' + encodeURIComponent(df));
@@ -4343,12 +4391,11 @@
             }).catch(function () { alert('Ошибка выгрузки отчёта.'); });
           };
         }
-        run();
       }
 
       function loadSectionReportAgents() {
         var content = document.getElementById('content');
-        content.innerHTML = '<div class="card"><h2>Отчёт: Эффективность агентов</h2><p><label>Дата с </label><input type="text" id="ra_date_from" placeholder="дд.мм.гггг" style="max-width:120px"> <label>по </label><input type="text" id="ra_date_to" placeholder="дд.мм.гггг" style="max-width:120px"> <button type="button" class="btn btn-primary" id="ra_load">Показать</button></p><div id="ra_list"></div></div>';
+        content.innerHTML = '<div class="card"><h2>Отчёт: Эффективность агентов</h2><p><label>Дата с </label><input type="text" id="ra_date_from" placeholder="дд.мм.гггг" style="max-width:120px"> <label>по </label><input type="text" id="ra_date_to" placeholder="дд.мм.гггг" style="max-width:120px"> <button type="button" class="btn btn-primary" id="ra_load">Показать</button> <button type="button" class="btn btn-secondary" id="ra_export">Экспорт в Excel</button></p><div id="ra_list"><p style="color:#64748b">Укажите фильтры и нажмите «Показать».</p></div></div>';
         var raDateFrom = document.getElementById('ra_date_from');
         var raDateTo = document.getElementById('ra_date_to');
         if (window.flatpickr) {
@@ -4366,22 +4413,42 @@
             var err = (res && res.error) ? res.error : null;
             if (err) { document.getElementById('ra_list').innerHTML = '<p class="err">Ошибка: ' + escAttr(err) + '</p>'; return; }
             if (!data.length) { document.getElementById('ra_list').innerHTML = '<p>Нет данных за выбранный период.</p>'; return; }
-            var tb = '<div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Логин</th><th>ФИО</th><th>Клиентов</th><th>Визитов</th><th>Завершено</th><th>% завершённости</th></tr></thead><tbody>';
+            var tb = '<div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Логин</th><th>ФИО</th><th>Клиентов</th><th>Визитов</th><th>Завершено</th><th>% завершённости визитов</th><th>Сумма заказов</th><th>Кол-во заказов</th><th>% завершённости заказов</th></tr></thead><tbody>';
             data.forEach(function (r, i) {
-              var rate = (r.completion_rate != null) ? r.completion_rate : 0;
-              tb += '<tr><td>' + (i + 1) + '</td><td>' + escAttr(r.login || '') + '</td><td>' + escAttr(r.fio || '') + '</td><td>' + (r.customer_count || 0) + '</td><td>' + (r.total_visits || 0) + '</td><td>' + (r.completed_visits || 0) + '</td><td>' + rate + '%</td></tr>';
+              var visitRate = (r.visit_completion_rate != null) ? r.visit_completion_rate : 0;
+              var orderRate = (r.orders_completion_rate != null) ? r.orders_completion_rate : 0;
+              var amt = (r.orders_amount != null) ? Number(r.orders_amount) : 0;
+              tb += '<tr><td>' + (i + 1) + '</td><td>' + escAttr(r.login || '') + '</td><td>' + escAttr(r.fio || '') + '</td><td>' + (r.client_count || 0) + '</td><td>' + (r.total_visits || 0) + '</td><td>' + (r.completed_visits || 0) + '</td><td>' + visitRate + '%</td><td>' + (amt ? amt.toFixed(2) : '0.00') + '</td><td>' + (r.orders_count || 0) + '</td><td>' + orderRate + '%</td></tr>';
             });
             tb += '</tbody></table></div><p><strong>Итого агентов: ' + data.length + '</strong></p>';
             document.getElementById('ra_list').innerHTML = tb;
           }).catch(function (e) { document.getElementById('ra_list').innerHTML = '<p class="err">Ошибка загрузки</p>'; });
         }
         document.getElementById('ra_load').onclick = run;
-        run();
+        var raExport = document.getElementById('ra_export');
+        if (raExport) {
+          raExport.onclick = function () {
+            var df = dateToApiFormat((document.getElementById('ra_date_from') && document.getElementById('ra_date_from').value) || '');
+            var dt = dateToApiFormat((document.getElementById('ra_date_to') && document.getElementById('ra_date_to').value) || '');
+            var params = []; if (df) params.push('date_from=' + encodeURIComponent(df)); if (dt) params.push('date_to=' + encodeURIComponent(dt));
+            var url = '/api/v1/reports/agents/export'; if (params.length) url += '?' + params.join('&');
+            fetch(url, { method: 'GET', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) {
+              if (!r.ok) throw new Error('Ошибка выгрузки');
+              return r.blob();
+            }).then(function (blob) {
+              var a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = 'report_agents.xlsx';
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }).catch(function () { alert('Ошибка выгрузки отчёта.'); });
+          };
+        }
       }
 
       function loadSectionReportExpeditors() {
         var content = document.getElementById('content');
-        content.innerHTML = '<div class="card"><h2>Отчёт: Эффективность экспедиторов (по заказам)</h2><p><label>Дата с </label><input type="text" id="re_date_from" placeholder="дд.мм.гггг" style="max-width:120px"> <label>по </label><input type="text" id="re_date_to" placeholder="дд.мм.гггг" style="max-width:120px"> <button type="button" class="btn btn-primary" id="re_load">Показать</button> <button type="button" class="btn btn-secondary" id="re_export">Экспорт в Excel</button></p><div id="re_list"></div></div>';
+        content.innerHTML = '<div class="card"><h2>Отчёт: Эффективность экспедиторов (по заказам)</h2><p><label>Дата с </label><input type="text" id="re_date_from" placeholder="дд.мм.гггг" style="max-width:120px"> <label>по </label><input type="text" id="re_date_to" placeholder="дд.мм.гггг" style="max-width:120px"> <button type="button" class="btn btn-primary" id="re_load">Показать</button> <button type="button" class="btn btn-secondary" id="re_export">Экспорт в Excel</button></p><div id="re_list"><p style="color:#64748b">Укажите фильтры и нажмите «Показать».</p></div></div>';
         var reDateFrom = document.getElementById('re_date_from');
         var reDateTo = document.getElementById('re_date_to');
         if (window.flatpickr) {
@@ -4428,12 +4495,11 @@
             }).catch(function () { alert('Ошибка выгрузки отчёта.'); });
           };
         }
-        run();
       }
 
       function loadSectionReportVisits() {
         var content = document.getElementById('content');
-        content.innerHTML = '<div class="card"><h2>Отчёт: Аналитика визитов</h2><p><label>Дата с </label><input type="text" id="rv_from" placeholder="дд.мм.гггг" style="max-width:120px"> <label>по </label><input type="text" id="rv_to" placeholder="дд.мм.гггг" style="max-width:120px"> <button type="button" class="btn btn-primary" id="rv_load">Показать</button></p><div id="rv_summary"></div><div id="rv_table"></div></div>';
+        content.innerHTML = '<div class="card"><h2>Отчёт: Аналитика визитов</h2><p><label>Дата с </label><input type="text" id="rv_from" placeholder="дд.мм.гггг" style="max-width:120px"> <label>по </label><input type="text" id="rv_to" placeholder="дд.мм.гггг" style="max-width:120px"> <button type="button" class="btn btn-primary" id="rv_load">Показать</button> <button type="button" class="btn btn-secondary" id="rv_export">Экспорт в Excel</button></p><div id="rv_summary"><p style="color:#64748b">Укажите фильтры и нажмите «Показать».</p></div><div id="rv_table"></div></div>';
         var rvFrom = document.getElementById('rv_from');
         var rvTo = document.getElementById('rv_to');
         if (window.flatpickr) {
@@ -4441,9 +4507,10 @@
           if (rvTo) window.flatpickr(rvTo, { locale: 'ru', dateFormat: 'Y-m-d', altInput: true, altFormat: 'd.m.Y', allowInput: true });
         }
         function run() {
-          var from = document.getElementById('rv_from') && document.getElementById('rv_from').value;
-          var to = document.getElementById('rv_to') && document.getElementById('rv_to').value;
-          var url = '/api/v1/reports/visits'; if (from) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'from_date=' + encodeURIComponent(from); if (to) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'to_date=' + encodeURIComponent(to);
+          var from = dateToApiFormat((document.getElementById('rv_from') && document.getElementById('rv_from').value) || '');
+          var to = dateToApiFormat((document.getElementById('rv_to') && document.getElementById('rv_to').value) || '');
+          var params = []; if (from) params.push('from_date=' + encodeURIComponent(from)); if (to) params.push('to_date=' + encodeURIComponent(to));
+          var url = '/api/v1/reports/visits'; if (params.length) url += '?' + params.join('&');
           document.getElementById('rv_summary').innerHTML = ''; document.getElementById('rv_table').innerHTML = '<p>Загрузка...</p>';
           api(url).then(function (res) {
             var sum = (res && res.summary) ? res.summary : {};
@@ -4474,7 +4541,25 @@
           }).catch(function (e) { document.getElementById('rv_table').innerHTML = '<p class="err">Ошибка загрузки</p>'; });
         }
         document.getElementById('rv_load').onclick = run;
-        run();
+        var rvExport = document.getElementById('rv_export');
+        if (rvExport) {
+          rvExport.onclick = function () {
+            var from = dateToApiFormat((document.getElementById('rv_from') && document.getElementById('rv_from').value) || '');
+            var to = dateToApiFormat((document.getElementById('rv_to') && document.getElementById('rv_to').value) || '');
+            var params = []; if (from) params.push('from_date=' + encodeURIComponent(from)); if (to) params.push('to_date=' + encodeURIComponent(to));
+            var url = '/api/v1/reports/visits/export'; if (params.length) url += '?' + params.join('&');
+            fetch(url, { method: 'GET', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) {
+              if (!r.ok) throw new Error('Ошибка выгрузки');
+              return r.blob();
+            }).then(function (blob) {
+              var a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = 'report_visits.xlsx';
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }).catch(function () { alert('Ошибка выгрузки отчёта.'); });
+          };
+        }
       }
 
       function loadSectionReportDashboard() {
@@ -4521,15 +4606,22 @@
             '<div style="font-size:32px;font-weight:700;margin:8px 0">' + (total ? total.toLocaleString('ru-RU', {minimumFractionDigits:2,maximumFractionDigits:2}) : '0') + ' сум</div>' +
             '<div style="font-size:13px;opacity:0.85">Продажа ' + dateLabel + ': ' + (total ? total.toLocaleString('ru-RU', {minimumFractionDigits:2}) : '0') + ' сум</div>';
           var byCat = (res && res.by_category) ? res.by_category : [];
-          if (window.Chart && document.getElementById('rd_chart')) {
-            var ctx = document.getElementById('rd_chart').getContext('2d');
-            if (rdChart) rdChart.destroy();
-            var labels = byCat.map(function (c) { return c.category; });
-            var data = byCat.map(function (c) { return c.share_pct; });
-            if (!labels.length) { labels = ['Нет данных']; data = [100]; }
-            var colors = ['#60a5fa','#34d399','#fbbf24','#f87171','#a78bfa','#22d3ee'];
-            rdChart = new Chart(ctx, { type: 'doughnut', data: { labels: labels, datasets: [{ data: data, backgroundColor: colors.slice(0, Math.max(data.length, 1)), borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } } });
-          }
+          try {
+            if (window.Chart && document.getElementById('rd_chart')) {
+              var ctx = document.getElementById('rd_chart').getContext('2d');
+              if (rdChart) rdChart.destroy();
+              var labels = byCat.map(function (c) { return c.category; });
+              var data = byCat.map(function (c) { return c.share_pct; });
+              if (!labels.length) { labels = ['Нет данных']; data = [100]; }
+              var colors = ['#60a5fa','#34d399','#fbbf24','#f87171','#a78bfa','#22d3ee'];
+              var maxLen = Math.max(data.length, 1);
+              rdChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: labels, datasets: [{ data: data, backgroundColor: colors.slice(0, maxLen), borderWidth: 0 }] },
+                options: { responsive: true, maintainAspectRatio: true }
+              });
+            }
+          } catch (chartErr) { if (console && console.warn) console.warn('Chart:', chartErr); }
           var kpi = (res && res.kpi) ? res.kpi : {};
           var kpiHtml = '';
           kpiHtml += '<div style="padding:16px;background:#fee2e2;border-radius:8px;border-left:4px solid #dc2626"><div style="font-size:11px;color:#7f1d1d">Визиты</div><div style="font-size:22px;font-weight:700;color:#991b1b">' + (kpi.visits_total || 0) + '</div><div style="font-size:12px">Завершено: ' + (kpi.visits_completed || 0) + ' (' + (kpi.visits_success_rate || 0) + '%)</div></div>';
@@ -4543,7 +4635,7 @@
           byCat.forEach(function (r) {
             tb += '<tr><td>' + escAttr(r.category || '') + '</td><td>' + (r.share_pct != null ? r.share_pct.toFixed(2) : '0') + '</td><td style="text-align:right">' + (r.sum_amount != null ? Number(r.sum_amount).toLocaleString('ru-RU', {minimumFractionDigits:2}) : '0') + '</td><td style="text-align:right">' + (r.quantity || 0) + '</td></tr>';
           });
-          tb += '<tr style="font-weight:600;background:#f8fafc"><td>Итог</td><td>100</td><td style="text-align:right">' + totalSum.toLocaleString('ru-RU', {minimumFractionDigits:2}) + '</td><td style="text-align:right">' + totalQty + '</td></tr>';
+          tb += '<tr style="font-weight:600;background:#f8fafc"><td>Итог</td><td>100</td><td style="text-align:right">' + totalSum.toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td><td style="text-align:right">' + totalQty + '</td></tr>';
           tb += '</tbody></table></div>';
           document.getElementById('rd_table').innerHTML = byCat.length ? tb : '<p>Нет данных по категориям.</p>';
         }
@@ -4559,6 +4651,7 @@
           api(url).then(render).catch(function (e) { render({ error: (e && e.data && e.data.detail) ? String(e.data.detail) : 'Ошибка загрузки' }); });
         }
         document.getElementById('rd_load').onclick = load;
+        document.getElementById('rd_summary').innerHTML = '<p style="color:#64748b">Укажите фильтры и нажмите «Фильтр» для загрузки данных.</p>';
         document.getElementById('rd_excel').onclick = function () {
           var df = dateToApiFormat((document.getElementById('rd_date_from') && document.getElementById('rd_date_from').value) || '');
           var dt = dateToApiFormat((document.getElementById('rd_date_to') && document.getElementById('rd_date_to').value) || '');
@@ -4570,22 +4663,42 @@
           var url = '/api/v1/reports/dashboard/export'; if (params.length) url += '?' + params.join('&');
           fetch(url, { method: 'GET', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) { if (!r.ok) throw new Error(); return r.blob(); }).then(function (blob) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dashboard_categories.xlsx'; a.click(); URL.revokeObjectURL(a.href); }).catch(function () { alert('Ошибка выгрузки'); });
         };
-        load();
       }
 
       function loadSectionReportPhotos() {
         var content = document.getElementById('content');
-        content.innerHTML = '<div class="card"><h2>Отчёт: Фотографии клиентов</h2><div id="rp_stats"></div><div id="rp_without"></div><div id="rp_recent"></div></div>';
-        api('/api/v1/reports/photos').then(function (res) {
-          var stats = (res && res.statistics) ? res.statistics : {};
-          document.getElementById('rp_stats').innerHTML = '<p><strong>Всего фото:</strong> ' + (stats.total_photos || 0) + ', Клиентов с фото: ' + (stats.customers_with_photos || 0) + ', Без фото: ' + (stats.customers_without_photos || 0) + '</p>';
-          var without = (res && res.customers_without_photos) ? res.customers_without_photos : [];
-          document.getElementById('rp_without').innerHTML = without.length ? '<p><strong>Клиенты без фото:</strong> ' + without.length + '</p><ul>' + without.slice(0, 20).map(function (c) { return '<li>' + escAttr(c.name || c.name_client || '') + '</li>'; }).join('') + '</ul>' : '<p>Все клиенты с фото или список пуст.</p>';
-          var recent = (res && res.recent_uploads) ? res.recent_uploads : [];
-          document.getElementById('rp_recent').innerHTML = recent.length ? '<p><strong>Последние загрузки:</strong></p><ul>' + recent.slice(0, 10).map(function (p) { return '<li>' + escAttr(p.customer_name || '') + ' — ' + (p.uploaded_at || '') + ' (' + (p.uploaded_by || '') + ')</li>'; }).join('') + '</ul>' : '<p>Нет недавних загрузок.</p>';
-        }).catch(function (e) {
-          document.getElementById('rp_stats').innerHTML = '<p class="err">Ошибка загрузки</p>';
-        });
+        content.innerHTML = '<div class="card"><h2>Отчёт: Фотографии клиентов</h2><p><button type="button" class="btn btn-primary" id="rp_load">Показать</button> <button type="button" class="btn btn-secondary" id="rp_export">Экспорт в Excel</button></p><div id="rp_stats"></div><div id="rp_without"></div><div id="rp_recent"></div></div>';
+        function run() {
+          document.getElementById('rp_stats').innerHTML = '<p>Загрузка...</p>';
+          document.getElementById('rp_without').innerHTML = '';
+          document.getElementById('rp_recent').innerHTML = '';
+          api('/api/v1/reports/photos').then(function (res) {
+            var stats = (res && res.statistics) ? res.statistics : {};
+            document.getElementById('rp_stats').innerHTML = '<p><strong>Всего фото:</strong> ' + (stats.total_photos || 0) + ', Клиентов с фото: ' + (stats.customers_with_photos || 0) + ', Без фото: ' + (stats.customers_without_photos || 0) + '</p>';
+            var without = (res && res.customers_without_photos) ? res.customers_without_photos : [];
+            document.getElementById('rp_without').innerHTML = without.length ? '<p><strong>Клиенты без фото:</strong> ' + without.length + '</p><ul>' + without.slice(0, 20).map(function (c) { return '<li>' + escAttr(c.name || c.name_client || '') + '</li>'; }).join('') + '</ul>' : '<p>Все клиенты с фото или список пуст.</p>';
+            var recent = (res && res.recent_uploads) ? res.recent_uploads : [];
+            document.getElementById('rp_recent').innerHTML = recent.length ? '<p><strong>Последние загрузки:</strong></p><ul>' + recent.slice(0, 10).map(function (p) { return '<li>' + escAttr(p.customer_name || '') + ' — ' + (p.uploaded_at || '') + ' (' + (p.uploaded_by || '') + ')</li>'; }).join('') + '</ul>' : '<p>Нет недавних загрузок.</p>';
+          }).catch(function (e) {
+            document.getElementById('rp_stats').innerHTML = '<p class="err">Ошибка загрузки</p>';
+          });
+        }
+        document.getElementById('rp_load').onclick = run;
+        var rpExport = document.getElementById('rp_export');
+        if (rpExport) {
+          rpExport.onclick = function () {
+            fetch('/api/v1/reports/photos/export', { method: 'GET', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) {
+              if (!r.ok) throw new Error('Ошибка выгрузки');
+              return r.blob();
+            }).then(function (blob) {
+              var a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = 'report_photos.xlsx';
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }).catch(function () { alert('Ошибка выгрузки отчёта.'); });
+          };
+        }
       }
 
       document.getElementById('btnLogout').onclick = function () { localStorage.removeItem('sds_token'); window.location.href = '/login'; };

@@ -182,14 +182,14 @@ async def list_customers(
 EXPORT_COLUMNS = [
     "id", "name_client", "firm_name", "category_client", "address", "city", "territory", "landmark",
     "phone", "contact_person", "tax_id", "status", "login_agent", "login_expeditor",
-    "latitude", "longitude", "PINFL", "contract_no", "account_no", "bank", "MFO", "OKED", "VAT_code",
+    "latitude", "longitude", "PINFL", "contract_no", "account_no", "bank", "MFO", "OKED", "VAT_code", "has_photo",
 ]
 
 # Заголовки в Excel — как в таблице (русские названия)
 EXPORT_HEADERS_RU = [
     "ИД клиента", "Название клиента", "Название фирмы", "Категория клиента", "Адрес", "Город", "Территория", "Ориентир",
     "Телефон", "Контактное лицо", "ИНН", "Статус", "login агента", "login экспедитора",
-    "Широта", "Долгота", "ПИНФЛ", "Договор №", "Р/С", "Банк", "МФО", "ОКЭД", "Регистрационный код плательщика НДС",
+    "Широта", "Долгота", "ПИНФЛ", "Договор №", "Р/С", "Банк", "МФО", "ОКЭД", "Регистрационный код плательщика НДС", "Фото",
 ]
 
 
@@ -199,10 +199,11 @@ async def export_customers_excel(
     user: User = Depends(require_admin),
 ):
     """Выгрузка всех клиентов в Excel (.xlsx), каждое поле в отдельной ячейке. Заголовки — русские, как в таблице. Только admin."""
-    sql = '''SELECT id, name_client, firm_name, category_client, address, city, territory, landmark,
-             phone, contact_person, tax_id, status, login_agent, login_expeditor,
-             latitude, longitude, pinfl, contract_no, account_no, bank, mfo, oked, vat_code
-             FROM "Sales".customers ORDER BY id LIMIT 50000'''
+    sql = """SELECT c.id, c.name_client, c.firm_name, c.category_client, c.address, c.city, c.territory, c.landmark,
+             c.phone, c.contact_person, c.tax_id, c.status, c.login_agent, c.login_expeditor,
+             c.latitude, c.longitude, c.pinfl, c.contract_no, c.account_no, c.bank, c.mfo, c.oked, c.vat_code,
+             CASE WHEN EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) THEN 'Да' ELSE 'Нет' END
+             FROM "Sales".customers c ORDER BY c.id LIMIT 50000"""
     result = await session.execute(text(sql))
     rows = result.fetchall()
     wb = Workbook()

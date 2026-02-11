@@ -1,10 +1,10 @@
 -- Схема БД Sales (актуальное состояние)
--- Обновлено: 2026-02-10 (при каждом изменении указывать полную дату ГГГГ-ММ-ДД). Таблицы: users, product_type, product, batches,
+-- Обновлено: 2026-02-11. Таблицы: users, product_type, product, batches,
 -- product_batches, warehouse, warehouse_stock, customers, operation_types,
 -- operation_config, expiry_date_config, payment_type, status, orders,
 -- items, operations, customers_visits, customer_photo.
--- VIEW: v_warehouse_stock, v_financial_ledger, v_operations_lifecycle, v_visits_statistics, v_upcoming_visits.
--- Функция: generate_operation_number(). Доп. миграция визитов/фото: migration_visits_photos.sql
+-- VIEW: v_warehouse_stock, v_financial_ledger, v_operations_lifecycle, v_visits_statistics, v_upcoming_visits, v_customers_without_photos.
+-- Функция: generate_operation_number(). Миграции: migrations/add_photo_datetime.sql
 -- ============================================================
 
 -- Расширение для UUID (PostgreSQL 13+ можно использовать gen_random_uuid() без расширения)
@@ -462,7 +462,7 @@ LEFT JOIN "Sales".operations related_op ON o.related_operation_id = related_op.i
 ORDER BY o.operation_date DESC;
 
 -- ============================================================
--- Визиты клиентам и фотографии (ТЗ 3.0, 2026-02-10)
+-- Визиты клиентам и фотографии клиентов (ТЗ 1.3, 2026-02-11)
 -- ============================================================
 
 -- Таблица customers_visits
@@ -488,7 +488,7 @@ CREATE INDEX IF NOT EXISTS idx_customers_visits_responsible ON "Sales".customers
 CREATE INDEX IF NOT EXISTS idx_customers_visits_created_at ON "Sales".customers_visits(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_customers_visits_public_token ON "Sales".customers_visits(public_token);
 
--- Таблица customer_photo
+-- Таблица customer_photo (фото привязано только к клиенту, папка /photo/, имя: КОД_ДДММГГГГ_ЧЧММСС.ext)
 CREATE TABLE IF NOT EXISTS "Sales".customer_photo (
   id SERIAL PRIMARY KEY,
   customer_id INT NOT NULL REFERENCES "Sales".customers(id) ON DELETE CASCADE,
@@ -500,8 +500,10 @@ CREATE TABLE IF NOT EXISTS "Sales".customer_photo (
   download_token TEXT UNIQUE NOT NULL DEFAULT md5(random()::text),
   is_main BOOLEAN DEFAULT FALSE,
   uploaded_by TEXT NOT NULL REFERENCES "Sales".users(login),
-  uploaded_at TIMESTAMPTZ DEFAULT now()
+  uploaded_at TIMESTAMPTZ DEFAULT now(),
+  photo_datetime TIMESTAMPTZ
 );
+-- Миграция для существующих БД: ALTER TABLE "Sales".customer_photo ADD COLUMN IF NOT EXISTS photo_datetime TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_customer_photo_customer_id ON "Sales".customer_photo(customer_id);
 CREATE INDEX IF NOT EXISTS idx_customer_photo_is_main ON "Sales".customer_photo(customer_id, is_main) WHERE is_main = TRUE;
 CREATE INDEX IF NOT EXISTS idx_customer_photo_uploaded_at ON "Sales".customer_photo(uploaded_at DESC);

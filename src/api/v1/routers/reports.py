@@ -62,6 +62,16 @@ def _parse_date_to_iso(s: str | None) -> str | None:
     return None
 
 
+def _iso_to_date(s: str | None) -> date | None:
+    """Преобразует ISO-дату YYYY-MM-DD в объект date для asyncpg."""
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s[:10])
+    except (ValueError, TypeError):
+        return None
+
+
 @router.get("/customers")
 async def report_customers(
     status: str | None = Query(None),
@@ -89,19 +99,24 @@ async def report_customers(
             params["agent_login"] = agent_login
         if month_iso:
             conditions.append("(rc.last_visit_date >= :m_start AND rc.last_visit_date < :m_end)")
-            params["m_start"] = month_iso + "-01"
+            params["m_start"] = _iso_to_date(month_iso + "-01") or (month_iso + "-01")
             y, m = int(month_iso[:4]), int(month_iso[5:7])
-            params["m_end"] = f"{y}-{m+1:02d}-01" if m < 12 else f"{y+1}-01-01"
+            end_str = f"{y}-{m+1:02d}-01" if m < 12 else f"{y+1}-01-01"
+            params["m_end"] = _iso_to_date(end_str) or end_str
         if df and dt:
             conditions.append("rc.last_visit_date >= :date_from AND rc.last_visit_date <= :date_to")
-            params["date_from"] = df
-            params["date_to"] = dt
+            params["date_from"] = _iso_to_date(df) or df
+            params["date_to"] = _iso_to_date(dt) or dt
         where_sql = " AND ".join(conditions) if conditions else "1=1"
         q = f"""
-        SELECT rc.id, rc.name_client, rc.login_agent,
-               rc.total_visits, rc.completed_visits, rc.last_visit_date, rc.status,
+        SELECT rc.id, rc.name_client, rc.firm_name, rc.login_agent, c.login_expeditor,
+               rc.total_visits, rc.completed_visits, rc.last_visit_date,
+               ua.fio AS agent_fio, ue.fio AS expeditor_fio,
                COALESCE(o.cnt, 0)::int AS orders_count, COALESCE(o.amt, 0) AS orders_amount
         FROM "Sales".v_report_customers rc
+        JOIN "Sales".customers c ON c.id = rc.id
+        LEFT JOIN "Sales".users ua ON rc.login_agent = ua.login
+        LEFT JOIN "Sales".users ue ON c.login_expeditor = ue.login
         LEFT JOIN (
           SELECT customer_id, COUNT(*)::int AS cnt, SUM(total_amount) AS amt
           FROM "Sales".orders
@@ -142,19 +157,25 @@ async def report_customers_export(
     wb = Workbook()
     ws = wb.active
     ws.title = "По клиентам"
-    headers = ["Клиент", "Агент", "Визитов", "Завершено", "Кол-во заказов", "Сумма заказов", "Последний визит", "Статус"]
+    def _client_display(r):
+        n = (r.get("name_client") or "").strip()
+        f = (r.get("firm_name") or "").strip()
+        if f and f != n:
+            return f"{n} ({f})" if n else f
+        return n or f or ""
+    def _visit_completed(r):
+        return "Визит завершён" if (r.get("completed_visits") or 0) > 0 else "—"
+    headers = ["Клиент", "ФИО Агента", "ФИО Экспедитора", "Визит завершён", "Кол-во заказов", "Сумма заказов"]
     for col, h in enumerate(headers, start=1):
         ws.cell(row=1, column=col, value=h)
     for row_idx, r in enumerate(data[:50000], start=2):
         vals = [
-            r.get("name_client") or "",
-            r.get("login_agent") or "",
-            r.get("total_visits") or 0,
-            r.get("completed_visits") or 0,
+            _client_display(r),
+            r.get("agent_fio") or "",
+            r.get("expeditor_fio") or "",
+            _visit_completed(r),
             r.get("orders_count") or 0,
             float(r.get("orders_amount") or 0),
-            r.get("last_visit_date") or "",
-            r.get("status") or "",
         ]
         for col_idx, v in enumerate(vals, start=1):
             ws.cell(row=row_idx, column=col_idx, value=v)
@@ -185,26 +206,37 @@ async def report_agents(
         date_filter = ""
         if month_iso:
             date_filter = " AND cv.visit_date >= :m_start AND cv.visit_date < :m_end"
-            params["m_start"] = month_iso + "-01"
+            params["m_start"] = _iso_to_date(month_iso + "-01") or (month_iso + "-01")
             y, m = int(month_iso[:4]), int(month_iso[5:7])
-            params["m_end"] = f"{y}-{m+1:02d}-01" if m < 12 else f"{y+1}-01-01"
+            end_str = f"{y}-{m+1:02d}-01" if m < 12 else f"{y+1}-01-01"
+            params["m_end"] = _iso_to_date(end_str) or end_str
         elif df or dt:
             if df and dt:
                 date_filter = " AND cv.visit_date >= :date_from AND cv.visit_date <= :date_to"
-                params["date_from"] = df
-                params["date_to"] = dt
+                params["date_from"] = _iso_to_date(df) or df
+                params["date_to"] = _iso_to_date(dt) or dt
             elif df:
                 date_filter = " AND cv.visit_date >= :date_from"
-                params["date_from"] = df
+                params["date_from"] = _iso_to_date(df) or df
             else:
                 date_filter = " AND cv.visit_date <= :date_to"
-                params["date_to"] = dt
+                params["date_to"] = _iso_to_date(dt) or dt
+        date_filter_orders = date_filter.replace("cv.visit_date", "o.order_date::date")
         q = f"""
         SELECT u.login, u.fio,
-               COUNT(DISTINCT cv.customer_id) AS customer_count,
+               (SELECT COUNT(*)::int FROM "Sales".customers c WHERE c.login_agent = u.login) AS client_count,
                COUNT(DISTINCT cv.id) AS total_visits,
                SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END)::int AS completed_visits,
-               ROUND(SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END)::numeric / NULLIF(COUNT(DISTINCT cv.id), 0) * 100, 1) AS completion_rate
+               ROUND(SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END)::numeric / NULLIF(COUNT(DISTINCT cv.id), 0) * 100, 1) AS visit_completion_rate,
+               COALESCE((SELECT SUM(o.total_amount) FROM "Sales".orders o
+                 JOIN "Sales".customers c ON o.customer_id = c.id AND c.login_agent = u.login
+                 WHERE o.status_code IS NOT NULL AND o.status_code NOT IN ('canceled', 'cancelled'){date_filter_orders}), 0) AS orders_amount,
+               COALESCE((SELECT COUNT(*)::int FROM "Sales".orders o
+                 JOIN "Sales".customers c ON o.customer_id = c.id AND c.login_agent = u.login
+                 WHERE o.status_code IS NOT NULL AND o.status_code NOT IN ('canceled', 'cancelled'){date_filter_orders}), 0) AS orders_count,
+               COALESCE((SELECT COUNT(*)::int FROM "Sales".orders o
+                 JOIN "Sales".customers c ON o.customer_id = c.id AND c.login_agent = u.login
+                 WHERE o.status_code = 'completed'{date_filter_orders}), 0) AS orders_completed
         FROM "Sales".users u
         LEFT JOIN "Sales".customers_visits cv ON u.login = cv.responsible_login {date_filter}
         WHERE LOWER(u.role::text) IN ('agent', 'expeditor', 'admin')
@@ -219,9 +251,56 @@ async def report_agents(
             for k, v in list(d.items()):
                 if hasattr(v, "isoformat"):
                     d[k] = v.isoformat()
+            # Процент завершённых заказов
+            oc = d.get("orders_count") or 0
+            ocomp = d.get("orders_completed") or 0
+            d["orders_completion_rate"] = round(ocomp / oc * 100, 1) if oc else 0
         return {"data": data}
     except Exception as e:
         return {"data": [], "error": str(e)[:200]}
+
+
+@router.get("/agents/export")
+async def report_agents_export(
+    month: str | None = Query(None),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Экспорт отчёта по агентам в Excel."""
+    res = await report_agents(month, date_from, date_to, session, user)
+    data = res.get("data") or []
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Агенты"
+    headers = ["Логин", "ФИО", "Клиентов", "Визитов", "Завершено", "% завершённости визитов", "Сумма заказов", "Кол-во заказов", "% завершённости заказов"]
+    for col, h in enumerate(headers, start=1):
+        ws.cell(row=1, column=col, value=h)
+    for row_idx, r in enumerate(data[:50000], start=2):
+        visit_rate = r.get("visit_completion_rate") or 0
+        order_rate = r.get("orders_completion_rate") or 0
+        vals = [
+            r.get("login") or "",
+            r.get("fio") or "",
+            r.get("client_count") or 0,
+            r.get("total_visits") or 0,
+            r.get("completed_visits") or 0,
+            visit_rate,
+            float(r.get("orders_amount") or 0),
+            r.get("orders_count") or 0,
+            order_rate,
+        ]
+        for col_idx, v in enumerate(vals, start=1):
+            ws.cell(row=row_idx, column=col_idx, value=v)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="report_agents.xlsx"'},
+    )
 
 
 @router.get("/expeditors")
@@ -241,20 +320,21 @@ async def report_expeditors(
         date_filter = ""
         if month_iso:
             date_filter = " AND (o.order_date::date >= :m_start AND o.order_date::date < :m_end)"
-            params["m_start"] = month_iso + "-01"
+            params["m_start"] = _iso_to_date(month_iso + "-01") or (month_iso + "-01")
             y, m = int(month_iso[:4]), int(month_iso[5:7])
-            params["m_end"] = f"{y}-{m+1:02d}-01" if m < 12 else f"{y+1}-01-01"
+            end_str = f"{y}-{m+1:02d}-01" if m < 12 else f"{y+1}-01-01"
+            params["m_end"] = _iso_to_date(end_str) or end_str
         elif df or dt:
             if df and dt:
                 date_filter = " AND (o.order_date::date >= :date_from AND o.order_date::date <= :date_to)"
-                params["date_from"] = df
-                params["date_to"] = dt
+                params["date_from"] = _iso_to_date(df) or df
+                params["date_to"] = _iso_to_date(dt) or dt
             elif df:
                 date_filter = " AND o.order_date::date >= :date_from"
-                params["date_from"] = df
+                params["date_from"] = _iso_to_date(df) or df
             else:
                 date_filter = " AND o.order_date::date <= :date_to"
-                params["date_to"] = dt
+                params["date_to"] = _iso_to_date(dt) or dt
         q = f"""
         SELECT u.login, u.fio,
                COUNT(DISTINCT o.order_no)::int AS orders_count,
@@ -342,10 +422,10 @@ async def report_visits(
         conditions = []
         if df:
             conditions.append("DATE(cv.visit_date) >= :date_from")
-            params["date_from"] = df
+            params["date_from"] = _iso_to_date(df) or df
         if dt:
             conditions.append("DATE(cv.visit_date) <= :date_to")
-            params["date_to"] = dt
+            params["date_to"] = _iso_to_date(dt) or dt
         where_sql = " AND ".join(conditions) if conditions else "1=1"
         q = f"""
         SELECT DATE(cv.visit_date)::text AS date,
@@ -376,6 +456,47 @@ async def report_visits(
         return {"summary": {}, "by_date": [], "error": str(e)[:200]}
 
 
+@router.get("/visits/export")
+async def report_visits_export(
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Экспорт отчёта по визитам в Excel."""
+    res = await report_visits(from_date, to_date, session, user)
+    by_date = res.get("by_date") or []
+    summary = res.get("summary") or {}
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Аналитика визитов"
+    headers = ["Дата", "Всего", "Завершено", "Запланировано", "Отменено"]
+    for col, h in enumerate(headers, start=1):
+        ws.cell(row=1, column=col, value=h)
+    for row_idx, r in enumerate(by_date[:50000], start=2):
+        vals = [
+            r.get("date") or "",
+            r.get("total_visits") or 0,
+            r.get("completed") or 0,
+            r.get("planned") or 0,
+            r.get("cancelled") or 0,
+        ]
+        for col_idx, v in enumerate(vals, start=1):
+            ws.cell(row=row_idx, column=col_idx, value=v)
+    row_final = len(by_date) + 2
+    ws.cell(row=row_final, column=1, value="Итого")
+    ws.cell(row=row_final, column=2, value=summary.get("total_visits") or 0)
+    ws.cell(row=row_final, column=3, value=summary.get("completed") or 0)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="report_visits.xlsx"'},
+    )
+
+
 @router.get("/dashboard")
 async def report_dashboard(
     date_from: str | None = Query(None),
@@ -404,9 +525,11 @@ async def report_dashboard(
 
         params = {}
         if df:
-            params["date_from"] = df
+            d = _iso_to_date(df)
+            params["date_from"] = d if d is not None else df
         if dt:
-            params["date_to"] = dt
+            d = _iso_to_date(dt)
+            params["date_to"] = d if d is not None else dt
 
         status_list = []
         if status_codes and status_codes.strip():
@@ -469,8 +592,8 @@ async def report_dashboard(
                 "quantity": int(r[2] or 0),
             })
 
-        v_from = df or today_str
-        v_to = dt or today_str
+        v_from = _iso_to_date(df or today_str) or dt_date.today()
+        v_to = _iso_to_date(dt or today_str) or dt_date.today()
         q_visits = """
         SELECT COUNT(*)::int AS total_visits,
                SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END)::int AS completed_visits
@@ -605,3 +728,43 @@ async def report_photos(
         }
     except Exception as e:
         return {"statistics": {}, "customers_without_photos": [], "recent_uploads": [], "error": str(e)[:200]}
+
+
+@router.get("/photos/export")
+async def report_photos_export(
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Экспорт отчёта по фотографиям клиентов в Excel."""
+    res = await report_photos(session, user)
+    stats = res.get("statistics") or {}
+    without = res.get("customers_without_photos") or []
+    recent = res.get("recent_uploads") or []
+    wb = Workbook()
+    ws1 = wb.active
+    ws1.title = "Статистика"
+    ws1.cell(row=1, column=1, value="Всего фото")
+    ws1.cell(row=1, column=2, value=stats.get("total_photos") or 0)
+    ws1.cell(row=2, column=1, value="Клиентов с фото")
+    ws1.cell(row=2, column=2, value=stats.get("customers_with_photos") or 0)
+    ws1.cell(row=3, column=1, value="Без фото")
+    ws1.cell(row=3, column=2, value=stats.get("customers_without_photos") or 0)
+    ws2 = wb.create_sheet("Клиенты без фото")
+    ws2.cell(row=1, column=1, value="Клиент")
+    for row_idx, c in enumerate(without[:5000], start=2):
+        ws2.cell(row=row_idx, column=1, value=(c.get("name_client") or c.get("firm_name") or c.get("name") or ""))
+    ws3 = wb.create_sheet("Последние загрузки")
+    for col, h in enumerate(["Клиент", "Дата загрузки", "Загружено"], start=1):
+        ws3.cell(row=1, column=col, value=h)
+    for row_idx, p in enumerate(recent[:500], start=2):
+        ws3.cell(row=row_idx, column=1, value=p.get("customer_name") or "")
+        ws3.cell(row=row_idx, column=2, value=p.get("uploaded_at") or "")
+        ws3.cell(row=row_idx, column=3, value=p.get("uploaded_by") or "")
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="report_photos.xlsx"'},
+    )

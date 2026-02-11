@@ -15,7 +15,7 @@ $REMOTE_PATH = "/var/www/sales.zakharenkov.ru/html"   # путь на серве
 ssh $SERVER "mkdir -p $REMOTE_PATH"
 
 # Скопировать все нужные файлы
-scp -r src requirements.txt .env.example postgres.py sales_sql.sql $SERVER:$REMOTE_PATH/
+scp -r src requirements.txt .env.example postgres.py sales_sql.sql migrations $SERVER:$REMOTE_PATH/
 ```
 
 ### Вариант B: через rsync (если установлен)
@@ -58,7 +58,15 @@ pip install -r requirements.txt
 
 # Создать .env из примера (если ещё нет)
 cp .env.example .env
-nano .env   # проверить DATABASE_URL, JWT_SECRET_KEY для продакшена
+nano .env   # проверить DATABASE_URL, JWT_SECRET_KEY, UPLOAD_DIR для продакшена
+
+# Папка для фото (обязательно создать, права на запись)
+mkdir -p /var/www/sales.zakharenkov.ru/html/photo
+chmod 777 /var/www/sales.zakharenkov.ru/html/photo   # или chown www-data:www-data
+
+# Миграции БД (если обновление с прошлой версии)
+# psql $DATABASE_URL -f migrations/add_photo_datetime.sql
+# psql $DATABASE_URL -f migrations/add_visit_photo.sql
 ```
 
 ---
