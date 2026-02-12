@@ -342,9 +342,11 @@ async def import_customers_csv(
 async def create_customer(
     body: CustomerCreate,
     session: AsyncSession = Depends(get_db_session),
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
 ):
-    """Добавить клиента. Только admin."""
+    """Добавить клиента. Admin или Agent."""
+    if user.role not in ("admin", "agent"):
+        raise HTTPException(status_code=403, detail="Только admin или agent могут создавать клиентов")
     c = Customer(
         name_client=body.name_client,
         firm_name=body.firm_name,

@@ -86,6 +86,11 @@ async def app_page():
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# Фото: /photo/33_11022026_143045.jpg (ТЗ: photo/ в корне проекта)
+from src.api.v1.routers.customer_photos import UPLOAD_DIR
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/photo", StaticFiles(directory=str(UPLOAD_DIR)), name="photo")
+
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():

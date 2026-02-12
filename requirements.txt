@@ -25,3 +25,10 @@ openpyxl>=3.1.0
 # Logging
 loguru>=0.7.2
 
+# Telegram bot
+python-telegram-bot>=21.0
+httpx>=0.27.0
+
+# Тестирование интерфейса
+playwright>=1.40.0
+

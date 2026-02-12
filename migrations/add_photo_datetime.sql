@@ -1,5 +1,6 @@
 -- Миграция: добавление даты и времени съёмки к таблице customer_photo
--- Выполнить: psql -f migrations/add_photo_datetime.sql
+-- ОБЯЗАТЕЛЬНО выполнить на сервере! Иначе: column photo_datetime does not exist
+-- psql -h HOST -U USER -d DB -f migrations/add_photo_datetime.sql
 
 ALTER TABLE "Sales".customer_photo ADD COLUMN IF NOT EXISTS photo_datetime TIMESTAMPTZ;
 

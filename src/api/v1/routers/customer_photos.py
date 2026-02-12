@@ -1,7 +1,10 @@
 """
 Фотографии клиентов и визитов (customer_photo). Загрузка в папку photo/, именование: КОД_ДДММГГГГ_ЧЧММСС.ext
 """
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 import re
 import uuid
 from datetime import datetime
@@ -19,10 +22,11 @@ from src.core.deps import get_current_user
 
 router = APIRouter()
 
-# Папка photo: UPLOAD_DIR в .env — /var/www/sales.zakharenkov.ru/html/photo
+# ТЗ: /var/www/sales.zakharenkov.ru/html/photo — НЕ uploads!
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", str(PROJECT_ROOT / "photo")))
 LEGACY_UPLOAD_DIR = PROJECT_ROOT / "uploads" / "customer_photos"
+SITE_URL = (os.environ.get("SITE_URL") or "").rstrip("/")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
@@ -44,6 +48,9 @@ def _photo_to_dict(p: CustomerPhoto, customer_name: str | None = None) -> dict:
         "uploaded_at": p.uploaded_at.isoformat() if p.uploaded_at else None,
         "photo_datetime": p.photo_datetime.isoformat() if p.photo_datetime else None,
     }
+    # Прямая ссылка: http://sales.zakharenkov.ru/photo/33_11022026_143045.jpg
+    fname = (p.photo_path or "").split("/")[-1] or p.photo_path
+    d["photo_url"] = f"{SITE_URL}/photo/{fname}" if SITE_URL and fname else None
     if customer_name is not None:
         d["customer_name"] = customer_name
     return d
@@ -76,8 +83,8 @@ def _parse_photo_datetime(s: str | None) -> "datetime | None":
         return None
 
 
-def _resolve_save_path(customer_id: int, ext: str) -> Path:
-    """Уникальное имя: КОД_ДДММГГГГ_ЧЧММСС.ext (при коллизии — _1, _2...)."""
+def _resolve_save_path(customer_id: int, ext: str) -> tuple[Path, str]:
+    """Уникальное имя: КОД_ДДММГГГГ_ЧЧММСС.ext в photo/ (ТЗ)."""
     base = _make_photo_filename(customer_id)
     name = f"{base}.{ext}"
     path = UPLOAD_DIR / name
@@ -89,53 +96,75 @@ def _resolve_save_path(customer_id: int, ext: str) -> Path:
     return path, name
 
 
+def _auto_description(customer_id: int, filename: str) -> str:
+    """Описание автоматом из имени: Клиент 33, 11.02.2026 14:30:45 (ТЗ)."""
+    # filename: 33_11022026_143045.jpg
+    parts = filename.replace(".", "_").split("_")
+    if len(parts) >= 3:
+        try:
+            dd, mm, yyyy = parts[1][:2], parts[1][2:4], parts[1][4:8]
+            hh, min_, ss = parts[2][:2], parts[2][2:4], parts[2][4:6] if len(parts[2]) >= 6 else (parts[2][:2], "00", "00")
+            return f"Клиент {customer_id}, {dd}.{mm}.{yyyy} {hh}:{min_}:{ss}"
+        except (IndexError, ValueError):
+            pass
+    return f"Клиент {customer_id}"
+
+
 @router.post("/customers/{customer_id}/photos")
 async def upload_photo(
     customer_id: int,
     file: UploadFile = File(...),
-    description: str | None = Form(None),
-    photo_datetime: str | None = Form(None),
     is_main: bool = Form(False),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Загрузить фото клиента. Имя файла: КОД_ДДММГГГГ_ЧЧММСС.ext"""
-    result = await session.execute(select(Customer).where(Customer.id == customer_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Customer not found")
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No filename")
-    ext = (file.filename.rsplit(".", 1)[-1] or "").lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"Допустимы: {', '.join(ALLOWED_EXTENSIONS)}")
-    content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="Максимум 10 MB")
-    full_path, filename = _resolve_save_path(customer_id, ext)
+    """Загрузить фото клиента. Имя: КОД_ДДММГГГГ_ЧЧММСС.ext в photo/"""
+    logger.info("upload_photo: customer_id=%s, filename=%s, user=%s", customer_id, file.filename, getattr(user, "login", ""))
     try:
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-        full_path.write_bytes(content)
-    except OSError as err:
-        raise HTTPException(status_code=500, detail=f"Не удалось сохранить файл: {str(err)}")
-    row = (await session.execute(text("SELECT md5(random()::text) AS t"))).fetchone()
-    download_token = row[0] if row else str(uuid.uuid4()).replace("-", "")
-    pdt = _parse_photo_datetime(photo_datetime)
-    photo = CustomerPhoto(
-        customer_id=customer_id,
-        photo_path=filename,
-        original_filename=_safe_filename(file.filename),
-        file_size=len(content),
-        mime_type=file.content_type or f"image/{ext}",
-        description=(description or "")[:500] or None,
-        download_token=download_token,
-        is_main=is_main,
-        uploaded_by=user.login,
-        photo_datetime=pdt,
-    )
-    session.add(photo)
-    await session.commit()
-    await session.refresh(photo)
-    return _photo_to_dict(photo)
+        result = await session.execute(select(Customer).where(Customer.id == customer_id))
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Customer not found")
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename")
+        ext = (file.filename.rsplit(".", 1)[-1] or "").lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"Допустимы: {', '.join(ALLOWED_EXTENSIONS)}")
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="Максимум 10 MB")
+        full_path, filename = _resolve_save_path(customer_id, ext)
+        logger.info("upload_photo: saving to %s", full_path)
+        try:
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+            full_path.write_bytes(content)
+        except OSError as err:
+            logger.exception("upload_photo: OSError writing file")
+            raise HTTPException(status_code=500, detail=f"Не удалось сохранить файл: {str(err)}")
+        row = (await session.execute(text("SELECT md5(random()::text) AS t"))).fetchone()
+        download_token = row[0] if row else str(uuid.uuid4()).replace("-", "")
+        now = datetime.now()
+        desc = _auto_description(customer_id, filename)
+        photo = CustomerPhoto(
+            customer_id=customer_id,
+            photo_path=filename,
+            original_filename=_safe_filename(file.filename),
+            file_size=len(content),
+            mime_type=file.content_type or f"image/{ext}",
+            description=desc or None,
+            download_token=download_token,
+            is_main=is_main,
+            uploaded_by=user.login,
+            photo_datetime=now,
+        )
+        session.add(photo)
+        await session.commit()
+        await session.refresh(photo)
+        return _photo_to_dict(photo)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("upload_photo: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)[:200])
 
 
 @router.get("/customers/{customer_id}/photos")
@@ -147,24 +176,31 @@ async def list_customer_photos(
     user: User = Depends(get_current_user),
 ):
     """Список фотографий клиента."""
-    result = await session.execute(select(Customer).where(Customer.id == customer_id))
-    customer = result.scalar_one_or_none()
-    if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    from sqlalchemy import func
-    count_q = select(func.count()).select_from(CustomerPhoto).where(CustomerPhoto.customer_id == customer_id)
-    total = (await session.execute(count_q)).scalar() or 0
-    q = select(CustomerPhoto).where(CustomerPhoto.customer_id == customer_id).order_by(CustomerPhoto.uploaded_at.desc()).offset(offset).limit(limit)
-    result = await session.execute(q)
-    photos = result.scalars().all()
-    main_photo_id = getattr(customer, "main_photo_id", None)
-    return {
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        "main_photo_id": main_photo_id,
-        "data": [_photo_to_dict(p) for p in photos],
-    }
+    try:
+        result = await session.execute(select(Customer).where(Customer.id == customer_id))
+        customer = result.scalar_one_or_none()
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        from sqlalchemy import func
+        count_q = select(func.count()).select_from(CustomerPhoto).where(CustomerPhoto.customer_id == customer_id)
+        total = (await session.execute(count_q)).scalar() or 0
+        q = select(CustomerPhoto).where(CustomerPhoto.customer_id == customer_id).order_by(CustomerPhoto.uploaded_at.desc()).offset(offset).limit(limit)
+        result = await session.execute(q)
+        photos = result.scalars().all()
+        main_photo_id = getattr(customer, "main_photo_id", None)
+        return {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "main_photo_id": main_photo_id,
+            "data": [_photo_to_dict(p) for p in photos],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("list_customer_photos: %s", e)
+        # Не блокировать форму загрузки: при ошибке БД (напр. photo_datetime) — пустой список
+        return {"total": 0, "limit": limit, "offset": offset, "main_photo_id": None, "data": []}
 
 
 @router.get("/photos/{photo_id}")
@@ -188,16 +224,10 @@ async def get_photo(
 
 
 def _resolve_photo_path(photo_path: str) -> Path:
-    """photo_path: новый формат 33_11022026_143045.jpg или старый /uploads/customer_photos/1.jpg"""
-    base = photo_path.strip().lstrip("/")
-    if base.startswith("uploads/"):
-        base = base.replace("uploads/", "", 1)
-    if base.startswith("customer_photos/"):
-        name = base.replace("customer_photos/", "", 1)
-    else:
-        name = base.split("/")[-1] or base
+    """Ищем в photo/ или legacy uploads/customer_photos/"""
+    name = (photo_path or "").strip().lstrip("/").split("/")[-1] or photo_path
     path = UPLOAD_DIR / name
-    if not path.exists() and LEGACY_UPLOAD_DIR.exists() and re.match(r"^\d+\.[a-z]+$", name.lower()):
+    if not path.exists() and re.match(r"^\d+\.[a-z]+$", name.lower()) and LEGACY_UPLOAD_DIR.exists():
         path = LEGACY_UPLOAD_DIR / name
     return path
 

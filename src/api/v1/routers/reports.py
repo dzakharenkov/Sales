@@ -566,7 +566,8 @@ async def report_dashboard(
         total_sum = float(r_sum.scalar() or 0)
 
         q_cat = f"""
-        SELECT COALESCE(pt.name, 'Без категории') AS category_name,
+        SELECT COALESCE(pt.name, 'Без категории') AS category_code,
+               COALESCE(NULLIF(TRIM(pt.description), ''), pt.name, 'Без категории') AS category_name,
                COALESCE(SUM(it.quantity * COALESCE(it.price, 0)), 0) AS sum_amount,
                COALESCE(SUM(it.quantity), 0)::int AS total_quantity
         FROM "Sales".orders o
@@ -575,21 +576,26 @@ async def report_dashboard(
         JOIN "Sales".product p ON p.code = it.product_code
         LEFT JOIN "Sales".product_type pt ON pt.name = p.type_id
         WHERE {date_cond} AND {status_cond} {extra_where_sql}
-        GROUP BY pt.name
+        GROUP BY pt.name, pt.description
         ORDER BY sum_amount DESC
         """
         r_cat = await session.execute(text(q_cat), params)
         rows_cat = r_cat.fetchall()
-        total_cat_sum = sum(float(r[1] or 0) for r in rows_cat)
+        CATEGORY_RU = {"Tvorog": "Творог", "Yogurt": "Йогурт", "Tara": "Тара", "Milk": "Молоко", "Kefir": "Кефир", "Smetana": "Сметана", "Maslo": "Масло"}
+        total_cat_sum = sum(float(r[2] or 0) for r in rows_cat)
         by_category = []
         for r in rows_cat:
-            amt = float(r[1] or 0)
+            amt = float(r[2] or 0)
             share = round(100.0 * amt / total_cat_sum, 2) if total_cat_sum else 0
+            code = (r[0] or "").strip()
+            desc = (r[1] or "").strip()
+            display_name = desc if desc and desc != code else (CATEGORY_RU.get(code, code) if code else "Без категории")
             by_category.append({
-                "category": r[0] or "Без категории",
+                "category": display_name,
+                "category_code": code,
                 "share_pct": share,
                 "sum_amount": amt,
-                "quantity": int(r[2] or 0),
+                "quantity": int(r[3] or 0),
             })
 
         v_from = _iso_to_date(df or today_str) or dt_date.today()
@@ -625,9 +631,79 @@ async def report_dashboard(
             inactive_count = 0
         active_pct = round(100.0 * (total_customers - inactive_count) / total_customers, 1) if total_customers else 0
 
+        # --- Заказы по дням (для графика) ---
+        q_orders_by_day = f"""
+        SELECT o.order_date::date::text AS day,
+               COUNT(*)::int AS cnt,
+               COALESCE(SUM(o.total_amount), 0) AS amt
+        FROM "Sales".orders o
+        {cust_join} {extra_joins}
+        WHERE {date_cond} AND {status_cond} {extra_where_sql}
+        GROUP BY o.order_date::date
+        ORDER BY day
+        """
+        r_obd = await session.execute(text(q_orders_by_day), params)
+        orders_by_day = [{"day": str(r[0]), "count": int(r[1]), "amount": float(r[2])} for r in r_obd.fetchall()]
+
+        # --- Заказы по статусам (для pie chart) ---
+        q_orders_by_status = f"""
+        SELECT o.status_code, COUNT(*)::int AS cnt, COALESCE(SUM(o.total_amount), 0) AS amt
+        FROM "Sales".orders o
+        {cust_join} {extra_joins}
+        WHERE {date_cond} {extra_where_sql}
+          AND o.status_code IS NOT NULL
+        GROUP BY o.status_code
+        ORDER BY cnt DESC
+        """
+        r_obs = await session.execute(text(q_orders_by_status), {k: v for k, v in params.items() if k != "status_codes"})
+        status_labels = {"open": "Открыто", "delivery": "Доставка", "completed": "Доставлен", "canceled": "Отменён", "cancelled": "Отменён"}
+        orders_by_status = [{"status": status_labels.get(str(r[0]), str(r[0])), "status_code": str(r[0]), "count": int(r[1]), "amount": float(r[2])} for r in r_obs.fetchall()]
+
+        # --- Визиты по дням (для графика) ---
+        q_visits_by_day = """
+        SELECT cv.visit_date::date::text AS day,
+               COUNT(*)::int AS total,
+               SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END)::int AS completed
+        FROM "Sales".customers_visits cv
+        WHERE cv.visit_date::date >= :v_from AND cv.visit_date::date <= :v_to
+        GROUP BY cv.visit_date::date
+        ORDER BY day
+        """
+        r_vbd = await session.execute(text(q_visits_by_day), {"v_from": v_from, "v_to": v_to})
+        visits_by_day = [{"day": str(r[0]), "total": int(r[1]), "completed": int(r[2])} for r in r_vbd.fetchall()]
+
+        # --- Топ-5 клиентов по сумме ---
+        q_top_clients = f"""
+        SELECT c.id, COALESCE(c.name_client, c.firm_name, '') AS name,
+               COUNT(DISTINCT o.order_no)::int AS orders_count,
+               COALESCE(SUM(o.total_amount), 0) AS orders_sum
+        FROM "Sales".orders o
+        JOIN "Sales".customers c ON o.customer_id = c.id
+        WHERE {date_cond} AND {status_cond}
+        GROUP BY c.id, c.name_client, c.firm_name
+        ORDER BY orders_sum DESC
+        LIMIT 5
+        """
+        r_tc = await session.execute(text(q_top_clients), params)
+        top_clients = [{"id": int(r[0]), "name": str(r[1]), "orders_count": int(r[2]), "orders_sum": float(r[3])} for r in r_tc.fetchall()]
+
+        # --- Кол-во заказов и общее число ---
+        q_orders_cnt = f"""
+        SELECT COUNT(*)::int FROM "Sales".orders o
+        {cust_join} {extra_joins}
+        WHERE {date_cond} AND {status_cond} {extra_where_sql}
+        """
+        r_ocnt = await session.execute(text(q_orders_cnt), params)
+        total_orders_count = r_ocnt.scalar() or 0
+
         return {
             "total_orders_sum": total_sum,
+            "total_orders_count": total_orders_count,
             "by_category": by_category,
+            "orders_by_day": orders_by_day,
+            "orders_by_status": orders_by_status,
+            "visits_by_day": visits_by_day,
+            "top_clients": top_clients,
             "kpi": {
                 "total_customers": total_customers,
                 "visits_total": visits_total,
@@ -684,7 +760,7 @@ async def report_photos(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Отчёт: фотографии клиентов."""
+    """Отчёт: фотографии клиентов — табличные данные."""
     try:
         q1 = """
         SELECT COUNT(*)::int AS total_photos,
@@ -698,36 +774,81 @@ async def report_photos(
         total_cust = await session.execute(text('SELECT COUNT(*)::int FROM "Sales".customers'))
         total_c = total_cust.scalar() or 0
         without = total_c - with_photos
-        q2 = 'SELECT id, name_client, firm_name FROM "Sales".v_customers_without_photos LIMIT 50'
+
+        # Клиенты без фото — полная таблица
+        q2_sql = 'SELECT id, name_client, firm_name FROM "Sales".v_customers_without_photos'
         try:
-            r2 = await session.execute(text(q2))
+            r2 = await session.execute(text(q2_sql))
         except Exception:
-            r2 = await session.execute(text('SELECT id, name_client, firm_name FROM "Sales".customers c WHERE NOT EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) LIMIT 50'))
+            r2 = await session.execute(text(
+                'SELECT id, name_client, firm_name FROM "Sales".customers c '
+                'WHERE NOT EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) '
+                'ORDER BY c.name_client'
+            ))
         rows2 = r2.fetchall()
-        without_list = [{"id": r[0], "name_client": r[1], "firm_name": r[2], "name": (r[1] or r[2] or "")} for r in rows2]
+        without_list = [{"id": r[0], "name_client": r[1] or "", "firm_name": r[2] or "", "name": (r[1] or r[2] or "")} for r in rows2]
+
+        # Все фото — полная таблица с клиентом, датой, автором, описанием, ссылкой
         q3 = """
-        SELECT cp.customer_id, c.name_client, c.firm_name, cp.uploaded_at, cp.uploaded_by
+        SELECT cp.id, cp.customer_id, COALESCE(c.name_client, c.firm_name, '') AS customer_name,
+               cp.photo_path, cp.original_filename, cp.file_size,
+               cp.description, cp.uploaded_by, cp.uploaded_at,
+               u.fio AS uploader_fio
         FROM "Sales".customer_photo cp
         JOIN "Sales".customers c ON c.id = cp.customer_id
+        LEFT JOIN "Sales".users u ON cp.uploaded_by = u.login
         ORDER BY cp.uploaded_at DESC NULLS LAST
-        LIMIT 20
         """
         r3 = await session.execute(text(q3))
-        recent = []
+        all_photos = []
         for row in r3.fetchall():
-            recent.append({
-                "customer_id": row[0],
-                "customer_name": (row[1] or row[2] or ""),
-                "uploaded_at": row[3].isoformat() if hasattr(row[3], "isoformat") else str(row[3]),
-                "uploaded_by": row[4],
+            all_photos.append({
+                "id": row[0],
+                "customer_id": row[1],
+                "customer_name": str(row[2] or ""),
+                "photo_path": row[3] or "",
+                "original_filename": row[4] or "",
+                "file_size": row[5] or 0,
+                "description": row[6] or "",
+                "uploaded_by": row[7] or "",
+                "uploader_fio": str(row[8] or row[7] or ""),
+                "uploaded_at": row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8] or ""),
+                "uploader_fio": str(row[9] or row[7] or ""),
             })
+
+        # Фото по клиентам — сводка
+        q4 = """
+        SELECT c.id, COALESCE(c.name_client, c.firm_name, '') AS name,
+               COUNT(cp.id)::int AS photo_count,
+               MAX(cp.uploaded_at) AS last_upload
+        FROM "Sales".customers c
+        LEFT JOIN "Sales".customer_photo cp ON cp.customer_id = c.id
+        GROUP BY c.id, c.name_client, c.firm_name
+        ORDER BY photo_count DESC, name
+        """
+        r4 = await session.execute(text(q4))
+        by_customer = []
+        for row in r4.fetchall():
+            by_customer.append({
+                "id": row[0],
+                "name": str(row[1] or ""),
+                "photo_count": int(row[2] or 0),
+                "last_upload": row[3].isoformat() if hasattr(row[3], "isoformat") else (str(row[3]) if row[3] else ""),
+            })
+
         return {
-            "statistics": {"total_photos": total_photos, "customers_with_photos": with_photos, "customers_without_photos": without},
+            "statistics": {
+                "total_photos": total_photos,
+                "customers_with_photos": with_photos,
+                "customers_without_photos": without,
+                "total_customers": total_c,
+            },
+            "all_photos": all_photos,
+            "by_customer": by_customer,
             "customers_without_photos": without_list,
-            "recent_uploads": recent,
         }
     except Exception as e:
-        return {"statistics": {}, "customers_without_photos": [], "recent_uploads": [], "error": str(e)[:200]}
+        return {"statistics": {}, "all_photos": [], "by_customer": [], "customers_without_photos": [], "error": str(e)[:200]}
 
 
 @router.get("/photos/export")
