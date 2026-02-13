@@ -163,9 +163,7 @@ async def report_customers_export(
         if f and f != n:
             return f"{n} ({f})" if n else f
         return n or f or ""
-    def _visit_completed(r):
-        return "Визит завершён" if (r.get("completed_visits") or 0) > 0 else "—"
-    headers = ["Клиент", "ФИО Агента", "ФИО Экспедитора", "Визит завершён", "Кол-во заказов", "Сумма заказов"]
+    headers = ["Клиент", "ФИО Агента", "ФИО Экспедитора", "Кол-во визитов агентом", "Кол-во завершённых визитов агентом", "Кол-во заказов", "Сумма заказов"]
     for col, h in enumerate(headers, start=1):
         ws.cell(row=1, column=col, value=h)
     for row_idx, r in enumerate(data[:50000], start=2):
@@ -173,7 +171,8 @@ async def report_customers_export(
             _client_display(r),
             r.get("agent_fio") or "",
             r.get("expeditor_fio") or "",
-            _visit_completed(r),
+            r.get("total_visits") or 0,
+            r.get("completed_visits") or 0,
             r.get("orders_count") or 0,
             float(r.get("orders_amount") or 0),
         ]
@@ -504,11 +503,12 @@ async def report_dashboard(
     status_codes: str | None = Query(None),
     product_category: str | None = Query(None),
     territory: str | None = Query(None),
+    city: str | None = Query(None),
     category_client: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Сводная аналитика: заказы, визиты, по категориям продуктов."""
+    """Сводная аналитика: заказы, визиты, по категориям продуктов, по территориям."""
     try:
         from datetime import date as dt_date
         df = _parse_date_to_iso(date_from)
@@ -550,6 +550,9 @@ async def report_dashboard(
         if territory and territory.strip():
             extra_where.append("c.territory = :territory")
             params["territory"] = territory.strip()
+        if city and city.strip():
+            extra_where.append("c.city = :city")
+            params["city"] = city.strip()
         if category_client and category_client.strip():
             extra_where.append("c.category_client = :category_client")
             params["category_client"] = category_client.strip()
@@ -598,39 +601,6 @@ async def report_dashboard(
                 "quantity": int(r[3] or 0),
             })
 
-        v_from = _iso_to_date(df or today_str) or dt_date.today()
-        v_to = _iso_to_date(dt or today_str) or dt_date.today()
-        q_visits = """
-        SELECT COUNT(*)::int AS total_visits,
-               SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END)::int AS completed_visits
-        FROM "Sales".customers_visits cv
-        WHERE cv.visit_date::date >= :v_from AND cv.visit_date::date <= :v_to
-        """
-        r_v = await session.execute(text(q_visits), {"v_from": v_from, "v_to": v_to})
-        v_row = r_v.fetchone()
-        visits_total = v_row[0] or 0
-        visits_completed = v_row[1] or 0
-        visits_success_rate = round(100.0 * visits_completed / visits_total, 1) if visits_total else 0
-
-        q_photos = """
-        SELECT COUNT(DISTINCT cp.id)::int
-        FROM "Sales".customer_photo cp
-        JOIN "Sales".customers_visits cv ON cv.customer_id = cp.customer_id
-        WHERE cv.visit_date::date >= :v_from AND cv.visit_date::date <= :v_to
-        """
-        r_ph = await session.execute(text(q_photos), {"v_from": v_from, "v_to": v_to})
-        photos_count = r_ph.scalar() or 0
-        photo_rate = round(100.0 * photos_count / visits_total, 1) if visits_total else 0
-
-        r_k = await session.execute(text('SELECT COUNT(*)::int FROM "Sales".customers'))
-        total_customers = r_k.scalar() or 0
-        try:
-            inc_r = await session.execute(text('SELECT COUNT(*)::int FROM "Sales".v_inactive_customers'))
-            inactive_count = inc_r.scalar() or 0
-        except Exception:
-            inactive_count = 0
-        active_pct = round(100.0 * (total_customers - inactive_count) / total_customers, 1) if total_customers else 0
-
         # --- Заказы по дням (для графика) ---
         q_orders_by_day = f"""
         SELECT o.order_date::date::text AS day,
@@ -659,19 +629,6 @@ async def report_dashboard(
         status_labels = {"open": "Открыто", "delivery": "Доставка", "completed": "Доставлен", "canceled": "Отменён", "cancelled": "Отменён"}
         orders_by_status = [{"status": status_labels.get(str(r[0]), str(r[0])), "status_code": str(r[0]), "count": int(r[1]), "amount": float(r[2])} for r in r_obs.fetchall()]
 
-        # --- Визиты по дням (для графика) ---
-        q_visits_by_day = """
-        SELECT cv.visit_date::date::text AS day,
-               COUNT(*)::int AS total,
-               SUM(CASE WHEN cv.status = 'completed' THEN 1 ELSE 0 END)::int AS completed
-        FROM "Sales".customers_visits cv
-        WHERE cv.visit_date::date >= :v_from AND cv.visit_date::date <= :v_to
-        GROUP BY cv.visit_date::date
-        ORDER BY day
-        """
-        r_vbd = await session.execute(text(q_visits_by_day), {"v_from": v_from, "v_to": v_to})
-        visits_by_day = [{"day": str(r[0]), "total": int(r[1]), "completed": int(r[2])} for r in r_vbd.fetchall()]
-
         # --- Топ-5 клиентов по сумме ---
         q_top_clients = f"""
         SELECT c.id, COALESCE(c.name_client, c.firm_name, '') AS name,
@@ -696,29 +653,42 @@ async def report_dashboard(
         r_ocnt = await session.execute(text(q_orders_cnt), params)
         total_orders_count = r_ocnt.scalar() or 0
 
+        # По территориям: город, территория, кол-во клиентов, кол-во заказов, сумма
+        q_terr = f"""
+        SELECT COALESCE(c.city, '') AS city, COALESCE(c.territory, '') AS territory,
+               COUNT(DISTINCT c.id)::int AS customers_count,
+               COUNT(DISTINCT o.order_no)::int AS orders_count,
+               COALESCE(SUM(o.total_amount), 0) AS orders_sum
+        FROM "Sales".customers c
+        LEFT JOIN "Sales".orders o ON o.customer_id = c.id AND {date_cond} AND {status_cond}
+        WHERE 1=1
+        """
+        terr_params = dict(params)
+        if territory and territory.strip():
+            q_terr += " AND c.territory = :territory"
+        if city and city.strip():
+            q_terr += " AND c.city = :city"
+        if category_client and category_client.strip():
+            q_terr += " AND c.category_client = :category_client"
+        q_terr += " GROUP BY c.city, c.territory ORDER BY c.city, c.territory"
+        try:
+            r_terr = await session.execute(text(q_terr), terr_params)
+            by_territory = [{"city": str(r[0] or ""), "territory": str(r[1] or ""), "customers_count": int(r[2] or 0), "orders_count": int(r[3] or 0), "orders_sum": float(r[4] or 0)} for r in r_terr.fetchall()]
+        except Exception:
+            by_territory = []
+
         return {
             "total_orders_sum": total_sum,
             "total_orders_count": total_orders_count,
             "by_category": by_category,
+            "by_territory": by_territory,
             "orders_by_day": orders_by_day,
             "orders_by_status": orders_by_status,
-            "visits_by_day": visits_by_day,
             "top_clients": top_clients,
-            "kpi": {
-                "total_customers": total_customers,
-                "visits_total": visits_total,
-                "visits_completed": visits_completed,
-                "visits_success_rate": visits_success_rate,
-                "active_customers_pct": active_pct,
-                "photo_reports_count": photos_count,
-                "photo_reports_rate": photo_rate,
-                "inactive_count": inactive_count,
-            },
-            "inactive_customers": {"count": inactive_count},
             "filters": {"date_from": df, "date_to": dt},
         }
     except Exception as e:
-        return {"total_orders_sum": 0, "by_category": [], "kpi": {}, "inactive_customers": {"count": 0}, "error": str(e)[:300]}
+        return {"total_orders_sum": 0, "by_category": [], "by_territory": [], "error": str(e)[:300]}
 
 
 @router.get("/dashboard/export")
@@ -728,13 +698,15 @@ async def report_dashboard_export(
     status_codes: str | None = Query(None),
     product_category: str | None = Query(None),
     territory: str | None = Query(None),
+    city: str | None = Query(None),
     category_client: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Экспорт сводной аналитики по категориям в Excel."""
-    res = await report_dashboard(date_from, date_to, status_codes, product_category, territory, category_client, session, user)
+    """Экспорт сводной аналитики по категориям и по территориям в Excel."""
+    res = await report_dashboard(date_from, date_to, status_codes, product_category, territory, city, category_client, session, user)
     data = res.get("by_category") or []
+    by_territory = res.get("by_territory") or []
     wb = Workbook()
     ws = wb.active
     ws.title = "По категориям"
@@ -745,6 +717,15 @@ async def report_dashboard_export(
         ws.cell(row=row_idx, column=2, value=float(r.get("share_pct") or 0))
         ws.cell(row=row_idx, column=3, value=float(r.get("sum_amount") or 0))
         ws.cell(row=row_idx, column=4, value=int(r.get("quantity") or 0))
+    ws2 = wb.create_sheet("По территориям")
+    for col, h in enumerate(["Город", "Территория", "Количество клиентов", "Количество заказов", "Сумма"], start=1):
+        ws2.cell(row=1, column=col, value=h)
+    for row_idx, r in enumerate(by_territory[:5000], start=2):
+        ws2.cell(row=row_idx, column=1, value=r.get("city") or "")
+        ws2.cell(row=row_idx, column=2, value=r.get("territory") or "")
+        ws2.cell(row=row_idx, column=3, value=int(r.get("customers_count") or 0))
+        ws2.cell(row=row_idx, column=4, value=int(r.get("orders_count") or 0))
+        ws2.cell(row=row_idx, column=5, value=float(r.get("orders_sum") or 0))
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -788,9 +769,10 @@ async def report_photos(
         rows2 = r2.fetchall()
         without_list = [{"id": r[0], "name_client": r[1] or "", "firm_name": r[2] or "", "name": (r[1] or r[2] or "")} for r in rows2]
 
-        # Все фото — полная таблица с клиентом, датой, автором, описанием, ссылкой
+        # Все фото — с полями клиента: адрес, город, территория, телефон, контактное лицо, ИНН
         q3 = """
         SELECT cp.id, cp.customer_id, COALESCE(c.name_client, c.firm_name, '') AS customer_name,
+               c.address, c.city, c.territory, c.phone, c.contact_person, c.tax_id,
                cp.photo_path, cp.original_filename, cp.file_size,
                cp.description, cp.uploaded_by, cp.uploaded_at,
                u.fio AS uploader_fio
@@ -802,18 +784,24 @@ async def report_photos(
         r3 = await session.execute(text(q3))
         all_photos = []
         for row in r3.fetchall():
+            uploaded_at = row[14]
             all_photos.append({
                 "id": row[0],
                 "customer_id": row[1],
                 "customer_name": str(row[2] or ""),
-                "photo_path": row[3] or "",
-                "original_filename": row[4] or "",
-                "file_size": row[5] or 0,
-                "description": row[6] or "",
-                "uploaded_by": row[7] or "",
-                "uploader_fio": str(row[8] or row[7] or ""),
-                "uploaded_at": row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8] or ""),
-                "uploader_fio": str(row[9] or row[7] or ""),
+                "address": str(row[3] or ""),
+                "city": str(row[4] or ""),
+                "territory": str(row[5] or ""),
+                "phone": str(row[6] or ""),
+                "contact_person": str(row[7] or ""),
+                "tax_id": str(row[8] or ""),
+                "photo_path": row[9] or "",
+                "original_filename": row[10] or "",
+                "file_size": row[11] or 0,
+                "description": row[12] or "",
+                "uploaded_by": row[13] or "",
+                "uploaded_at": uploaded_at.isoformat() if hasattr(uploaded_at, "isoformat") else str(uploaded_at or ""),
+                "uploader_fio": str(row[15] or row[13] or ""),
             })
 
         # Фото по клиентам — сводка
@@ -836,6 +824,7 @@ async def report_photos(
                 "last_upload": row[3].isoformat() if hasattr(row[3], "isoformat") else (str(row[3]) if row[3] else ""),
             })
 
+        recent_uploads = all_photos[:500]
         return {
             "statistics": {
                 "total_photos": total_photos,
@@ -844,6 +833,7 @@ async def report_photos(
                 "total_customers": total_c,
             },
             "all_photos": all_photos,
+            "recent_uploads": recent_uploads,
             "by_customer": by_customer,
             "customers_without_photos": without_list,
         }
@@ -875,12 +865,19 @@ async def report_photos_export(
     for row_idx, c in enumerate(without[:5000], start=2):
         ws2.cell(row=row_idx, column=1, value=(c.get("name_client") or c.get("firm_name") or c.get("name") or ""))
     ws3 = wb.create_sheet("Последние загрузки")
-    for col, h in enumerate(["Клиент", "Дата загрузки", "Загружено"], start=1):
+    headers_photos = ["Клиент", "Адрес", "Город", "Территория", "Телефон", "Контактное лицо", "ИНН", "Дата загрузки", "Загружено"]
+    for col, h in enumerate(headers_photos, start=1):
         ws3.cell(row=1, column=col, value=h)
     for row_idx, p in enumerate(recent[:500], start=2):
         ws3.cell(row=row_idx, column=1, value=p.get("customer_name") or "")
-        ws3.cell(row=row_idx, column=2, value=p.get("uploaded_at") or "")
-        ws3.cell(row=row_idx, column=3, value=p.get("uploaded_by") or "")
+        ws3.cell(row=row_idx, column=2, value=p.get("address") or "")
+        ws3.cell(row=row_idx, column=3, value=p.get("city") or "")
+        ws3.cell(row=row_idx, column=4, value=p.get("territory") or "")
+        ws3.cell(row=row_idx, column=5, value=p.get("phone") or "")
+        ws3.cell(row=row_idx, column=6, value=p.get("contact_person") or "")
+        ws3.cell(row=row_idx, column=7, value=p.get("tax_id") or "")
+        ws3.cell(row=row_idx, column=8, value=p.get("uploaded_at") or "")
+        ws3.cell(row=row_idx, column=9, value=p.get("uploaded_by") or "")
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)

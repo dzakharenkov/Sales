@@ -56,15 +56,17 @@ async def _fetch_stock_with_expiry(
     ]
     data = [dict(zip(columns, row)) for row in rows]
 
-    # Подтягиваем цену товара из таблицы Product
+    # Подтягиваем цену и вес товара из таблицы Product
     product_codes = {d["product_code"] for d in data if d.get("product_code")}
     prices_map: dict[str, float] = {}
+    weights_map: dict[str, int] = {}
     if product_codes:
-        price_result = await session.execute(
-            select(Product.code, Product.price).where(Product.code.in_(product_codes))
+        prod_result = await session.execute(
+            select(Product.code, Product.price, Product.weight_g).where(Product.code.in_(product_codes))
         )
-        for code, price in price_result.fetchall():
+        for code, price, weight_g in prod_result.fetchall():
             prices_map[code] = float(price) if price is not None else 0.0
+            weights_map[code] = int(weight_g) if weight_g is not None else 0
 
     # Собираем batch_id для одного запроса в batches
     batch_ids = {d["batch_id"] for d in data if d.get("batch_id") is not None}
@@ -136,11 +138,13 @@ async def _fetch_stock_with_expiry(
         if d.get("batch_id"):
             d["batch_id"] = str(d["batch_id"])
 
-        # Цена за единицу и общая стоимость
+        # Цена за единицу, общая стоимость и вес
         price = prices_map.get(d.get("product_code"), 0.0)
+        weight_g = weights_map.get(d.get("product_code"), 0)
         qty = d.get("total_qty") or 0
         d["unit_price"] = price
         d["total_cost"] = price * qty
+        d["weight_g"] = weight_g
 
     return data
 

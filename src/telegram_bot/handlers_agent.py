@@ -8,7 +8,7 @@ from datetime import date, datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
 
-from .session import get_session, touch_session, log_action
+from .session import get_session, touch_session, log_action, delete_session
 from .sds_api import api, SDSApiError
 from .helpers import (
     fmt_money, fmt_date, date_picker_keyboard, calendar_keyboard,
@@ -34,6 +34,8 @@ def _clear_agent_state(context: ContextTypes.DEFAULT_TYPE):
     keys = [
         "add_cust_step", "add_cust_name", "add_cust_inn", "add_cust_lat",
         "add_cust_lon", "add_cust_photo_bytes", "add_cust_photo_name",
+        "add_cust_address", "add_cust_city", "add_cust_territory", "add_cust_phone",
+        "add_cust_contact", "add_cust_firm_name", "add_cust_account_no", "add_cust_editing_field",
         "photo_search", "photo_customer_id", "order_search", "adding_product",
         "vcomplete_id", "vcancel_id", "order_geo_step", "order_photo_step",
         "order_cart", "order_customer_id", "order_payment", "order_lat",
@@ -56,7 +58,7 @@ async def cb_agent_add_customer(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data["add_cust_step"] = "name"
     buttons = [[InlineKeyboardButton("❌ Отмена", callback_data="main_menu")]]
     await q.edit_message_text(
-        "➕ *Добавить клиента*\n\nВведите *название клиента* (минимум 3 символа):",
+        "➕ *Добавить клиента*\n\nВведите *название клиента* (минимум 2 символа):",
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode="Markdown",
     )
@@ -75,8 +77,8 @@ async def _handle_add_customer_text(update: Update, context: ContextTypes.DEFAUL
 
     if step == "name":
         name = update.message.text.strip()
-        if len(name) < 3:
-            await update.message.reply_text("❌ Название минимум 3 символа. Введите снова:")
+        if len(name) < 2:
+            await update.message.reply_text("❌ Название минимум 2 символа. Введите снова:")
             return True
         context.user_data["add_cust_name"] = name
         context.user_data["add_cust_step"] = "inn"
@@ -100,18 +102,35 @@ async def _handle_add_customer_text(update: Update, context: ContextTypes.DEFAUL
             )
             return True
         context.user_data["add_cust_inn"] = inn
-        context.user_data["add_cust_step"] = "geo"
-        await update.message.reply_text(
-            f"✅ ИНН: *{inn}*\n\n"
-            f"📍 Отправьте *геолокацию* клиента через Telegram\n"
-            f"(нажмите 📎 → Геолокация)\n\n"
-            f"Или нажмите Пропустить.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("⏭ Пропустить", callback_data="agent_addcust_skip_geo")],
-                [InlineKeyboardButton("❌ Отмена", callback_data="main_menu")],
-            ]),
-            parse_mode="Markdown",
-        )
+        context.user_data["add_cust_step"] = "fields"
+        await _show_add_customer_fields_menu(update, context, is_callback=False)
+        return True
+
+    if step == "fields":
+        editing = context.user_data.get("add_cust_editing_field")
+        if not editing:
+            return True
+        text_val = update.message.text.strip()
+        if editing == "name":
+            context.user_data["add_cust_name"] = text_val if len(text_val) >= 2 else context.user_data.get("add_cust_name", "")
+        elif editing == "inn":
+            context.user_data["add_cust_inn"] = text_val if re.match(r"^\d{9,12}$", text_val) else context.user_data.get("add_cust_inn")
+        elif editing == "address":
+            context.user_data["add_cust_address"] = text_val
+        elif editing == "city":
+            context.user_data["add_cust_city"] = text_val
+        elif editing == "territory":
+            context.user_data["add_cust_territory"] = text_val
+        elif editing == "phone":
+            context.user_data["add_cust_phone"] = text_val
+        elif editing == "contact":
+            context.user_data["add_cust_contact"] = text_val
+        elif editing == "firm_name":
+            context.user_data["add_cust_firm_name"] = text_val
+        elif editing == "account_no":
+            context.user_data["add_cust_account_no"] = text_val
+        context.user_data["add_cust_editing_field"] = None
+        await _show_add_customer_fields_menu(update, context, is_callback=False)
         return True
 
     return False
@@ -121,17 +140,138 @@ async def cb_agent_addcust_skip_inn(update: Update, context: ContextTypes.DEFAUL
     q = update.callback_query
     await q.answer()
     context.user_data["add_cust_inn"] = None
-    context.user_data["add_cust_step"] = "geo"
-    await q.edit_message_text(
-        "📍 Отправьте *геолокацию* клиента через Telegram\n"
-        "(нажмите 📎 → Геолокация)\n\n"
-        "Или нажмите Пропустить.",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("⏭ Пропустить", callback_data="agent_addcust_skip_geo")],
-            [InlineKeyboardButton("❌ Отмена", callback_data="main_menu")],
-        ]),
-        parse_mode="Markdown",
-    )
+    context.user_data["add_cust_step"] = "fields"
+    await _show_add_customer_fields_menu(update, context, is_callback=True)
+
+
+def _field_btn(label: str, field_key: str, value) -> list:
+    check = " ✓" if value else ""
+    return [InlineKeyboardButton(label + check, callback_data=f"agent_addcust_field_{field_key}")]
+
+
+async def _show_add_customer_fields_menu(update, context, is_callback: bool):
+    """Меню полей клиента с галочками для заполненных. После ИНН."""
+    name = context.user_data.get("add_cust_name", "")
+    inn = context.user_data.get("add_cust_inn") or ""
+    address = context.user_data.get("add_cust_address", "")
+    city = context.user_data.get("add_cust_city", "")
+    territory = context.user_data.get("add_cust_territory", "")
+    phone = context.user_data.get("add_cust_phone", "")
+    contact = context.user_data.get("add_cust_contact", "")
+    firm_name = context.user_data.get("add_cust_firm_name", "")
+    account_no = context.user_data.get("add_cust_account_no", "")
+    lat = context.user_data.get("add_cust_lat")
+    lon = context.user_data.get("add_cust_lon")
+    has_geo = lat is not None and lon is not None
+    has_photo = context.user_data.get("add_cust_photo_bytes") is not None
+
+    lines = ["📋 *Заполните данные клиента*\nНажмите на поле, введите значение и отправьте. Для координат — отправьте геолокацию.\n"]
+    buttons = []
+    buttons.append(_field_btn("Название", "name", name))
+    buttons.append(_field_btn("ИНН", "inn", inn))
+    buttons.append(_field_btn("Название фирмы", "firm_name", firm_name))
+    buttons.append(_field_btn("Р/с", "account_no", account_no))
+    buttons.append(_field_btn("Адрес", "address", address))
+    buttons.append(_field_btn("Город", "city", city))
+    buttons.append(_field_btn("Территория", "territory", territory))
+    buttons.append(_field_btn("Телефон", "phone", phone))
+    buttons.append(_field_btn("Контактное лицо", "contact", contact))
+    buttons.append(_field_btn("📍 Координаты (геолокация)", "geo", has_geo))
+    buttons.append(_field_btn("📸 Фото", "photo", has_photo))
+    buttons.append([InlineKeyboardButton("✅ Завершить заведение клиента", callback_data="agent_addcust_finish")])
+    buttons.append([InlineKeyboardButton("❌ Отмена", callback_data="main_menu")])
+
+    text = "\n".join(lines)
+    kb = InlineKeyboardMarkup(buttons)
+    if is_callback:
+        await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
+    else:
+        await update.message.reply_text(text, reply_markup=kb, parse_mode="Markdown")
+
+
+async def cb_agent_addcust_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор поля для ввода."""
+    q = update.callback_query
+    await q.answer()
+    field = q.data.replace("agent_addcust_field_", "")
+    context.user_data["add_cust_editing_field"] = field
+
+    prompts = {
+        "name": "Введите *название клиента* (минимум 2 символа):",
+        "inn": "Введите *ИНН* (9–12 цифр):",
+        "firm_name": "Введите *название фирмы*:",
+        "account_no": "Введите *расчётный счёт* (р/с):",
+        "address": "Введите *адрес*:",
+        "city": "Введите *город*:",
+        "territory": "Введите *территорию*:",
+        "phone": "Введите *телефон*:",
+        "contact": "Введите *контактное лицо*:",
+        "geo": "📍 Отправьте *геолокацию* (нажмите 📎 → Геолокация):",
+        "photo": "📸 Отправьте *фото* клиента (вывеска, магазин):",
+    }
+    prompt = prompts.get(field, "Введите значение:")
+    await q.edit_message_text(prompt, parse_mode="Markdown")
+
+
+async def cb_agent_addcust_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Завершить заведение клиента — сохранить в БД."""
+    q = update.callback_query
+    await q.answer()
+    session, token = await _get_auth(update)
+    if not session:
+        return
+    name = (context.user_data.get("add_cust_name") or "").strip()
+    if len(name) < 2:
+        await q.edit_message_text("❌ Заполните хотя бы *название клиента* (минимум 2 символа).", parse_mode="Markdown")
+        return
+
+    body = {"name_client": name, "status": "Активный", "login_agent": session.login}
+    if context.user_data.get("add_cust_inn"):
+        body["tax_id"] = context.user_data["add_cust_inn"]
+    if context.user_data.get("add_cust_firm_name"):
+        body["firm_name"] = context.user_data["add_cust_firm_name"]
+    if context.user_data.get("add_cust_address"):
+        body["address"] = context.user_data["add_cust_address"]
+    if context.user_data.get("add_cust_city"):
+        body["city"] = context.user_data["add_cust_city"]
+    if context.user_data.get("add_cust_territory"):
+        body["territory"] = context.user_data["add_cust_territory"]
+    if context.user_data.get("add_cust_phone"):
+        body["phone"] = context.user_data["add_cust_phone"]
+    if context.user_data.get("add_cust_contact"):
+        body["contact_person"] = context.user_data["add_cust_contact"]
+    if context.user_data.get("add_cust_account_no"):
+        body["account_no"] = context.user_data["add_cust_account_no"]
+    lat = context.user_data.get("add_cust_lat")
+    lon = context.user_data.get("add_cust_lon")
+    if lat is not None and lon is not None:
+        body["latitude"] = lat
+        body["longitude"] = lon
+
+    try:
+        customer = await api.create_customer(token, body)
+        cid = customer.get("id")
+        photo_bytes = context.user_data.get("add_cust_photo_bytes")
+        photo_name = context.user_data.get("add_cust_photo_name", "photo.jpg")
+        if photo_bytes and cid:
+            ext = photo_name.rsplit(".", 1)[-1] if "." in photo_name else "jpg"
+            auto_filename = f"{cid}_{datetime.now().strftime('%d%m%Y_%H%M%S')}.{ext}"
+            try:
+                await api.upload_photo(token, cid, photo_bytes, auto_filename)
+            except Exception as e:
+                logger.warning("Не удалось загрузить фото нового клиента %s: %s", cid, e)
+        await log_action(q.from_user.id, session.login, session.role, "customer_created", f"customer_id={cid}, name={name}", "success")
+        _clear_agent_state(context)
+        await q.edit_message_text(
+            f"✅ *Клиент создан!*\n\n*ID:* {cid}\n*Название:* {name}",
+            reply_markup=back_button(), parse_mode="Markdown",
+        )
+    except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
+        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
 
 
 async def cb_agent_addcust_skip_geo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -139,39 +279,54 @@ async def cb_agent_addcust_skip_geo(update: Update, context: ContextTypes.DEFAUL
     await q.answer()
     context.user_data["add_cust_lat"] = None
     context.user_data["add_cust_lon"] = None
-    context.user_data["add_cust_step"] = "photo"
-    await q.edit_message_text(
-        "📸 Отправьте *фото клиента* (вывеска, магазин) или нажмите Пропустить.",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("⏭ Пропустить", callback_data="agent_addcust_skip_photo")],
-            [InlineKeyboardButton("❌ Отмена", callback_data="main_menu")],
-        ]),
-        parse_mode="Markdown",
-    )
+    context.user_data["add_cust_step"] = "fields"
+    await _show_add_customer_fields_menu(update, context, is_callback=True)
+
+
+async def cb_agent_addcust_skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    context.user_data["add_cust_photo_bytes"] = None
+    context.user_data["add_cust_step"] = "fields"
+    await _show_add_customer_fields_menu(update, context, is_callback=True)
 
 
 async def _handle_add_customer_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("add_cust_step")
-    if step != "geo":
+    if step != "fields":
         return False
     loc = update.message.location
     context.user_data["add_cust_lat"] = loc.latitude
     context.user_data["add_cust_lon"] = loc.longitude
-    context.user_data["add_cust_step"] = "photo"
-    await update.message.reply_text(
-        f"✅ Координаты: {loc.latitude:.6f}, {loc.longitude:.6f}\n\n"
-        f"📸 Отправьте *фото клиента* (вывеска, магазин) или нажмите Пропустить.",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("⏭ Пропустить", callback_data="agent_addcust_skip_photo")],
-            [InlineKeyboardButton("❌ Отмена", callback_data="main_menu")],
-        ]),
-        parse_mode="Markdown",
-    )
+    context.user_data["add_cust_editing_field"] = None
+    await _show_add_customer_fields_menu(update, context, is_callback=False)
     return True
 
 
 async def _handle_add_customer_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("add_cust_step")
+    editing = context.user_data.get("add_cust_editing_field")
+    if step == "fields" and editing == "photo":
+        photo = update.message.photo[-1] if update.message.photo else None
+        doc = update.message.document if not photo and update.message.document else None
+        if photo:
+            file = await photo.get_file()
+            filename = "photo.jpg"
+        elif doc and doc.mime_type and (doc.mime_type.startswith("image/")):
+            file = await doc.get_file()
+            filename = doc.file_name or "photo.jpg"
+        else:
+            await update.message.reply_text("❌ Отправьте изображение (JPG, PNG, WEBP).")
+            return True
+        if file.file_size and file.file_size > 10 * 1024 * 1024:
+            await update.message.reply_text("❌ Файл слишком большой (макс. 10 МБ).")
+            return True
+        file_bytes = await file.download_as_bytearray()
+        context.user_data["add_cust_photo_bytes"] = bytes(file_bytes)
+        context.user_data["add_cust_photo_name"] = filename
+        context.user_data["add_cust_editing_field"] = None
+        await _show_add_customer_fields_menu(update, context, is_callback=False)
+        return True
     if step != "photo":
         return False
     photo = update.message.photo[-1] if update.message.photo else None
@@ -199,7 +354,8 @@ async def cb_agent_addcust_skip_photo(update: Update, context: ContextTypes.DEFA
     q = update.callback_query
     await q.answer()
     context.user_data["add_cust_photo_bytes"] = None
-    await _show_add_customer_confirm(update, context, is_callback=True)
+    context.user_data["add_cust_step"] = "fields"
+    await _show_add_customer_fields_menu(update, context, is_callback=True)
 
 
 async def _show_add_customer_confirm(update, context, is_callback: bool):
@@ -268,6 +424,10 @@ async def cb_agent_addcust_confirm(update: Update, context: ContextTypes.DEFAULT
             reply_markup=back_button(), parse_mode="Markdown",
         )
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await log_action(q.from_user.id, session.login, session.role,
                          "customer_created", f"name={name}", "error", e.detail)
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
@@ -320,6 +480,10 @@ async def cb_agent_visits_date(update: Update, context: ContextTypes.DEFAULT_TYP
             limit=50,
         )
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button("agent_visits"))
         return
 
@@ -359,6 +523,10 @@ async def cb_agent_visit_detail(update: Update, context: ContextTypes.DEFAULT_TY
     try:
         v = await api.get_visit(token, vid)
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button("agent_visits"))
         return
 
@@ -439,7 +607,11 @@ async def _handle_vcomplete_comment(update: Update, context: ContextTypes.DEFAUL
         from .handlers_auth import show_main_menu
         await show_main_menu(update, context, session)
     except SDSApiError as e:
-        await update.message.reply_text(f"❌ Ошибка: {e.detail}")
+        if e.status == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+        else:
+            await update.message.reply_text(f"❌ Ошибка: {e.detail}")
     return True
 
 
@@ -476,7 +648,11 @@ async def _handle_vcancel_comment(update: Update, context: ContextTypes.DEFAULT_
         from .handlers_auth import show_main_menu
         await show_main_menu(update, context, session)
     except SDSApiError as e:
-        await update.message.reply_text(f"❌ Ошибка: {e.detail}")
+        if e.status == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+        else:
+            await update.message.reply_text(f"❌ Ошибка: {e.detail}")
     return True
 
 
@@ -505,7 +681,11 @@ async def cb_agent_vphotos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         pr = await api.get_customer_photos(token, customer_id)
         data = pr.get("data", []) if isinstance(pr, dict) else (pr if isinstance(pr, list) else [])
-    except SDSApiError:
+    except SDSApiError as e:
+        if getattr(e, "status", None) == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return True
         data = []
 
     lines = [f"📷 *Фотографии клиента #{customer_id}*\n"]
@@ -533,7 +713,11 @@ async def _handle_photo_search(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.message.text.strip()
     try:
         customers = await api.search_customers(session.jwt_token, name_client=query, limit=10)
-    except SDSApiError:
+    except SDSApiError as e:
+        if getattr(e, "status", None) == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return True
         customers = []
     if not customers or not isinstance(customers, list) or len(customers) == 0:
         await update.message.reply_text("Клиенты не найдены. Попробуйте другой запрос:")
@@ -552,7 +736,10 @@ async def _handle_photo_search(update: Update, context: ContextTypes.DEFAULT_TYP
 async def msg_agent_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка отправки фото (добавление клиента / заказ / клиент)."""
     # Добавление клиента
-    if context.user_data.get("add_cust_step") == "photo":
+    if context.user_data.get("add_cust_step") == "photo" or (
+        context.user_data.get("add_cust_step") == "fields"
+        and context.user_data.get("add_cust_editing_field") == "photo"
+    ):
         await _handle_add_customer_photo(update, context)
         return
     # Фото для заказа
@@ -593,6 +780,10 @@ async def msg_agent_photo_upload(update: Update, context: ContextTypes.DEFAULT_T
                          "photo_upload", f"customer={customer_id}", "success")
         await update.message.reply_text(f"✅ Фото загружено! ({auto_filename})")
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await log_action(update.effective_user.id, session.login, session.role,
                          "photo_upload", f"customer={customer_id}", "error", e.detail)
         await update.message.reply_text(f"❌ Ошибка загрузки: {e.detail}")
@@ -621,7 +812,11 @@ async def _handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.message.text.strip()
     try:
         customers = await api.search_customers(session.jwt_token, name_client=query, limit=10)
-    except SDSApiError:
+    except SDSApiError as e:
+        if getattr(e, "status", None) == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return True
         customers = []
     if not customers or not isinstance(customers, list) or len(customers) == 0:
         await update.message.reply_text("Клиенты не найдены. Попробуйте другой запрос:")
@@ -857,6 +1052,10 @@ async def _handle_order_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data["order_photo_uploaded"] = True
         await update.message.reply_text(f"✅ Фото загружено! ({auto_filename})")
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await update.message.reply_text(f"⚠️ Не удалось загрузить фото: {e.detail}")
 
     context.user_data.pop("order_photo_step", None)
@@ -947,6 +1146,10 @@ async def cb_agent_order_confirm(update: Update, context: ContextTypes.DEFAULT_T
             reply_markup=back_button(), parse_mode="Markdown",
         )
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await log_action(q.from_user.id, session.login, session.role,
                          "order_created", f"customer={cid}", "error", e.detail)
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
@@ -956,7 +1159,7 @@ async def cb_agent_order_confirm(update: Update, context: ContextTypes.DEFAULT_T
 
 async def msg_agent_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Единый обработчик текстовых сообщений агента."""
-    if context.user_data.get("add_cust_step") in ("name", "inn"):
+    if context.user_data.get("add_cust_step") in ("name", "inn", "fields"):
         if await _handle_add_customer_text(update, context):
             return
     if context.user_data.get("vcomplete_id"):
@@ -978,7 +1181,7 @@ async def msg_agent_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def msg_agent_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик геолокации."""
-    if context.user_data.get("add_cust_step") == "geo":
+    if context.user_data.get("add_cust_step") == "fields":
         await _handle_add_customer_location(update, context)
         return
     if context.user_data.get("order_geo_step"):
@@ -994,6 +1197,8 @@ def register_agent_handlers(app):
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_skip_inn, pattern="^agent_addcust_skip_inn$"))
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_skip_geo, pattern="^agent_addcust_skip_geo$"))
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_skip_photo, pattern="^agent_addcust_skip_photo$"))
+    app.add_handler(CallbackQueryHandler(cb_agent_addcust_field, pattern="^agent_addcust_field_.+$"))
+    app.add_handler(CallbackQueryHandler(cb_agent_addcust_finish, pattern="^agent_addcust_finish$"))
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_confirm, pattern="^agent_addcust_confirm$"))
     # Визиты
     app.add_handler(CallbackQueryHandler(cb_agent_visits, pattern="^agent_visits$"))

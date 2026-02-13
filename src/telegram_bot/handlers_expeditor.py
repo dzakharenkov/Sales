@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
 
-from .session import get_session, touch_session, log_action
+from .session import get_session, touch_session, log_action, delete_session
 from .sds_api import api, SDSApiError
 from .helpers import (
     fmt_money, fmt_date, date_picker_keyboard, calendar_keyboard,
@@ -66,6 +66,70 @@ async def cb_exp_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.edit_message_text("🗺 *Мой маршрут*\n\nВыберите дату:", reply_markup=kb, parse_mode="Markdown")
 
 
+async def _exp_orders_list_today(update: Update, context: ContextTypes.DEFAULT_TYPE, completed_only: bool):
+    """Список заказов на сегодня (все или только выполненные)."""
+    q = update.callback_query
+    await q.answer()
+    session, token = await _get_auth(update)
+    if not session:
+        return
+    today = date.today().isoformat()
+    today_end = (date.today() + timedelta(days=1)).isoformat()
+    params = {
+        "login_expeditor": session.login,
+        "scheduled_delivery_from": today,
+        "scheduled_delivery_to": today_end,
+        "limit": 50,
+    }
+    if completed_only:
+        params["status_code"] = "completed"
+    try:
+        data = await api.get_orders(token, **params)
+    except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
+        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        return
+    all_orders = data if isinstance(data, list) else (data.get("orders") or data.get("data") or [])
+    if completed_only:
+        title = "✅ *Выполненные заказы сегодня*\n\n"
+    else:
+        title = "📦 *Мои заказы на сегодня*\n\n"
+    if not all_orders:
+        await q.edit_message_text(
+            title + "Нет заказов.",
+            reply_markup=back_button(),
+            parse_mode="Markdown",
+        )
+        return
+    context.user_data["exp_date"] = today
+    lines = [title]
+    buttons = []
+    for o in all_orders:
+        order_no = o.get("order_no")
+        client = o.get("customer_name", "—")
+        st = o.get("status_code", "")
+        status = STATUS_RU.get(st, st)
+        lines.append(f"• №{order_no} | {client} | {status}")
+        buttons.append([InlineKeyboardButton(
+            f"№{order_no} — {client}", callback_data=f"exp_order_{order_no}"
+        )])
+    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
+    await q.edit_message_text(
+        "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
+    )
+
+
+async def cb_exp_orders_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _exp_orders_list_today(update, context, completed_only=False)
+
+
+async def cb_exp_orders_done_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _exp_orders_list_today(update, context, completed_only=True)
+
+
 async def cb_exp_orders_calendar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -101,7 +165,8 @@ async def cb_exp_orders_date(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
     except SDSApiError as e:
         if e.status == 401:
-            await q.edit_message_text("Сессия истекла. Нажмите /start.")
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
             return
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
         return
@@ -204,6 +269,10 @@ async def cb_exp_order_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     try:
         o = await api.get_order(token, order_no)
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button("exp_orders"))
         return
 
@@ -267,7 +336,7 @@ async def cb_exp_order_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     if o.get("status_code") == "open":
         buttons.append([InlineKeyboardButton("🚚 Доставить заказ", callback_data=f"exp_complete_{order_no}")])
     elif o.get("status_code") == "delivery":
-        buttons.append([InlineKeyboardButton("✅ Завершить (оплата получена)", callback_data=f"exp_finish_{order_no}")])
+        buttons.append([InlineKeyboardButton("✅ Доставлен", callback_data=f"exp_delivered_{order_no}")])
 
     date_str = context.user_data.get("exp_date", date.today().isoformat())
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data=f"exp_orders_date_{date_str}")])
@@ -311,28 +380,29 @@ async def cb_exp_confirm_delivery(update: Update, context: ContextTypes.DEFAULT_
             parse_mode="Markdown",
         )
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await log_action(q.from_user.id, session.login, session.role, "delivery_complete",
                          f"order={order_no}", "error", e.detail)
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
 
 
-# ---------- Завершить заказ (delivery → completed) ----------
+# ---------- Доставлен (только информирование, оплата — в «Получить оплату») ----------
 
-async def cb_exp_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    order_no = int(q.data.replace("exp_finish_", ""))
-    o = context.user_data.get("current_order") or {}
-    amount = o.get("total_amount", 0)
-
-    buttons = [
-        [InlineKeyboardButton(f"✅ Полная сумма ({fmt_money(amount)})", callback_data=f"exp_payfull_{order_no}")],
-        [InlineKeyboardButton("💬 Другая сумма", callback_data=f"exp_payother_{order_no}")],
-        [InlineKeyboardButton("◀️ Назад", callback_data=f"exp_order_{order_no}")],
-    ]
+    order_no = int(q.data.replace("exp_delivered_", ""))
     await q.edit_message_text(
-        f"💰 Заказ №{order_no}\nСумма: {fmt_money(amount)}\n\nПолучена полная сумма?",
-        reply_markup=InlineKeyboardMarkup(buttons),
+        f"✅ Заказ №{order_no} отмечен как доставленный.\n\n"
+        "Для приёма оплаты используйте раздел «Получить оплату».",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("◀️ К заказу", callback_data=f"exp_order_{order_no}")],
+            [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
+        ]),
+        parse_mode="Markdown",
     )
 
 
@@ -353,6 +423,10 @@ async def cb_exp_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
             limit=50,
         )
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
         return
 
@@ -395,6 +469,10 @@ async def cb_exp_pay_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         o = await api.get_order(token, order_no)
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button("exp_payment"))
         return
 
@@ -420,10 +498,20 @@ async def cb_exp_pay_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     order_no = int(q.data.replace("exp_payfull_", ""))
     o = context.user_data.get("current_order") or context.user_data.get("pay_order") or {}
-    amount = o.get("total_amount", 0)
+    amount = float(o.get("total_amount", 0))
+    customer_id = o.get("customer_id") or 0
+    payment_type_code = o.get("payment_type_code") or "cash"
 
     try:
         await api.update_order(token, order_no, {"status_code": "completed"})
+        if customer_id and amount > 0:
+            try:
+                await api.create_payment_receipt(
+                    token, order_no, customer_id, amount, payment_type_code
+                )
+            except SDSApiError as op_err:
+                await log_action(q.from_user.id, session.login, session.role, "payment_receipt_create",
+                                 f"order={order_no}", "error", op_err.detail)
         await log_action(q.from_user.id, session.login, session.role, "payment_received",
                          f"order={order_no}, amount={amount}", "success")
         await q.edit_message_text(
@@ -432,6 +520,10 @@ async def cb_exp_pay_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await log_action(q.from_user.id, session.login, session.role, "payment_received",
                          f"order={order_no}", "error", e.detail)
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button("exp_payment"))
@@ -476,8 +568,18 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
 
+    customer_id = o.get("customer_id") or 0
+    payment_type_code = o.get("payment_type_code") or "cash"
     try:
         await api.update_order(session.jwt_token, order_no, {"status_code": "completed"})
+        if customer_id and amount > 0:
+            try:
+                await api.create_payment_receipt(
+                    session.jwt_token, order_no, customer_id, amount, payment_type_code
+                )
+            except SDSApiError as op_err:
+                await log_action(update.effective_user.id, session.login, session.role, "payment_receipt_create",
+                                 f"order={order_no}", "error", op_err.detail)
         await log_action(update.effective_user.id, session.login, session.role, "payment_received",
                          f"order={order_no}, amount={amount}", "success")
         context.user_data.pop("pay_other_order", None)
@@ -487,6 +589,10 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
         from .handlers_auth import show_main_menu
         await show_main_menu(update, context, session)
     except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
         await update.message.reply_text(f"❌ Ошибка: {e.detail}")
 
 
@@ -494,13 +600,15 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 def register_expeditor_handlers(app):
     app.add_handler(CallbackQueryHandler(cb_exp_orders, pattern="^exp_orders$"))
+    app.add_handler(CallbackQueryHandler(cb_exp_orders_today, pattern="^exp_orders_today$"))
+    app.add_handler(CallbackQueryHandler(cb_exp_orders_done_today, pattern="^exp_orders_done_today$"))
     app.add_handler(CallbackQueryHandler(cb_exp_orders_pick_date, pattern="^exp_orders_pick_date$"))
     app.add_handler(CallbackQueryHandler(cb_exp_orders_calendar, pattern=r"^exp_orders_calendar_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_orders_date, pattern=r"^exp_orders_date_\d{4}-\d{2}-\d{2}$"))
     app.add_handler(CallbackQueryHandler(cb_exp_order_detail, pattern=r"^exp_order_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_complete, pattern=r"^exp_complete_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_confirm_delivery, pattern=r"^exp_confirm_\d+$"))
-    app.add_handler(CallbackQueryHandler(cb_exp_finish, pattern=r"^exp_finish_\d+$"))
+    app.add_handler(CallbackQueryHandler(cb_exp_delivered, pattern=r"^exp_delivered_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_route, pattern=r"^exp_route_\d{4}-\d{2}-\d{2}$"))
     app.add_handler(CallbackQueryHandler(cb_exp_payment, pattern="^exp_payment$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_order, pattern=r"^exp_pay_\d+$"))

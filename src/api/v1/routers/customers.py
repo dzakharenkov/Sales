@@ -118,9 +118,9 @@ async def list_customers(
     sql = 'SELECT id, name_client, firm_name, category_client, address, city, territory, landmark, phone, contact_person, tax_id, status, login_agent, login_expeditor, latitude, longitude, pinfl, contract_no, account_no, bank, mfo, oked, vat_code FROM "Sales".customers'
     conditions = []
     params = {}
-    # Расширенный поиск: одно поле search ищет и по name_client, и по tax_id (OR)
+    # Расширенный поиск: одно поле search — по name_client, tax_id (ИНН), account_no (р/с)
     if search and search.strip():
-        conditions.append("(name_client ILIKE :search OR tax_id ILIKE :search)")
+        conditions.append("(name_client ILIKE :search OR tax_id ILIKE :search OR account_no ILIKE :search)")
         params["search"] = "%" + search.strip() + "%"
     if name_client and name_client.strip():
         conditions.append(" name_client ILIKE :name_client ")

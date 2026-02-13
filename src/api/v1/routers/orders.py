@@ -645,8 +645,10 @@ async def update_order(
         # Определяем по названию/коду статуса, проставлять ли даты (работает для любых кодов: 1, 2, 3, 4, delivered, отмена и т.д.)
         st_result = await session.execute(select(Status).where(Status.code == body.status_code))
         st_row = st_result.scalar_one_or_none()
-        name_lower = ((st_row.name or "") + " " + (body.status_code or "")).strip().lower()
-        if order.status_delivery_at is None and any(k in name_lower for k in ("достав", "deliver", "delivery", "shipping")):
+        name_lower = ((st_row.name or "") + " " + (str(body.status_code) or "")).strip().lower()
+        code_str = str(body.status_code).strip().lower() if body.status_code is not None else ""
+        is_delivery_status = code_str in ("2", "delivery", "доставка") or any(k in name_lower for k in ("достав", "deliver", "delivery", "shipping"))
+        if order.status_delivery_at is None and is_delivery_status:
             order.status_delivery_at = now
         if order.closed_at is None and any(k in name_lower for k in ("отмен", "cancel", "closed", "доставлен", "delivered", "dismiss")):
             order.closed_at = now

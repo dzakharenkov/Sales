@@ -25,7 +25,7 @@ echo   Пароль будет запрошен при подключении
 echo ========================================
 echo.
 
-scp -r src requirements.txt .env.example postgres.py sales_sql.sql %SERVER%:%REMOTE_PATH%/
+scp -r src migrations requirements.txt .env.example sales_sql.sql %SERVER%:%REMOTE_PATH%/
 if errorlevel 1 (
     echo [ОШИБКА] Не удалось скопировать
     pause

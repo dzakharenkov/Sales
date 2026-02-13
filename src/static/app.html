@@ -68,7 +68,7 @@
     select:focus { outline: 2px solid #0d9488; outline-offset: 2px; }
     option:checked, option:hover { background: #0d9488; color: #fff; }
     .form-readonly { padding: 8px 0; font-size: 14px; color: #555; }
-    .modal-actions { margin-top: 20px; display: flex; gap: 8px; }
+    .modal-actions { margin-top: 20px; display: flex; gap: 8px; justify-content: center; }
     .err { color: #c00; font-size: 13px; margin-top: 8px; }
     .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
     @media (max-width: 900px) { .dashboard-grid { grid-template-columns: 1fr; } }
@@ -1328,6 +1328,20 @@
             return d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
           } catch (e) { return isoStr; }
         }
+        function formatScheduledDelivery(isoStr, statusCode) {
+          var text = formatDateTashkent(isoStr);
+          if (!text) return '';
+          var sc = (statusCode || '').toString().toLowerCase();
+          if (sc === 'completed' || sc === 'cancelled' || sc === 'отменен' || sc === 'завершен' || sc === 'closed') return text;
+          try {
+            var d = new Date(isoStr);
+            var today = new Date();
+            today.setHours(0, 0, 0, 0);
+            d.setHours(0, 0, 0, 0);
+            if (d < today) return '<span style="color:#c00;font-weight:bold" title="Просрочена">' + text + '</span>';
+          } catch (e) {}
+          return text;
+        }
         var orderSortCol = 'order_no';
         var orderSortDir = 1;
         function renderOrderTable(data) {
@@ -1370,7 +1384,7 @@
           var th = function (col, lbl) { return '<th class="sortable" data-col="' + col + '" style="cursor:pointer">' + lbl + (orderSortCol === col ? arrow : '') + '</th>'; };
           var t = '<div style="overflow-x:auto"><table><thead><tr><th>Действия</th>' + th('order_no', '№') + th('customer_name', 'Клиент') + th('order_date', 'Дата создания') + th('status_code', 'Статус') + th('payment_type_name', 'Тип оплаты') + th('total_amount', 'Сумма') + th('login_agent', 'Агент') + th('login_expeditor', 'Экспедитор') + th('scheduled_delivery_at', 'Дата поставки') + '<th>Перевод в статус «Доставка»</th><th>Дата закрытия</th>' + th('last_updated_at', 'Последнее изменение') + th('last_updated_by', 'Кто изменил') + '</tr></thead><tbody>';
           sorted.forEach(function (o) {
-            t += '<tr><td><button type="button" class="btn btn-secondary btn-small" data-order-edit data-id="' + (o.order_no != null ? o.order_no : o.id) + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-order-copy data-id="' + (o.order_no != null ? o.order_no : o.id) + '" style="background:#17a2b8;color:#fff;border-color:#17a2b8">Копировать</button></td><td>' + (o.order_no != null ? o.order_no : o.id) + '</td><td>' + escAttr(o.customer_name || (o.customer_id != null ? 'ID ' + o.customer_id : '')) + '</td><td>' + formatDateTashkent(o.order_date) + '</td><td>' + formatStatusBadge(o.status_code, o.status_name) + '</td><td>' + escAttr(o.payment_type_name || o.payment_type_code || '') + '</td><td>' + (o.total_amount != null ? o.total_amount : '') + '</td><td>' + escAttr(o.login_agent || '') + '</td><td>' + escAttr(o.login_expeditor || '') + '</td><td>' + formatDateTashkent(o.scheduled_delivery_at) + '</td><td>' + formatDateTashkent(o.status_delivery_at) + '</td><td>' + formatDateTashkent(o.closed_at) + '</td><td>' + formatDateTashkent(o.last_updated_at) + '</td><td>' + escAttr(o.last_updated_by || '') + '</td></tr>';
+            t += '<tr><td><button type="button" class="btn btn-secondary btn-small" data-order-edit data-id="' + (o.order_no != null ? o.order_no : o.id) + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-order-copy data-id="' + (o.order_no != null ? o.order_no : o.id) + '" style="background:#17a2b8;color:#fff;border-color:#17a2b8">Копировать</button></td><td>' + (o.order_no != null ? o.order_no : o.id) + '</td><td>' + escAttr(o.customer_name || (o.customer_id != null ? 'ID ' + o.customer_id : '')) + '</td><td>' + formatDateTashkent(o.order_date) + '</td><td>' + formatStatusBadge(o.status_code, o.status_name) + '</td><td>' + escAttr(o.payment_type_name || o.payment_type_code || '') + '</td><td>' + (o.total_amount != null ? o.total_amount : '') + '</td><td>' + escAttr(o.login_agent || '') + '</td><td>' + escAttr(o.login_expeditor || '') + '</td><td>' + formatScheduledDelivery(o.scheduled_delivery_at, o.status_code) + '</td><td>' + formatDateTashkent(o.status_delivery_at) + '</td><td>' + formatDateTashkent(o.closed_at) + '</td><td>' + formatDateTashkent(o.last_updated_at) + '</td><td>' + escAttr(o.last_updated_by || '') + '</td></tr>';
           });
           t += '</tbody></table></div>';
           tableDiv.innerHTML = t;
@@ -1529,6 +1543,23 @@
         }).catch(function () {
           searchRow.innerHTML = '<button type="button" class="btn btn-primary" id="orderSearchBtn">Загрузить заказы</button>';
           document.getElementById('orderSearchBtn').onclick = runOrderSearch;
+          setTimeout(function () {
+            if (window._openOrderNo) {
+              var orderNo = window._openOrderNo;
+              window._openOrderNo = null;
+              api('/api/v1/orders/' + orderNo).then(function (orderData) {
+                Promise.all([
+                  api('/api/v1/customers?limit=1000').catch(function () { return []; }),
+                  api('/api/v1/orders/statuses').catch(function () { return []; }),
+                  api('/api/v1/dictionary/products').catch(function () { return []; }),
+                  api('/api/v1/dictionary/payment-types').catch(function () { return []; }),
+                  api('/api/v1/dictionary/user-logins').catch(function () { return []; })
+                ]).then(function (results) {
+                  openOrderForm(true, orderNo, orderData, results[0], results[1], results[2], results[3], results[4]);
+                });
+              }).catch(function () {});
+            }
+          }, 100);
         });
         function openOrderForm(isEdit, orderId, orderData, customers, statuses, products, paymentTypes, userList) {
           var sel = orderData ? { cust: orderData.customer_id, status: orderData.status_code || 'open', payment: orderData.payment_type_code || '', agent: orderData.login_agent || '', exp: orderData.login_expeditor || '' } : { cust: '', status: 'open', payment: '', agent: '', exp: '' };
@@ -1764,6 +1795,20 @@
             return d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
           } catch (e) { return isoStr; }
         }
+        function formatScheduledDeliveryOi(isoStr, statusCode) {
+          var text = formatDateTashkent(isoStr);
+          if (!text) return '';
+          var sc = (statusCode || '').toString().toLowerCase();
+          if (sc === 'completed' || sc === 'cancelled' || sc === 'отменен' || sc === 'завершен' || sc === 'closed') return text;
+          try {
+            var d = new Date(isoStr);
+            var today = new Date();
+            today.setHours(0, 0, 0, 0);
+            d.setHours(0, 0, 0, 0);
+            if (d < today) return '<span style="color:#c00;font-weight:bold" title="Просрочена">' + text + '</span>';
+          } catch (e) {}
+          return text;
+        }
         function getFilters() {
           var customer_id = document.getElementById('orderItemsSearchCustomerId') ? document.getElementById('orderItemsSearchCustomerId').value : '';
           var status_code = document.getElementById('orderItemsSearchStatus') ? document.getElementById('orderItemsSearchStatus').value : '';
@@ -1835,15 +1880,22 @@
           });
           var arrow = oiSortDir > 0 ? ' ▲' : ' ▼';
           var th = function (col, lbl) { return '<th class="sortable" data-col="' + col + '" style="cursor:pointer">' + lbl + (oiSortCol === col ? arrow : '') + '</th>'; };
-          var t = '<div style="overflow-x:auto"><table><thead><tr>' + th('order_no', '№ заказа') + th('customer_name', 'Клиент') + th('order_date', 'Дата заказа') + th('status_code', 'Статус') + th('payment_type_name', 'Тип оплаты') + th('product_code', 'Код товара') + th('product_name', 'Товар') + th('quantity', 'Количество') + th('price', 'Цена') + th('amount', 'Сумма') + th('login_agent', 'Агент') + th('login_expeditor', 'Экспедитор') + th('scheduled_delivery_at', 'Дата поставки') + '<th>Перевод в статус «Доставка»</th><th>Дата закрытия</th>' + th('order_last_updated_at', 'Последнее изменение заказа') + th('order_last_updated_by', 'Кто изменил') + '</tr></thead><tbody>';
+          var t = '<div style="overflow-x:auto"><table><thead><tr><th>Заказ</th>' + th('order_no', '№ заказа') + th('customer_name', 'Клиент') + th('order_date', 'Дата заказа') + th('status_code', 'Статус') + th('payment_type_name', 'Тип оплаты') + th('product_code', 'Код товара') + th('product_name', 'Товар') + th('quantity', 'Количество') + th('price', 'Цена') + th('amount', 'Сумма') + th('login_agent', 'Агент') + th('login_expeditor', 'Экспедитор') + th('scheduled_delivery_at', 'Дата поставки') + '<th>Перевод в статус «Доставка»</th><th>Дата закрытия</th>' + th('order_last_updated_at', 'Последнее изменение заказа') + th('order_last_updated_by', 'Кто изменил') + '</tr></thead><tbody>';
           sorted.forEach(function (r) {
             var amt = (r.amount != null ? r.amount : ((r.quantity || 0) * (r.price != null ? r.price : 0)));
-            t += '<tr><td>' + (r.order_no != null ? r.order_no : '') + '</td><td>' + escAttr(r.customer_name || (r.customer_id != null ? 'ID ' + r.customer_id : '')) + '</td><td>' + formatDateTashkent(r.order_date) + '</td><td>' + formatStatusBadge(r.status_code, r.status_name) + '</td><td>' + escAttr(r.payment_type_name || r.payment_type_code || '') + '</td><td>' + escAttr(r.product_code || '') + '</td><td>' + escAttr(r.product_name || '') + '</td><td>' + (r.quantity != null ? r.quantity : '') + '</td><td>' + (r.price != null ? r.price : '') + '</td><td>' + (amt != null ? amt : '') + '</td><td>' + escAttr(r.login_agent || '') + '</td><td>' + escAttr(r.login_expeditor || '') + '</td><td>' + formatDateTashkent(r.scheduled_delivery_at) + '</td><td>' + formatDateTashkent(r.status_delivery_at) + '</td><td>' + formatDateTashkent(r.closed_at) + '</td><td>' + formatDateTashkent(r.order_last_updated_at) + '</td><td>' + escAttr(r.order_last_updated_by || '') + '</td></tr>';
+            var orderNo = (r.order_no != null ? r.order_no : '');
+            t += '<tr><td><button type="button" class="btn btn-secondary btn-small" data-order-open data-order-no="' + escAttr(orderNo) + '" title="Открыть заказ">📋</button></td><td>' + orderNo + '</td><td>' + escAttr(r.customer_name || (r.customer_id != null ? 'ID ' + r.customer_id : '')) + '</td><td>' + formatDateTashkent(r.order_date) + '</td><td>' + formatStatusBadge(r.status_code, r.status_name) + '</td><td>' + escAttr(r.payment_type_name || r.payment_type_code || '') + '</td><td>' + escAttr(r.product_code || '') + '</td><td>' + escAttr(r.product_name || '') + '</td><td>' + (r.quantity != null ? r.quantity : '') + '</td><td>' + (r.price != null ? r.price : '') + '</td><td>' + (amt != null ? amt : '') + '</td><td>' + escAttr(r.login_agent || '') + '</td><td>' + escAttr(r.login_expeditor || '') + '</td><td>' + formatScheduledDeliveryOi(r.scheduled_delivery_at, r.status_code) + '</td><td>' + formatDateTashkent(r.status_delivery_at) + '</td><td>' + formatDateTashkent(r.closed_at) + '</td><td>' + formatDateTashkent(r.order_last_updated_at) + '</td><td>' + escAttr(r.order_last_updated_by || '') + '</td></tr>';
           });
           t += '</tbody></table></div>';
           tableDiv.innerHTML = t;
           tableDiv.querySelectorAll('th.sortable').forEach(function (thEl) {
             thEl.onclick = function () { var col = thEl.getAttribute('data-col'); if (oiSortCol === col) oiSortDir = -oiSortDir; else { oiSortCol = col; oiSortDir = 1; } renderTable(lastOiData); };
+          });
+          tableDiv.querySelectorAll('[data-order-open]').forEach(function (btn) {
+            btn.onclick = function () {
+              var orderNo = btn.getAttribute('data-order-no');
+              if (orderNo) { window._openOrderNo = orderNo; showSection('orders'); }
+            };
           });
           // Пагинация
           if (paginationDiv && totalCount > pageSize) {
@@ -1968,6 +2020,10 @@
           if (!isoStr) return '';
           try { var d = new Date(isoStr); return d.toLocaleDateString('ru-RU'); } catch (e) { return isoStr; }
         }
+        function operationStatusRu(code) {
+          var m = { pending: 'В ожидании', completed: 'Выполнено', cancelled: 'Отменено', canceled: 'Отменено' };
+          return m[(code || '').toString().toLowerCase()] || (code || '');
+        }
         var opSortCol = 'operation_number';
         var opSortDir = 1;
         var lastOpList = null;
@@ -1985,7 +2041,7 @@
           var th = function (col, lbl) { return '<th class="sortable" data-col="' + col + '" style="cursor:pointer">' + lbl + (opSortCol === col ? arrow : '') + '</th>'; };
           var t = '<div style="overflow-x:auto"><table><thead><tr><th>Действия</th>' + th('operation_number', '№ операции') + th('operation_date', 'Дата') + th('type_code', 'Тип') + th('status', 'Статус') + th('customer_name', 'Клиент') + th('product_code', 'Товар') + th('quantity', 'Кол-во') + th('amount', 'Сумма') + th('order_id', 'Заказ №') + th('created_by', 'Кто создал') + '</tr></thead><tbody>';
           sorted.forEach(function (o) {
-            t += '<tr><td><button type="button" class="btn btn-secondary btn-small" data-op-edit data-id="' + escAttr(o.id) + '">Изменить</button></td><td>' + escAttr(o.operation_number || '') + '</td><td>' + formatDateOp(o.operation_date) + '</td><td>' + escAttr(o.type_name || o.type_code || '') + '</td><td>' + formatStatusBadge(o.status, o.status) + '</td><td>' + escAttr(o.customer_name || (o.customer_id != null ? 'ID ' + o.customer_id : '')) + '</td><td>' + escAttr(o.product_code || '') + '</td><td>' + (o.quantity != null ? o.quantity : '') + '</td><td>' + (o.amount != null ? o.amount : '') + '</td><td>' + (o.order_id != null ? o.order_id : '') + '</td><td>' + escAttr(o.created_by || '') + '</td></tr>';
+            t += '<tr><td><button type="button" class="btn btn-secondary btn-small" data-op-edit data-id="' + escAttr(o.id) + '">Изменить</button></td><td>' + escAttr(o.operation_number || '') + '</td><td>' + formatDateOp(o.operation_date) + '</td><td>' + escAttr(o.type_name || o.type_code || '') + '</td><td>' + formatStatusBadge(o.status, (o.status_name_ru != null && o.status_name_ru !== '') ? o.status_name_ru : operationStatusRu(o.status)) + '</td><td>' + escAttr(o.customer_name || (o.customer_id != null ? 'ID ' + o.customer_id : '')) + '</td><td>' + escAttr(o.product_code || '') + '</td><td>' + (o.quantity != null ? o.quantity : '') + '</td><td>' + (o.amount != null ? o.amount : '') + '</td><td>' + (o.order_id != null ? o.order_id : '') + '</td><td>' + escAttr(o.created_by || '') + '</td></tr>';
           });
           t += '</tbody></table></div>';
           tableDiv.innerHTML = t;
@@ -2067,7 +2123,7 @@
           // Фильтруем только активные типы операций для фильтров
           var activeTypes = types.filter(function(ty) { return ty.active !== false; });
           var typeOpts = '<option value="">— Все —</option>'; activeTypes.forEach(function (ty) { typeOpts += '<option value="' + escAttr(ty.code) + '">' + escAttr(ty.name || ty.code) + '</option>'; });
-          var statusOpts = '<option value="">— Все —</option><option value="pending">pending</option><option value="completed">completed</option><option value="cancelled">cancelled</option>';
+          var statusOpts = '<option value="">— Все —</option><option value="pending">В ожидании</option><option value="completed">Выполнено</option><option value="cancelled">Отменено</option>';
           var custOpts = '<option value="">— Любой —</option>'; customers.forEach(function (c) { custOpts += '<option value="' + (c.id != null ? c.id : '') + '">' + escAttr((c.name_client || c.firm_name || '') + ' (ID ' + (c.id != null ? c.id : '') + ')') + '</option>'; });
           var prodOpts = '<option value="">— Любой —</option>'; products.forEach(function (p) { prodOpts += '<option value="' + escAttr(p.code) + '">' + escAttr((p.code || '') + ' — ' + (p.name || '')) + '</option>'; });
           var userOpts = '<option value="">— Все —</option>'; userList.forEach(function (u) { userOpts += '<option value="' + escAttr(u.login) + '">' + escAttr(u.login + (u.fio ? ' — ' + u.fio : '')) + '</option>'; });
@@ -2109,7 +2165,7 @@
           var prodOpts = '<option value="">— Не указан —</option>'; products.forEach(function (p) { var o = (p.code === sel.product_code) ? ' selected' : ''; prodOpts += '<option value="' + escAttr(p.code) + '"' + o + '>' + escAttr((p.code || '') + ' — ' + (p.name || '')) + '</option>'; });
           var whOpts = '<option value="">— Не указан —</option>'; warehouses.forEach(function (w) { whOpts += '<option value="' + escAttr(w.code) + '">' + escAttr(w.name || w.code) + '</option>'; });
           var payOpts = '<option value="">— Не указан —</option>'; paymentTypes.forEach(function (pt) { var o = (pt.code === sel.payment_type_code) ? ' selected' : ''; payOpts += '<option value="' + escAttr(pt.code) + '"' + o + '>' + escAttr(pt.name || pt.code) + '</option>'; });
-          var statusOpts = '<option value="pending"' + (sel.status === 'pending' ? ' selected' : '') + '>pending</option><option value="completed"' + (sel.status === 'completed' ? ' selected' : '') + '>completed</option><option value="cancelled"' + (sel.status === 'cancelled' ? ' selected' : '') + '>cancelled</option>';
+          var statusOpts = '<option value="pending"' + (sel.status === 'pending' ? ' selected' : '') + '>В ожидании</option><option value="completed"' + (sel.status === 'completed' ? ' selected' : '') + '>Выполнено</option><option value="cancelled"' + (sel.status === 'cancelled' ? ' selected' : '') + '>Отменено</option>';
           var userOpts = '<option value="">— Не указан —</option>'; userList.forEach(function (u) { userOpts += '<option value="' + escAttr(u.login) + '">' + escAttr(u.login + (u.fio ? ' — ' + u.fio : '')) + '</option>'; });
           var content = document.getElementById('content');
           if (!content) return;
@@ -2634,6 +2690,453 @@
             createNext();
           };
         }
+        function buildWriteOffForm(config, products, warehouses, userList) {
+          var content = document.getElementById('content');
+          if (!content) return;
+          var warehousesList = warehouses || [];
+          var productsList = products || [];
+          var productsMap = {}; productsList.forEach(function (p) { productsMap[p.code] = p; });
+          var whOpts = '<option value="">— Выберите склад —</option>';
+          warehousesList.forEach(function (w) { whOpts += '<option value="' + escAttr(w.code) + '">' + escAttr(w.name || w.code) + '</option>'; });
+          var formHtml = '<div class="card"><h2>Создание операции: ' + escAttr(config.operation_name || 'Списание товара') + '</h2>';
+          formHtml += '<div id="opFormErr" class="err" style="margin-bottom:12px"></div><div id="opFormMsg" class="msg" style="margin-bottom:12px;display:none"></div>';
+          formHtml += '<div class="form-group"><label>Склад <span style="color:#c00">*</span></label><select id="writeOffWh" required>' + whOpts + '</select></div>';
+          formHtml += '<div style="margin-top:20px"><h3 style="margin-bottom:12px">Товары для списания</h3><p style="color:#666;font-size:13px;margin-bottom:8px">Выберите склад — подтянутся остатки по партиям.</p><div style="overflow-x:auto"><table id="writeOffItemsTable" style="width:100%"><thead><tr><th>Товар</th><th>Партия</th><th>Срок годности</th><th>Дней осталось</th><th>Доступно</th><th>Количество к списанию</th><th>Вес</th><th>Цена</th><th>Сумма</th></tr></thead><tbody id="writeOffItemsBody"></tbody><tfoot><tr style="background:#f8f9fa;font-weight:600"><td colspan="5" style="text-align:right;padding:8px">Итого:</td><td id="writeOffTotalQty" style="text-align:right;padding:8px">0</td><td id="writeOffTotalWeight" style="text-align:right;padding:8px">—</td><td></td><td id="writeOffTotalSum" style="text-align:right;padding:8px">0</td></tr></tfoot></table></div></div>';
+          formHtml += '<div class="form-group" style="margin-top:20px"><label>Комментарий</label><input type="text" id="writeOffComment" placeholder="необяз."></div>';
+          formHtml += '<p style="margin-top:16px"><button type="button" class="btn btn-primary" id="writeOffSave">Сохранить операции</button> <button type="button" class="btn btn-secondary" id="writeOffCancel">Отмена</button></p></div>';
+          content.innerHTML = formHtml;
+          var stockCache = [];
+          function loadStock(whCode) {
+            if (!whCode) { stockCache = []; return Promise.resolve(); }
+            return api('/api/v1/warehouse/stock?warehouse=' + encodeURIComponent(whCode)).then(function (resp) {
+              stockCache = (resp && resp.success && Array.isArray(resp.data)) ? resp.data : [];
+              stockCache.sort(function (a, b) {
+                var da = a.days_until_expiry != null ? a.days_until_expiry : 1e9;
+                var db = b.days_until_expiry != null ? b.days_until_expiry : 1e9;
+                return da - db;
+              });
+            }).catch(function () { stockCache = []; });
+          }
+          function renderWriteOffTable() {
+            var tbody = document.getElementById('writeOffItemsBody');
+            var wh = document.getElementById('writeOffWh').value;
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            if (!wh || !stockCache.length) {
+              if (!wh) tbody.innerHTML = '<tr><td colspan="9" style="color:#666;padding:12px">Выберите склад</td></tr>';
+              else tbody.innerHTML = '<tr><td colspan="9" style="color:#666;padding:12px">Нет остатков на складе</td></tr>';
+              document.getElementById('writeOffTotalQty').textContent = '0';
+              document.getElementById('writeOffTotalSum').textContent = '0';
+              document.getElementById('writeOffTotalWeight').textContent = '—';
+              return;
+            }
+            var totalQty = 0, totalSum = 0, totalWeightG = 0;
+            stockCache.forEach(function (s) {
+              var productName = (s.product_name || s.product_code || '');
+              var expiry = s.expiry_date ? formatDateOnly(s.expiry_date) : '—';
+              var days = s.days_until_expiry != null ? s.days_until_expiry : '—';
+              var avail = s.total_qty != null ? s.total_qty : 0;
+              var price = s.unit_price != null ? parseFloat(s.unit_price) : 0;
+              var weightG = s.weight_g != null ? parseInt(s.weight_g, 10) : 0;
+              var status = s.expiry_status || {};
+              var color = status.color || '';
+              var icon = status.icon || '';
+              var daysHtml = (days === '—' || days === '') ? '—' : '<span class="badge" style="background-color:' + (color === 'YELLOW' ? '#ffc107' : color === 'RED' ? '#dc3545' : color === 'BLACK' ? '#343a40' : '#28a745') + ';color:#fff;border-radius:4px;padding:2px 6px;font-size:11px;">' + (icon || '') + ' ' + days + ' дн.</span>';
+              var row = document.createElement('tr');
+              row.className = 'writeoff-row';
+              row.setAttribute('data-product-code', s.product_code || '');
+              row.setAttribute('data-batch-code', s.batch_code || '');
+              row.setAttribute('data-available', String(avail));
+              row.setAttribute('data-price', String(price));
+              row.setAttribute('data-weight-g', String(weightG));
+              row.innerHTML = '<td>' + escAttr(productName) + '</td><td>' + escAttr(s.batch_code || '') + '</td><td>' + expiry + '</td><td style="text-align:center">' + daysHtml + '</td><td style="text-align:right">' + avail + '</td><td><input type="number" class="writeoff-qty" min="0" max="' + avail + '" value="0" data-available="' + avail + '"></td><td class="writeoff-weight" style="text-align:right">—</td><td class="writeoff-price" style="text-align:right">' + (price ? price.toFixed(2) : '—') + '</td><td class="writeoff-sum" style="text-align:right">0</td>';
+              var qtyInp = row.querySelector('.writeoff-qty');
+              var weightCell = row.querySelector('.writeoff-weight');
+              var sumCell = row.querySelector('.writeoff-sum');
+              function upd() {
+                var q = parseInt(qtyInp.value || '0', 10) || 0;
+                var maxA = parseInt(qtyInp.getAttribute('data-available') || '0', 10) || 0;
+                if (q > maxA) { q = maxA; qtyInp.value = q || ''; }
+                var sum = price * q;
+                sumCell.textContent = sum ? sum.toFixed(2) : '0';
+                if (weightG > 0 && q > 0) weightCell.textContent = ((weightG * q) / 1000).toFixed(2) + ' кг'; else weightCell.textContent = '—';
+                updateWriteOffTotals();
+              }
+              qtyInp.oninput = upd;
+              qtyInp.onchange = upd;
+              tbody.appendChild(row);
+            });
+            updateWriteOffTotals();
+          }
+          function updateWriteOffTotals() {
+            var totalQty = 0, totalSum = 0, totalWeightG = 0;
+            document.querySelectorAll('.writeoff-row').forEach(function (row) {
+              var qtyInp = row.querySelector('.writeoff-qty');
+              var code = row.getAttribute('data-product-code');
+              var price = parseFloat(row.getAttribute('data-price') || '0') || 0;
+              var wg = parseInt(row.getAttribute('data-weight-g') || '0', 10) || 0;
+              var q = parseInt((qtyInp && qtyInp.value) || '0', 10) || 0;
+              totalQty += q;
+              totalSum += price * q;
+              totalWeightG += wg * q;
+            });
+            document.getElementById('writeOffTotalQty').textContent = totalQty;
+            document.getElementById('writeOffTotalSum').textContent = totalSum ? totalSum.toFixed(2) : '0';
+            var wEl = document.getElementById('writeOffTotalWeight');
+            if (totalWeightG > 0) wEl.textContent = (totalWeightG / 1000).toFixed(2) + ' кг'; else wEl.textContent = '—';
+          }
+          document.getElementById('writeOffWh').onchange = function () {
+            loadStock(this.value).then(renderWriteOffTable);
+          };
+          document.getElementById('writeOffCancel').onclick = function () { loadSectionOperations(false); };
+          document.getElementById('writeOffSave').onclick = function () {
+            var errEl = document.getElementById('opFormErr');
+            var msgEl = document.getElementById('opFormMsg');
+            var wh = document.getElementById('writeOffWh').value;
+            var comment = (document.getElementById('writeOffComment').value || '').trim() || null;
+            var createdBy = (window.currentUser && currentUser.login) ? currentUser.login : null;
+            if (errEl) errEl.textContent = '';
+            if (!wh) { if (errEl) errEl.textContent = 'Выберите склад.'; return; }
+            if (!createdBy) { if (errEl) errEl.textContent = 'Не определен текущий пользователь.'; return; }
+            var items = [];
+            document.querySelectorAll('.writeoff-row').forEach(function (row) {
+              var qtyInp = row.querySelector('.writeoff-qty');
+              var q = parseInt((qtyInp && qtyInp.value) || '0', 10) || 0;
+              if (q <= 0) return;
+              items.push({
+                product_code: row.getAttribute('data-product-code') || '',
+                batch_code: row.getAttribute('data-batch-code') || '',
+                quantity: q
+              });
+            });
+            if (!items.length) { if (errEl) errEl.textContent = 'Укажите количество к списанию хотя бы по одной позиции.'; return; }
+            var saveBtn = document.getElementById('writeOffSave');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Сохранение...';
+            var createdCount = 0, idx = 0;
+            function createNext() {
+              if (idx >= items.length) {
+                if (msgEl) { msgEl.textContent = 'Создано операций списания: ' + createdCount; msgEl.style.display = 'block'; }
+                setTimeout(function () { loadSectionOperations(false); }, 1500);
+                return;
+              }
+              var it = items[idx++];
+              api('/api/v1/operations/write_off', { method: 'POST', body: JSON.stringify({ warehouse_from: wh, product_code: it.product_code, batch_code: it.batch_code, quantity: it.quantity, created_by: createdBy, comment: comment }) }).then(function () {
+                createdCount += 1;
+                createNext();
+              }).catch(function (e) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Сохранить операции';
+                var detail = e && e.data && e.data.detail;
+                if (typeof detail === 'string') { if (errEl) errEl.textContent = detail; return; }
+                if (detail && detail.errors) { var errs = []; for (var k in detail.errors) errs.push(k + ': ' + detail.errors[k]); if (errEl) errEl.textContent = errs.join('; '); }
+                else if (errEl) errEl.textContent = 'Ошибка сохранения';
+              });
+            }
+            createNext();
+          };
+        }
+        function buildTransferForm(config, products, warehouses, userList) {
+          var content = document.getElementById('content');
+          if (!content) return;
+          var warehousesList = warehouses || [];
+          var productsList = products || [];
+          var productsMap = {}; productsList.forEach(function (p) { productsMap[p.code] = p; });
+          var whOpts = '<option value="">— Выберите склад —</option>';
+          warehousesList.forEach(function (w) { whOpts += '<option value="' + escAttr(w.code) + '">' + escAttr(w.name || w.code) + '</option>'; });
+          var formHtml = '<div class="card"><h2>Создание операции: ' + escAttr(config.operation_name || 'Перемещение между складами') + '</h2>';
+          formHtml += '<div id="opFormErr" class="err" style="margin-bottom:12px"></div><div id="opFormMsg" class="msg" style="margin-bottom:12px;display:none"></div>';
+          formHtml += '<div class="form-group"><label>Склад от <span style="color:#c00">*</span></label><select id="transferWhFrom" required>' + whOpts + '</select></div>';
+          formHtml += '<div class="form-group"><label>Склад в <span style="color:#c00">*</span></label><select id="transferWhTo" required>' + whOpts + '</select></div>';
+          formHtml += '<div style="margin-top:20px"><h3 style="margin-bottom:12px">Товары для перемещения</h3><p style="color:#666;font-size:13px;margin-bottom:8px">Выберите склады — подтянутся остатки по партиям со склада «от».</p><div style="overflow-x:auto"><table id="transferItemsTable" style="width:100%"><thead><tr><th>Товар</th><th>Партия</th><th>Срок годности</th><th>Дней осталось</th><th>Доступно</th><th>Количество к перемещению</th><th>Вес</th><th>Цена</th><th>Сумма</th></tr></thead><tbody id="transferItemsBody"></tbody><tfoot><tr style="background:#f8f9fa;font-weight:600"><td colspan="5" style="text-align:right;padding:8px">Итого:</td><td id="transferTotalQty" style="text-align:right;padding:8px">0</td><td id="transferTotalWeight" style="text-align:right;padding:8px">—</td><td></td><td id="transferTotalSum" style="text-align:right;padding:8px">0</td></tr></tfoot></table></div></div>';
+          formHtml += '<div class="form-group" style="margin-top:20px"><label>Комментарий</label><input type="text" id="transferComment" placeholder="необяз."></div>';
+          formHtml += '<p style="margin-top:16px"><button type="button" class="btn btn-primary" id="transferSave">Сохранить операции</button> <button type="button" class="btn btn-secondary" id="transferCancel">Отмена</button></p></div>';
+          content.innerHTML = formHtml;
+          var stockCache = [];
+          function loadStock(whCode) {
+            if (!whCode) { stockCache = []; return Promise.resolve(); }
+            return api('/api/v1/warehouse/stock?warehouse=' + encodeURIComponent(whCode)).then(function (resp) {
+              stockCache = (resp && resp.success && Array.isArray(resp.data)) ? resp.data : [];
+            }).catch(function () { stockCache = []; });
+          }
+          function renderTransferTable() {
+            var tbody = document.getElementById('transferItemsBody');
+            var whFrom = document.getElementById('transferWhFrom').value;
+            var whTo = document.getElementById('transferWhTo').value;
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            if (!whFrom || !whTo || whFrom === whTo || !stockCache.length) {
+              if (!whFrom || !whTo) tbody.innerHTML = '<tr><td colspan="9" style="color:#666;padding:12px">Выберите склад от и склад в</td></tr>';
+              else if (whFrom === whTo) tbody.innerHTML = '<tr><td colspan="9" style="color:#c00;padding:12px">Склад от и склад в не должны совпадать</td></tr>';
+              else tbody.innerHTML = '<tr><td colspan="9" style="color:#666;padding:12px">Нет остатков на складе «от»</td></tr>';
+              document.getElementById('transferTotalQty').textContent = '0';
+              document.getElementById('transferTotalSum').textContent = '0';
+              document.getElementById('transferTotalWeight').textContent = '—';
+              return;
+            }
+            stockCache.forEach(function (s) {
+              var productName = (s.product_name || s.product_code || '');
+              var expiry = s.expiry_date ? formatDateOnly(s.expiry_date) : '—';
+              var days = s.days_until_expiry != null ? s.days_until_expiry : '—';
+              var avail = s.total_qty != null ? s.total_qty : 0;
+              var price = s.unit_price != null ? parseFloat(s.unit_price) : 0;
+              var weightG = s.weight_g != null ? parseInt(s.weight_g, 10) : 0;
+              var status = s.expiry_status || {};
+              var color = status.color || '';
+              var icon = status.icon || '';
+              var daysHtml = (days === '—' || days === '') ? '—' : '<span class="badge" style="background-color:' + (color === 'YELLOW' ? '#ffc107' : color === 'RED' ? '#dc3545' : color === 'BLACK' ? '#343a40' : '#28a745') + ';color:#fff;border-radius:4px;padding:2px 6px;font-size:11px;">' + (icon || '') + ' ' + days + ' дн.</span>';
+              var row = document.createElement('tr');
+              row.className = 'transfer-row';
+              row.setAttribute('data-product-code', s.product_code || '');
+              row.setAttribute('data-batch-code', s.batch_code || '');
+              row.setAttribute('data-available', String(avail));
+              row.setAttribute('data-price', String(price));
+              row.setAttribute('data-weight-g', String(weightG));
+              row.innerHTML = '<td>' + escAttr(productName) + '</td><td>' + escAttr(s.batch_code || '') + '</td><td>' + expiry + '</td><td style="text-align:center">' + daysHtml + '</td><td style="text-align:right">' + avail + '</td><td><input type="number" class="transfer-qty" min="0" max="' + avail + '" value="0" data-available="' + avail + '"></td><td class="transfer-weight" style="text-align:right">—</td><td class="transfer-price" style="text-align:right">' + (price ? price.toFixed(2) : '—') + '</td><td class="transfer-sum" style="text-align:right">0</td>';
+              var qtyInp = row.querySelector('.transfer-qty');
+              var weightCell = row.querySelector('.transfer-weight');
+              var sumCell = row.querySelector('.transfer-sum');
+              function upd() {
+                var q = parseInt(qtyInp.value || '0', 10) || 0;
+                var maxA = parseInt(qtyInp.getAttribute('data-available') || '0', 10) || 0;
+                if (q > maxA) { q = maxA; qtyInp.value = q || ''; }
+                sumCell.textContent = price * q ? (price * q).toFixed(2) : '0';
+                if (weightG > 0 && q > 0) weightCell.textContent = ((weightG * q) / 1000).toFixed(2) + ' кг'; else weightCell.textContent = '—';
+                updateTransferTotals();
+              }
+              qtyInp.oninput = upd;
+              qtyInp.onchange = upd;
+              tbody.appendChild(row);
+            });
+            updateTransferTotals();
+          }
+          function updateTransferTotals() {
+            var totalQty = 0, totalSum = 0, totalWeightG = 0;
+            document.querySelectorAll('.transfer-row').forEach(function (row) {
+              var qtyInp = row.querySelector('.transfer-qty');
+              var price = parseFloat(row.getAttribute('data-price') || '0') || 0;
+              var wg = parseInt(row.getAttribute('data-weight-g') || '0', 10) || 0;
+              var q = parseInt((qtyInp && qtyInp.value) || '0', 10) || 0;
+              totalQty += q;
+              totalSum += price * q;
+              totalWeightG += wg * q;
+            });
+            document.getElementById('transferTotalQty').textContent = totalQty;
+            document.getElementById('transferTotalSum').textContent = totalSum ? totalSum.toFixed(2) : '0';
+            var wEl = document.getElementById('transferTotalWeight');
+            if (totalWeightG > 0) wEl.textContent = (totalWeightG / 1000).toFixed(2) + ' кг'; else wEl.textContent = '—';
+          }
+          document.getElementById('transferWhFrom').onchange = function () {
+            var whFrom = this.value;
+            if (whFrom) loadStock(whFrom).then(renderTransferTable); else renderTransferTable();
+          };
+          document.getElementById('transferWhTo').onchange = renderTransferTable;
+          document.getElementById('transferCancel').onclick = function () { loadSectionOperations(false); };
+          document.getElementById('transferSave').onclick = function () {
+            var errEl = document.getElementById('opFormErr');
+            var msgEl = document.getElementById('opFormMsg');
+            var whFrom = document.getElementById('transferWhFrom').value;
+            var whTo = document.getElementById('transferWhTo').value;
+            var comment = (document.getElementById('transferComment').value || '').trim() || null;
+            var createdBy = (window.currentUser && currentUser.login) ? currentUser.login : null;
+            if (errEl) errEl.textContent = '';
+            if (!whFrom || !whTo) { if (errEl) errEl.textContent = 'Выберите склад от и склад в.'; return; }
+            if (whFrom === whTo) { if (errEl) errEl.textContent = 'Склад от и склад в не должны совпадать.'; return; }
+            if (!createdBy) { if (errEl) errEl.textContent = 'Не определен текущий пользователь.'; return; }
+            var items = [];
+            document.querySelectorAll('.transfer-row').forEach(function (row) {
+              var qtyInp = row.querySelector('.transfer-qty');
+              var q = parseInt((qtyInp && qtyInp.value) || '0', 10) || 0;
+              if (q <= 0) return;
+              items.push({ product_code: row.getAttribute('data-product-code') || '', batch_code: row.getAttribute('data-batch-code') || '', quantity: q });
+            });
+            if (!items.length) { if (errEl) errEl.textContent = 'Укажите количество к перемещению хотя бы по одной позиции.'; return; }
+            var saveBtn = document.getElementById('transferSave');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Сохранение...';
+            var createdCount = 0, idx = 0;
+            function createNext() {
+              if (idx >= items.length) {
+                if (msgEl) { msgEl.textContent = 'Создано операций перемещения: ' + createdCount; msgEl.style.display = 'block'; }
+                setTimeout(function () { loadSectionOperations(false); }, 1500);
+                return;
+              }
+              var it = items[idx++];
+              api('/api/v1/operations/transfer', { method: 'POST', body: JSON.stringify({ warehouse_from: whFrom, warehouse_to: whTo, product_code: it.product_code, batch_code: it.batch_code, quantity: it.quantity, created_by: createdBy, comment: comment }) }).then(function () {
+                createdCount += 1;
+                createNext();
+              }).catch(function (e) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Сохранить операции';
+                var detail = e && e.data && e.data.detail;
+                if (typeof detail === 'string') { if (errEl) errEl.textContent = detail; return; }
+                if (detail && detail.errors) { var errs = []; for (var k in detail.errors) errs.push(k + ': ' + detail.errors[k]); if (errEl) errEl.textContent = errs.join('; '); }
+                else if (errEl) errEl.textContent = 'Ошибка сохранения';
+              });
+            }
+            createNext();
+          };
+        }
+        function buildPromotionalSampleForm(config, products, warehouses, userList) {
+          var content = document.getElementById('content');
+          if (!content) return;
+          var warehousesList = warehouses || [];
+          var productsList = products || [];
+          var productsMap = {}; productsList.forEach(function (p) { productsMap[p.code] = p; });
+          var whOpts = '<option value="">— Выберите склад —</option>';
+          warehousesList.forEach(function (w) { whOpts += '<option value="' + escAttr(w.code) + '">' + escAttr(w.name || w.code) + '</option>'; });
+          var expOpts = '<option value="">— Выберите экспедитора —</option>';
+          (userList || []).forEach(function (u) {
+            if ((u.role || '').toLowerCase() !== 'expeditor') return;
+            expOpts += '<option value="' + escAttr(u.login) + '">' + escAttr(u.login + (u.fio ? ' — ' + u.fio : '')) + '</option>';
+          });
+          var formHtml = '<div class="card"><h2>Создание операции: ' + escAttr(config.operation_name || 'Раздача образцов') + '</h2>';
+          formHtml += '<div id="opFormErr" class="err" style="margin-bottom:12px"></div><div id="opFormMsg" class="msg" style="margin-bottom:12px;display:none"></div>';
+          formHtml += '<div class="form-group"><label>Экспедитор <span style="color:#c00">*</span></label><select id="sampleExpeditor" required>' + expOpts + '</select></div>';
+          formHtml += '<div class="form-group"><label>Склад в <span style="color:#c00">*</span></label><select id="sampleWhTo" required disabled style="background:#eee;color:#555">' + whOpts + '</select></div>';
+          formHtml += '<div class="form-group"><label>Склад от <span style="color:#c00">*</span></label><select id="sampleWhFrom" required>' + whOpts + '</select></div>';
+          formHtml += '<div style="margin-top:20px"><h3 style="margin-bottom:12px">Образцы</h3><p style="color:#666;font-size:13px;margin-bottom:8px">Остатки отсортированы от просроченных к нормальным. Укажите количество образцов.</p><div style="overflow-x:auto"><table id="sampleItemsTable" style="width:100%"><thead><tr><th>Товар</th><th>Партия</th><th>Срок годности</th><th>Дней осталось</th><th>Доступно</th><th>Количество образцов</th><th>Вес</th><th>Цена</th><th>Сумма</th></tr></thead><tbody id="sampleItemsBody"></tbody><tfoot><tr style="background:#f8f9fa;font-weight:600"><td colspan="5" style="text-align:right;padding:8px">Итого:</td><td id="sampleTotalQty" style="text-align:right;padding:8px">0</td><td id="sampleTotalWeight" style="text-align:right;padding:8px">—</td><td></td><td id="sampleTotalSum" style="text-align:right;padding:8px">0</td></tr></tfoot></table></div></div>';
+          formHtml += '<div class="form-group" style="margin-top:20px"><label>Комментарий</label><input type="text" id="sampleComment" placeholder="необяз."></div>';
+          formHtml += '<p style="margin-top:16px"><button type="button" class="btn btn-primary" id="sampleSave">Сохранить операции</button> <button type="button" class="btn btn-secondary" id="sampleCancel">Отмена</button></p></div>';
+          content.innerHTML = formHtml;
+          var stockCache = [];
+          function loadStock(whCode) {
+            if (!whCode) { stockCache = []; return Promise.resolve(); }
+            return api('/api/v1/warehouse/stock?warehouse=' + encodeURIComponent(whCode)).then(function (resp) {
+              stockCache = (resp && resp.success && Array.isArray(resp.data)) ? resp.data : [];
+              stockCache.sort(function (a, b) {
+                var da = a.days_until_expiry != null ? a.days_until_expiry : 1e9;
+                var db = b.days_until_expiry != null ? b.days_until_expiry : 1e9;
+                return da - db;
+              });
+            }).catch(function () { stockCache = []; });
+          }
+          function renderSampleTable() {
+            var tbody = document.getElementById('sampleItemsBody');
+            var whFrom = document.getElementById('sampleWhFrom').value;
+            var whTo = document.getElementById('sampleWhTo').value;
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            if (!whFrom || !whTo || !stockCache.length) {
+              if (!whTo) tbody.innerHTML = '<tr><td colspan="9" style="color:#666;padding:12px">Сначала выберите экспедитора (склад в заполнится автоматически)</td></tr>';
+              else if (!whFrom) tbody.innerHTML = '<tr><td colspan="9" style="color:#666;padding:12px">Выберите склад от</td></tr>';
+              else tbody.innerHTML = '<tr><td colspan="9" style="color:#666;padding:12px">Нет остатков на складе</td></tr>';
+              document.getElementById('sampleTotalQty').textContent = '0';
+              document.getElementById('sampleTotalSum').textContent = '0';
+              document.getElementById('sampleTotalWeight').textContent = '—';
+              return;
+            }
+            stockCache.forEach(function (s) {
+              var productName = (s.product_name || s.product_code || '');
+              var expiry = s.expiry_date ? formatDateOnly(s.expiry_date) : '—';
+              var days = s.days_until_expiry != null ? s.days_until_expiry : '—';
+              var avail = s.total_qty != null ? s.total_qty : 0;
+              var price = s.unit_price != null ? parseFloat(s.unit_price) : 0;
+              var weightG = s.weight_g != null ? parseInt(s.weight_g, 10) : 0;
+              var status = s.expiry_status || {};
+              var color = status.color || '';
+              var icon = status.icon || '';
+              var daysHtml = (days === '—' || days === '') ? '—' : '<span class="badge" style="background-color:' + (color === 'YELLOW' ? '#ffc107' : color === 'RED' ? '#dc3545' : color === 'BLACK' ? '#343a40' : '#28a745') + ';color:#fff;border-radius:4px;padding:2px 6px;font-size:11px;">' + (icon || '') + ' ' + days + ' дн.</span>';
+              var row = document.createElement('tr');
+              row.className = 'sample-row';
+              row.setAttribute('data-product-code', s.product_code || '');
+              row.setAttribute('data-batch-code', s.batch_code || '');
+              row.setAttribute('data-available', String(avail));
+              row.setAttribute('data-price', String(price));
+              row.setAttribute('data-weight-g', String(weightG));
+              row.innerHTML = '<td>' + escAttr(productName) + '</td><td>' + escAttr(s.batch_code || '') + '</td><td>' + expiry + '</td><td style="text-align:center">' + daysHtml + '</td><td style="text-align:right">' + avail + '</td><td><input type="number" class="sample-qty" min="0" max="' + avail + '" value="0" data-available="' + avail + '"></td><td class="sample-weight" style="text-align:right">—</td><td class="sample-price" style="text-align:right">' + (price ? price.toFixed(2) : '—') + '</td><td class="sample-sum" style="text-align:right">0</td>';
+              var qtyInp = row.querySelector('.sample-qty');
+              var weightCell = row.querySelector('.sample-weight');
+              var sumCell = row.querySelector('.sample-sum');
+              function upd() {
+                var q = parseInt(qtyInp.value || '0', 10) || 0;
+                var maxA = parseInt(qtyInp.getAttribute('data-available') || '0', 10) || 0;
+                if (q > maxA) { q = maxA; qtyInp.value = q || ''; }
+                sumCell.textContent = price * q ? (price * q).toFixed(2) : '0';
+                if (weightG > 0 && q > 0) weightCell.textContent = ((weightG * q) / 1000).toFixed(2) + ' кг'; else weightCell.textContent = '—';
+                updateSampleTotals();
+              }
+              qtyInp.oninput = upd;
+              qtyInp.onchange = upd;
+              tbody.appendChild(row);
+            });
+            updateSampleTotals();
+          }
+          function updateSampleTotals() {
+            var totalQty = 0, totalSum = 0, totalWeightG = 0;
+            document.querySelectorAll('.sample-row').forEach(function (row) {
+              var qtyInp = row.querySelector('.sample-qty');
+              var price = parseFloat(row.getAttribute('data-price') || '0') || 0;
+              var wg = parseInt(row.getAttribute('data-weight-g') || '0', 10) || 0;
+              var q = parseInt((qtyInp && qtyInp.value) || '0', 10) || 0;
+              totalQty += q;
+              totalSum += price * q;
+              totalWeightG += wg * q;
+            });
+            document.getElementById('sampleTotalQty').textContent = totalQty;
+            document.getElementById('sampleTotalSum').textContent = totalSum ? totalSum.toFixed(2) : '0';
+            var wEl = document.getElementById('sampleTotalWeight');
+            if (totalWeightG > 0) wEl.textContent = (totalWeightG / 1000).toFixed(2) + ' кг'; else wEl.textContent = '—';
+          }
+          document.getElementById('sampleExpeditor').onchange = function () {
+            var login = this.value || '';
+            var whToSel = document.getElementById('sampleWhTo');
+            var match = null;
+            if (login) warehousesList.forEach(function (w) { if (!match && w.expeditor_login === login) match = w; });
+            if (match && match.code) whToSel.value = match.code; else whToSel.value = '';
+            renderSampleTable();
+          };
+          document.getElementById('sampleWhFrom').onchange = function () {
+            loadStock(this.value).then(renderSampleTable);
+          };
+          document.getElementById('sampleCancel').onclick = function () { loadSectionOperations(false); };
+          document.getElementById('sampleSave').onclick = function () {
+            var errEl = document.getElementById('opFormErr');
+            var msgEl = document.getElementById('opFormMsg');
+            var whFrom = document.getElementById('sampleWhFrom').value;
+            var whTo = document.getElementById('sampleWhTo').value;
+            var expeditor = document.getElementById('sampleExpeditor').value;
+            var comment = (document.getElementById('sampleComment').value || '').trim() || null;
+            var createdBy = (window.currentUser && currentUser.login) ? currentUser.login : null;
+            if (errEl) errEl.textContent = '';
+            if (!expeditor) { if (errEl) errEl.textContent = 'Выберите экспедитора.'; return; }
+            if (!whTo) { if (errEl) errEl.textContent = 'Склад в не определён — выберите экспедитора, привязанного к складу.'; return; }
+            if (!whFrom) { if (errEl) errEl.textContent = 'Выберите склад от.'; return; }
+            if (!createdBy) { if (errEl) errEl.textContent = 'Не определен текущий пользователь.'; return; }
+            var items = [];
+            document.querySelectorAll('.sample-row').forEach(function (row) {
+              var qtyInp = row.querySelector('.sample-qty');
+              var q = parseInt((qtyInp && qtyInp.value) || '0', 10) || 0;
+              if (q <= 0) return;
+              items.push({ product_code: row.getAttribute('data-product-code') || '', batch_code: row.getAttribute('data-batch-code') || '', quantity: q });
+            });
+            if (!items.length) { if (errEl) errEl.textContent = 'Укажите количество образцов хотя бы по одной позиции.'; return; }
+            var saveBtn = document.getElementById('sampleSave');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Сохранение...';
+            var createdCount = 0, idx = 0;
+            function createNext() {
+              if (idx >= items.length) {
+                if (msgEl) { msgEl.textContent = 'Создано операций раздачи образцов: ' + createdCount; msgEl.style.display = 'block'; }
+                setTimeout(function () { loadSectionOperations(false); }, 1500);
+                return;
+              }
+              var it = items[idx++];
+              api('/api/v1/operations/allocation', { method: 'POST', body: JSON.stringify({ warehouse_from: whFrom, warehouse_to: whTo, product_code: it.product_code, batch_code: it.batch_code, quantity: it.quantity, expeditor_login: expeditor, created_by: createdBy, comment: comment }) }).then(function () {
+                createdCount += 1;
+                createNext();
+              }).catch(function (e) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Сохранить операции';
+                var detail = e && e.data && e.data.detail;
+                if (typeof detail === 'string') { if (errEl) errEl.textContent = detail; return; }
+                if (detail && detail.errors) { var errs = []; for (var k in detail.errors) errs.push(k + ': ' + detail.errors[k]); if (errEl) errEl.textContent = errs.join('; '); }
+                else if (errEl) errEl.textContent = 'Ошибка сохранения';
+              });
+            }
+            createNext();
+          };
+        }
         function buildDeliveryForm(config, customers, products, warehouses, paymentTypes, userList) {
           var content = document.getElementById('content');
           if (!content) return;
@@ -3044,7 +3547,7 @@
           var hiddenFields = config.hidden_fields || [];
           var readonlyFields = config.readonly_fields || [];
           if (config.operation_type === 'payment_receipt_from_customer') {
-            var prio = ['expeditor_login', 'customer_id', 'order_id'];
+            var prio = ['customer_id', 'order_id'];
             var rest = fieldsToShow.filter(function (f) { return prio.indexOf(f) === -1; });
             fieldsToShow = prio.filter(function (f) { return fieldsToShow.indexOf(f) >= 0; }).concat(rest);
           }
@@ -3058,6 +3561,18 @@
           }
           if (config.operation_type === 'delivery') {
             buildDeliveryForm(config, customers, products, warehouses, paymentTypes, userList);
+            return;
+          }
+          if (config.operation_type === 'write_off') {
+            buildWriteOffForm(config, products, warehouses, userList);
+            return;
+          }
+          if (config.operation_type === 'transfer') {
+            buildTransferForm(config, products, warehouses, userList);
+            return;
+          }
+          if (config.operation_type === 'promotional_sample') {
+            buildPromotionalSampleForm(config, products, warehouses, userList);
             return;
           }
           var formHtml = '<div class="card"><h2 id="opFormTitle">Создание операции: ' + escAttr(config.operation_name || config.operation_type) + '</h2>';
@@ -3088,18 +3603,9 @@
             var isReadonly = readonlyFields.indexOf(fieldName) >= 0;
             formHtml += '<div class="form-group"><label>' + escAttr(field.label || fieldName) + (isRequired ? ' <span style="color:#c00">*</span>' : '') + '</label>';
             if (fieldName === 'order_id' && config.operation_type === 'payment_receipt_from_customer') {
-              formHtml += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="hidden" id="' + field.id + '"><input type="text" id="opCreateOrderDisplay" readonly placeholder="Сначала выберите экспедитора и клиента" style="flex:1;min-width:200px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px"><button type="button" class="btn btn-secondary" id="opOrderPickBtn" disabled>Выбрать заказ</button></div></div>';
+              formHtml += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="hidden" id="' + field.id + '"><input type="text" id="opCreateOrderDisplay" readonly placeholder="Сначала выберите клиента" style="flex:1;min-width:200px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px"><button type="button" class="btn btn-secondary" id="opOrderPickBtn" disabled>Выбрать заказ</button></div></div>';
             } else if (fieldName === 'customer_id' && config.operation_type === 'payment_receipt_from_customer') {
-              var custOpts = '<option value="">— Не указан —</option>';
-              if (field.options) {
-                field.options.forEach(function (opt) {
-                  var val = opt.id != null ? opt.id : '';
-                  var exp = opt.login_expeditor || '';
-                  var text = ((opt.name_client || opt.firm_name || '') + ' (ID ' + (opt.id || '') + ')');
-                  custOpts += '<option value="' + escAttr(val) + '" data-login-expeditor="' + escAttr(exp) + '">' + escAttr(text) + '</option>';
-                });
-              }
-              formHtml += '<select id="' + field.id + '"' + (isRequired ? ' required' : '') + (isReadonly ? ' disabled' : '') + '>' + custOpts + '</select></div>';
+              formHtml += '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><input type="hidden" id="' + field.id + '"><input type="text" id="opCreateCustomerSearch" placeholder="ИНН или р/с" style="max-width:220px" autocomplete="off"><button type="button" class="btn btn-secondary" id="opCreateCustomerFind">Найти</button><span id="opCreateCustomerDisplay" style="color:#0f766e;font-weight:600"></span></div><div id="opCreateCustomerErr" class="err" style="margin-top:4px;font-size:12px"></div></div>';
             } else if (field.type === 'select') {
               var opts = '<option value="">— Не указан —</option>';
               if (field.options) {
@@ -3154,77 +3660,63 @@
             if (expiryEl) { expiryEl.onchange = updateBatchCodeFromProductAndExpiry; expiryEl.oninput = updateBatchCodeFromProductAndExpiry; }
           }
           if (config.operation_type === 'payment_receipt_from_customer') {
-            var expeditorSelect = document.getElementById('opCreateExpeditor');
-            var customerSelect = document.getElementById('opCreateCustomer');
+            var customerIdInput = document.getElementById('opCreateCustomer');
+            var customerSearchInput = document.getElementById('opCreateCustomerSearch');
+            var customerDisplay = document.getElementById('opCreateCustomerDisplay');
+            var customerErr = document.getElementById('opCreateCustomerErr');
             var orderIdInput = document.getElementById('opCreateOrderId');
             var orderDisplay = document.getElementById('opCreateOrderDisplay');
             var orderPickBtn = document.getElementById('opOrderPickBtn');
-            function filterCustomersByExpeditor() {
-              if (!customerSelect) return;
-              var exp = expeditorSelect ? expeditorSelect.value : '';
-              var opts = customerSelect.querySelectorAll('option');
-              opts.forEach(function (opt) {
-                if (opt.value === '') {
-                  opt.textContent = exp ? '— Выберите клиента —' : '— Сначала выберите экспедитора —';
-                  opt.disabled = !exp;
-                  opt.style.display = '';
-                  return;
-                }
-                var match = !exp || (opt.getAttribute('data-login-expeditor') || '') === exp;
-                opt.disabled = !match;
-                opt.style.display = match ? '' : 'none';
-              });
-              if (!exp) customerSelect.value = '';
-            }
+            var amountEl = document.getElementById('opCreateAmount');
+            var paymentTypeEl = document.getElementById('opCreatePaymentType');
             function updateOrderPickState() {
-              var exp = expeditorSelect ? expeditorSelect.value : '';
-              var cust = customerSelect ? customerSelect.value : '';
-              if (!orderPickBtn) return;
-              orderPickBtn.disabled = !exp || !cust || cust.trim() === '';
-              if (!exp || !cust || cust.trim() === '') {
+              var cust = customerIdInput ? customerIdInput.value : '';
+              if (orderPickBtn) orderPickBtn.disabled = !cust || cust.trim() === '';
+              if (!cust || cust.trim() === '') {
                 if (orderIdInput) orderIdInput.value = '';
-                if (orderDisplay) { orderDisplay.value = ''; orderDisplay.placeholder = 'Сначала выберите экспедитора и клиента'; }
+                if (orderDisplay) { orderDisplay.value = ''; orderDisplay.placeholder = 'Сначала выберите клиента'; }
+                if (amountEl) { amountEl.value = ''; amountEl.readOnly = false; }
+                if (paymentTypeEl) { paymentTypeEl.value = ''; paymentTypeEl.disabled = false; }
               } else if (orderDisplay) orderDisplay.placeholder = 'Нажмите «Выбрать заказ»';
             }
-            function clearOrderSelection() {
-              if (orderIdInput) orderIdInput.value = '';
-              if (orderDisplay) orderDisplay.value = '';
-              updateOrderPickState();
+            if (document.getElementById('opCreateCustomerFind')) {
+              document.getElementById('opCreateCustomerFind').onclick = function () {
+                var val = (customerSearchInput && customerSearchInput.value) ? customerSearchInput.value.trim() : '';
+                if (customerErr) customerErr.textContent = '';
+                if (!val) { if (customerErr) customerErr.textContent = 'Введите ИНН или расчётный счёт'; return; }
+                api('/api/v1/customers?search=' + encodeURIComponent(val)).then(function (data) {
+                  var list = Array.isArray(data) ? data : (data && data.data ? data.data : []);
+                  if (!list.length) { if (customerErr) customerErr.textContent = 'Клиент не найден'; return; }
+                  var c = list[0];
+                  var id = c.id != null ? c.id : c.customer_id;
+                  if (customerIdInput) customerIdInput.value = id;
+                  if (customerDisplay) customerDisplay.textContent = (c.name_client || c.firm_name || '') + ' (ID ' + id + ')';
+                  if (customerErr) customerErr.textContent = '';
+                  updateOrderPickState();
+                }).catch(function () { if (customerErr) customerErr.textContent = 'Ошибка поиска'; });
+              };
             }
-            function onExpeditorChange() {
-              filterCustomersByExpeditor();
-              if (customerSelect) customerSelect.value = '';
-              clearOrderSelection();
-            }
-            if (expeditorSelect) {
-              expeditorSelect.onchange = onExpeditorChange;
-              filterCustomersByExpeditor();
-            }
-            if (customerSelect) {
-              customerSelect.onchange = clearOrderSelection;
-              updateOrderPickState();
-            }
+            updateOrderPickState();
             if (orderPickBtn) {
               orderPickBtn.onclick = function () {
-                var expeditorLogin = expeditorSelect ? expeditorSelect.value : '';
-                var customerId = customerSelect ? customerSelect.value : '';
-                if (!customerId || customerId.trim() === '' || !expeditorLogin || expeditorLogin.trim() === '') return;
+                var customerId = customerIdInput ? customerIdInput.value : '';
+                if (!customerId || customerId.trim() === '') return;
                 var modalId = 'opOrderPickModal_' + Date.now();
-                var modalHtml = '<div class="modal show" id="' + modalId + '"><div class="modal-inner" style="max-width:700px;max-height:85vh;overflow:auto"><h3>Выбор заказа</h3><div id="opOrderPickLoading" style="padding:20px;text-align:center;color:#666">Загрузка заказов...</div><div id="opOrderPickResults" style="margin-top:12px;max-height:400px;overflow-y:auto;display:none"></div><div id="opOrderPickErr" class="err" style="margin-top:8px"></div><div class="modal-actions" style="margin-top:16px"><button type="button" class="btn btn-secondary" id="opOrderPickCancel">Отмена</button></div></div></div>';
+                var modalHtml = '<div class="modal show" id="' + modalId + '"><div class="modal-inner" style="max-width:700px;max-height:85vh;overflow:auto"><h3>Выбор заказа (неоплаченные)</h3><div id="opOrderPickLoading" style="padding:20px;text-align:center;color:#666">Загрузка заказов...</div><div id="opOrderPickResults" style="margin-top:12px;max-height:400px;overflow-y:auto;display:none"></div><div id="opOrderPickErr" class="err" style="margin-top:8px"></div><div class="modal-actions" style="margin-top:16px"><button type="button" class="btn btn-secondary" id="opOrderPickCancel">Отмена</button></div></div></div>';
                 var modalContainer = document.getElementById('modalContainer');
                 if (!modalContainer) { modalContainer = document.createElement('div'); modalContainer.id = 'modalContainer'; document.body.appendChild(modalContainer); }
                 modalContainer.innerHTML = modalHtml;
                 var loadingEl = document.getElementById('opOrderPickLoading');
                 var resultsEl = document.getElementById('opOrderPickResults');
                 var errEl = document.getElementById('opOrderPickErr');
-                var orderParams = 'customer_id=' + encodeURIComponent(customerId) + '&login_expeditor=' + encodeURIComponent(expeditorLogin);
-                api('/api/v1/orders?' + orderParams).then(function (data) {
-                  var orders = Array.isArray(data) ? data : (data && data.orders ? data.orders : []);
+                api('/api/v1/orders?customer_id=' + encodeURIComponent(customerId)).then(function (data) {
+                  var orders = Array.isArray(data) ? data : (data && data.orders ? data.orders : data && data.data ? data.data : []);
+                  orders = (orders || []).filter(function (o) { var s = (o.status_code || '').toLowerCase(); return s !== 'completed' && s !== 'canceled' && s !== 'cancelled'; });
                   if (loadingEl) loadingEl.style.display = 'none';
                   if (resultsEl) {
                     resultsEl.style.display = 'block';
-                    if (!orders || !orders.length) {
-                      resultsEl.innerHTML = '<p style="color:#666;text-align:center;padding:20px">У клиента нет заказов.</p>';
+                    if (!orders.length) {
+                      resultsEl.innerHTML = '<p style="color:#666;text-align:center;padding:20px">Нет неоплаченных заказов у клиента.</p>';
                       return;
                     }
                     var tableHtml = '<div style="overflow-x:auto"><table style="width:100%"><thead><tr><th>№ заказа</th><th>Дата поставки</th><th>Статус</th><th>Сумма</th><th></th></tr></thead><tbody>';
@@ -3233,7 +3725,7 @@
                       var deliveryDate = o.scheduled_delivery_at ? formatDateOnly(o.scheduled_delivery_at) : '—';
                       var status = o.status_name || o.status_code || '—';
                       var amount = o.total_amount != null ? (typeof o.total_amount === 'number' ? o.total_amount.toFixed(2) : o.total_amount) : '—';
-                      tableHtml += '<tr><td>' + escAttr(orderNo) + '</td><td>' + escAttr(deliveryDate) + '</td><td>' + formatStatusBadge(o.status_code, status) + '</td><td>' + escAttr(amount) + '</td><td><button type="button" class="btn btn-primary btn-small" data-op-select-order="' + escAttr(orderNo) + '" data-op-order-display="' + escAttr('№ ' + orderNo + ' — ' + deliveryDate) + '">Выбрать</button></td></tr>';
+                      tableHtml += '<tr><td>' + escAttr(orderNo) + '</td><td>' + escAttr(deliveryDate) + '</td><td>' + formatStatusBadge(o.status_code, status) + '</td><td>' + escAttr(amount) + '</td><td><button type="button" class="btn btn-primary btn-small" data-op-select-order="' + escAttr(orderNo) + '" data-op-order-amount="' + escAttr(o.total_amount != null ? o.total_amount : '') + '" data-op-order-payment="' + escAttr(o.payment_type_code || '') + '" data-op-order-display="' + escAttr('№ ' + orderNo + ' — ' + deliveryDate) + '">Выбрать</button></td></tr>';
                     });
                     tableHtml += '</tbody></table></div>';
                     resultsEl.innerHTML = tableHtml;
@@ -3243,6 +3735,10 @@
                         var disp = this.getAttribute('data-op-order-display') || ('№ ' + ordId);
                         if (orderIdInput) orderIdInput.value = ordId;
                         if (orderDisplay) orderDisplay.value = disp;
+                        var amt = this.getAttribute('data-op-order-amount');
+                        var pay = this.getAttribute('data-op-order-payment') || '';
+                        if (amountEl) { amountEl.value = amt != null && amt !== '' ? amt : ''; amountEl.readOnly = true; }
+                        if (paymentTypeEl) { try { paymentTypeEl.value = pay; paymentTypeEl.disabled = true; } catch (e) {} }
                         document.getElementById(modalId).classList.remove('show');
                       };
                     });
@@ -3641,6 +4137,7 @@
           });
         }
         document.getElementById('cashLoadReceived').onclick = loadReceived;
+        loadReceived();
         document.getElementById('cashExportExcel').onclick = function () {
           var params = [];
           var df = document.getElementById('cashDateFrom'); var dt = document.getElementById('cashDateTo');
@@ -3703,8 +4200,14 @@
 
       function loadSectionCashierOrders() {
         var content = document.getElementById('content');
-        content.innerHTML = '<div class="card"><h2>Заказы для подтверждения оплаты</h2><p style="color:#666;margin-bottom:12px">Заказы с указанным типом оплаты. Подтвердите приём денег по каждому заказу.</p><div style="margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 16px"><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Тип оплаты</label><select id="cof_payment_type" style="max-width:180px"><option value="">— Все —</option></select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Статус</label><select id="cof_status" style="max-width:160px"><option value="">— Все —</option></select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Оплата подтверждена</label><select id="cof_payment_confirmed" style="max-width:160px"><option value="">Все</option><option value="true">Подтверждено</option><option value="false">Не подтверждено</option></select></div><button type="button" class="btn btn-primary" id="cof_apply">Показать</button> <button type="button" class="btn btn-secondary" id="cashierOrdersExport">Выгрузить в Excel</button></div><div id="cashierOrdersList" style="margin-top:12px"><p>Загрузка...</p></div></div>';
+        content.innerHTML = '<div class="card"><h2>Заказы для подтверждения оплаты</h2><p style="color:#666;margin-bottom:12px">Заказы с указанным типом оплаты. Подтвердите приём денег по каждому заказу.</p><div style="margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 16px"><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Тип оплаты</label><select id="cof_payment_type" style="max-width:180px"><option value="">— Все —</option></select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Статус</label><select id="cof_status" style="max-width:160px"><option value="">— Все —</option></select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Оплата подтверждена</label><select id="cof_payment_confirmed" style="max-width:160px"><option value="">Все</option><option value="true">Подтверждено</option><option value="false">Не подтверждено</option></select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Дата поставки с</label><input type="text" id="cof_date_from" placeholder="дд.мм.гггг" style="max-width:130px"></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Дата поставки по</label><input type="text" id="cof_date_to" placeholder="дд.мм.гггг" style="max-width:130px"></div><button type="button" class="btn btn-primary" id="cof_apply">Показать</button> <button type="button" class="btn btn-secondary" id="cashierOrdersExport">Выгрузить в Excel</button></div><div id="cashierOrdersList" style="margin-top:12px"><p>Загрузка...</p></div></div>';
         var div = document.getElementById('cashierOrdersList');
+        if (window.flatpickr) {
+          var cofDf = document.getElementById('cof_date_from');
+          var cofDt = document.getElementById('cof_date_to');
+          if (cofDf) window.flatpickr(cofDf, { locale: 'ru', dateFormat: 'Y-m-d', altInput: true, altFormat: 'd.m.Y', allowInput: true });
+          if (cofDt) window.flatpickr(cofDt, { locale: 'ru', dateFormat: 'Y-m-d', altInput: true, altFormat: 'd.m.Y', allowInput: true });
+        }
         function renderCashierOrdersTable(data) {
           if (!div) return;
           if (!data || !data.length) {
@@ -3734,24 +4237,40 @@
           var pt = document.getElementById('cof_payment_type') && document.getElementById('cof_payment_type').value;
           var st = document.getElementById('cof_status') && document.getElementById('cof_status').value;
           var pc = document.getElementById('cof_payment_confirmed') && document.getElementById('cof_payment_confirmed').value;
+          var df = document.getElementById('cof_date_from') && document.getElementById('cof_date_from').value;
+          var dt = document.getElementById('cof_date_to') && document.getElementById('cof_date_to').value;
           var params = [];
           if (pt) params.push('payment_type_code=' + encodeURIComponent(pt));
           if (st) params.push('status_code=' + encodeURIComponent(st));
           if (pc) params.push('payment_confirmed=' + encodeURIComponent(pc));
+          if (df) params.push('scheduled_delivery_from=' + encodeURIComponent(dateToApiFormatCof(df)));
+          if (dt) params.push('scheduled_delivery_to=' + encodeURIComponent(dateToApiFormatCof(dt)));
           var url = window.location.origin + '/api/v1/finances/orders-for-confirmation/export' + (params.length ? '?' + params.join('&') : '');
           fetch(url, { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) {
             if (!r.ok) return r.json().then(function (d) { throw { data: d }; }).catch(function (e) { if (e.data) throw e; throw { data: { detail: r.statusText } }; });
             return r.blob();
           }).then(function (blob) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'orders_for_confirmation.xlsx'; a.click(); URL.revokeObjectURL(a.href); }).catch(function (e) { alert('Ошибка: ' + (e && e.data && e.data.detail ? e.data.detail : 'Ошибка выгрузки')); });
         };
+        function dateToApiFormatCof(val) {
+          if (!val || !(val + '').trim()) return '';
+          var v = (val + '').trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+          var m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+          if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+          return v;
+        }
         function loadCashierOrders() {
           var pt = document.getElementById('cof_payment_type') && document.getElementById('cof_payment_type').value;
           var st = document.getElementById('cof_status') && document.getElementById('cof_status').value;
           var pc = document.getElementById('cof_payment_confirmed') && document.getElementById('cof_payment_confirmed').value;
+          var df = document.getElementById('cof_date_from') && document.getElementById('cof_date_from').value;
+          var dt = document.getElementById('cof_date_to') && document.getElementById('cof_date_to').value;
           var params = [];
           if (pt) params.push('payment_type_code=' + encodeURIComponent(pt));
           if (st) params.push('status_code=' + encodeURIComponent(st));
           if (pc) params.push('payment_confirmed=' + encodeURIComponent(pc));
+          if (df) params.push('scheduled_delivery_from=' + encodeURIComponent(dateToApiFormatCof(df)));
+          if (dt) params.push('scheduled_delivery_to=' + encodeURIComponent(dateToApiFormatCof(dt)));
           var url = '/api/v1/finances/orders-for-confirmation' + (params.length ? '?' + params.join('&') : '');
           api(url).then(function (res) {
             if (res && res.success === false && res.error) {
@@ -4000,7 +4519,8 @@
               userList = userList || [];
               var dateStr = visit.visit_date ? formatDateOnly(visit.visit_date) : '—';
               var timeStr = (visit.visit_time || '').toString().substring(0, 5) || '—';
-              var body = '<div class="form-group"><label>Клиент</label><div>' + escAttr(visit.customer_name || '') + '</div></div><div class="form-group"><label>Дата</label><div>' + escAttr(dateStr) + '</div></div><div class="form-group"><label>Время</label><div>' + escAttr(timeStr) + '</div></div><div class="form-group"><label>Статус</label><div>' + escAttr(visitStatusRu(visit.status)) + '</div></div><div class="form-group"><label>Ответственный</label><div>' + escAttr(visit.responsible_name || visit.responsible_login || '') + '</div></div>' + (visit.comment ? '<div class="form-group"><label>Комментарий</label><div>' + escAttr(visit.comment) + '</div></div>' : '') + '<p><button type="button" class="btn btn-secondary" id="vcard_edit">Изменить</button></p>';
+              var dtCombined = (dateStr + (timeStr && timeStr !== '—' ? ' ' + timeStr : '')).trim() || '—';
+              var body = '<div class="form-group"><label>Клиент</label><div>' + escAttr(visit.customer_name || '') + '</div></div><div class="form-group"><label>Дата и время</label><div>' + escAttr(dtCombined) + '</div></div><div class="form-group"><label>Статус</label><div>' + escAttr(visitStatusRu(visit.status)) + '</div></div><div class="form-group"><label>Ответственный</label><div>' + escAttr(visit.responsible_name || visit.responsible_login || '') + '</div></div>' + (visit.comment ? '<div class="form-group"><label>Комментарий</label><div>' + escAttr(visit.comment) + '</div></div>' : '') + '<p style="text-align:center"><button type="button" class="btn btn-secondary" id="vcard_edit">Изменить</button></p>';
               showModal('Карточка визита', body, function () { return Promise.resolve(); });
               var saveBtn = document.querySelector('#modalContainer .modal-actions .btn-primary');
               if (saveBtn) saveBtn.textContent = 'Закрыть';
@@ -4023,16 +4543,17 @@
           var sorted = data.slice().sort(function (a, b) { return tableSortCompare(a, b, vsSortCol, vsSortDir); });
           var arrow = vsSortDir > 0 ? ' ▲' : ' ▼';
           var thf = function (c, lbl) { return '<th class="sortable" data-col="' + c + '" style="cursor:pointer">' + lbl + (vsSortCol === c ? arrow : '') + '</th>'; };
-          var tb = '<div style="overflow-x:auto"><table><thead><tr>' + thf('visit_date', 'Дата') + thf('visit_time', 'Время') + thf('customer_name', 'Клиент') + thf('status', 'Статус') + thf('responsible_login', 'Ответственный') + '<th>Действия</th></tr></thead><tbody>';
+          var tb = '<div style="overflow-x:auto"><table><thead><tr>' + thf('visit_date', 'Дата и время') + thf('customer_name', 'Клиент') + thf('status', 'Статус') + thf('responsible_login', 'Ответственный') + '<th>Действия</th></tr></thead><tbody>';
           sorted.forEach(function (v) {
             var sc = 'status-badge--default';
             if (v.status === 'completed') sc = 'status-badge--completed';
             else if (v.status === 'cancelled') sc = 'status-badge--cancelled';
             else if (v.status === 'planned') sc = 'status-badge--delivery';
             var ds = v.visit_date ? formatDateOnly(v.visit_date) : '—';
-            var ts = (v.visit_time || '').toString().substring(0, 5) || '—';
+            var ts = (v.visit_time || '').toString().substring(0, 5) || '';
+            var dtCombined = (ds + (ts && ts !== '—' ? ' ' + ts : '')).trim();
             var sru = visitStatusRu(v.status);
-            tb += '<tr><td>' + escAttr(ds) + '</td><td>' + escAttr(ts) + '</td><td>' + escAttr(v.customer_name || '') + '</td><td><span class="status-badge ' + sc + '">' + escAttr(sru) + '</span></td><td>' + escAttr(v.responsible_name || v.responsible_login || '') + '</td><td><button type="button" class="btn btn-secondary btn-small" data-visit-id="' + (v.id || '') + '">Открыть</button></td></tr>';
+            tb += '<tr><td>' + escAttr(dtCombined) + '</td><td>' + escAttr(v.customer_name || '') + '</td><td><span class="status-badge ' + sc + '">' + escAttr(sru) + '</span></td><td>' + escAttr(v.responsible_name || v.responsible_login || '') + '</td><td><button type="button" class="btn btn-secondary btn-small" data-visit-id="' + (v.id || '') + '">Открыть</button></td></tr>';
           });
           tb += '</tbody></table></div>';
           document.getElementById('vs_table').innerHTML = tb;
@@ -4114,24 +4635,27 @@
         (userList || []).forEach(function (u) { respOpts += '<option value="' + escAttr(u.login) + '">' + escAttr((u.fio || u.login) + '') + '</option>'; });
         var locked = visit.status === 'completed';
         var dateReadonly = locked ? ' readonly style="cursor:not-allowed;background:#f0f0f0"' : ' readonly style="cursor:pointer;background:#fff"';
-        var formHtml = '<div class="form-group"><label>Дата визита</label><input type="text" id="ve_date" value="' + escAttr(visit.visit_date || '') + '"' + dateReadonly + '></div><div class="form-group"><label>Время</label><input type="time" id="ve_time" value="' + (visit.visit_time ? (visit.visit_time + '').substring(0, 5) : '') + '"' + (locked ? ' readonly' : '') + '></div><div class="form-group"><label>Статус</label><select id="ve_status"' + (locked ? '' : '') + '><option value="planned"' + (visit.status === 'planned' ? ' selected' : '') + '>Запланирован</option><option value="completed"' + (visit.status === 'completed' ? ' selected' : '') + '>Завершён</option><option value="cancelled"' + (visit.status === 'cancelled' ? ' selected' : '') + '>Отменён</option><option value="postponed"' + (visit.status === 'postponed' ? ' selected' : '') + '>На рассмотрении</option></select></div><div class="form-group"><label>Ответственный</label><select id="ve_resp"' + (locked ? ' disabled' : '') + '>' + respOpts + '</select></div><div class="form-group"><label>Комментарий</label><textarea id="ve_comment" rows="3" maxlength="5000">' + escAttr(visit.comment || '') + '</textarea><p id="ve_comment_cnt" style="font-size:12px;color:#666">' + (visit.comment ? visit.comment.length : 0) + ' / 5000</p></div>';
+        var visitDT = (visit.visit_date || '').toString() + ((visit.visit_time && visit.visit_time !== '—') ? ' ' + (visit.visit_time + '').substring(0, 5) : '');
+        var formHtml = '<div class="form-group"><label>Дата и время визита</label><input type="text" id="ve_datetime" value="' + escAttr(visitDT.trim()) + '"' + dateReadonly + ' placeholder="дд.мм.гггг чч:мм"></div><div class="form-group"><label>Статус</label><select id="ve_status"' + (locked ? '' : '') + '><option value="planned"' + (visit.status === 'planned' ? ' selected' : '') + '>Запланирован</option><option value="completed"' + (visit.status === 'completed' ? ' selected' : '') + '>Завершён</option><option value="cancelled"' + (visit.status === 'cancelled' ? ' selected' : '') + '>Отменён</option><option value="postponed"' + (visit.status === 'postponed' ? ' selected' : '') + '>На рассмотрении</option></select></div><div class="form-group"><label>Ответственный</label><select id="ve_resp"' + (locked ? ' disabled' : '') + '>' + respOpts + '</select></div><div class="form-group"><label>Комментарий</label><textarea id="ve_comment" rows="3" maxlength="5000" style="width:100%">' + escAttr(visit.comment || '') + '</textarea><p id="ve_comment_cnt" style="font-size:12px;color:#666">' + (visit.comment ? visit.comment.length : 0) + ' / 5000</p></div>';
         showModal('Изменить визит', formHtml, function (errEl) {
-          var d = document.getElementById('ve_date') && document.getElementById('ve_date').value;
-          var t = document.getElementById('ve_time') && document.getElementById('ve_time').value;
+          var dtVal = (document.getElementById('ve_datetime') && document.getElementById('ve_datetime').value) || '';
           var s = document.getElementById('ve_status') && document.getElementById('ve_status').value;
           var r = document.getElementById('ve_resp');
           var rVal = r ? (r.disabled ? visit.responsible_login : r.value) : visit.responsible_login;
           var c = (document.getElementById('ve_comment') && document.getElementById('ve_comment').value.trim()) || null;
-          if (!d) { if (errEl) errEl.textContent = 'Укажите дату.'; return; }
+          if (!dtVal) { if (errEl) errEl.textContent = 'Укажите дату и время.'; return; }
           if (s === 'completed' && (!c || c.length < 10)) { if (errEl) errEl.textContent = 'При статусе «Завершён» укажите, что было сделано (минимум 10 символов).'; return; }
           if (s === 'completed' && c.length > 5000) { if (errEl) errEl.textContent = 'Комментарий не более 5000 символов.'; return; }
+          var parts = dtVal.split(/[T ]/);
+          var d = parts[0] || '';
+          var t = parts[1] ? parts[1].substring(0, 5) : null;
           var body = { status: s, comment: c };
-          if (!locked) { body.visit_date = d; body.responsible_login = rVal || null; if (t) body.visit_time = t + (t.length === 5 ? ':00' : ''); else body.visit_time = null; }
+          if (!locked) { body.visit_date = d; body.responsible_login = rVal || null; if (t) body.visit_time = t + ':00'; else body.visit_time = null; }
           return api('/api/v1/visits/' + visit.id, { method: 'PUT', body: JSON.stringify(body) }).then(refreshVisits);
         });
         setTimeout(function () {
-          var veDate = document.getElementById('ve_date');
-          if (veDate && window.flatpickr && !locked) window.flatpickr(veDate, { locale: 'ru', dateFormat: 'Y-m-d' });
+          var veDatetime = document.getElementById('ve_datetime');
+          if (veDatetime && window.flatpickr && !locked) window.flatpickr(veDatetime, { locale: 'ru', dateFormat: 'Y-m-d H:i', altInput: true, altFormat: 'd.m.Y H:i', enableTime: true, time_24hr: true, allowInput: false });
           var veResp = document.getElementById('ve_resp');
           if (veResp && visit.responsible_login) veResp.value = visit.responsible_login;
           var veComment = document.getElementById('ve_comment');
@@ -4142,14 +4666,14 @@
 
       function loadSectionVisitsCreate() {
         var content = document.getElementById('content');
-        content.innerHTML = '<div class="card"><h2>Создать визит</h2><div id="vc_err" class="err"></div><div class="form-group"><label>Клиент *</label><input type="hidden" id="vc_customer"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn btn-secondary btn-small" id="vc_customer_pick">Выбрать клиента</button><input type="text" id="vc_customer_display" readonly placeholder="Не выбран" style="flex:1;min-width:260px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px"></div></div><div class="form-group"><label>Дата и время визита *</label><input type="text" id="vc_datetime" readonly placeholder="дд.мм.гггг чч:мм" style="max-width:280px;cursor:pointer;background:#fff"></div><div class="form-group"><label>Агент (ответственный) *</label><div id="vc_agent_badge" style="font-size:13px;margin-bottom:4px;color:#065f46;"></div><select id="vc_responsible"><option value="">—</option></select></div><div class="form-group"><label>Статус *</label><select id="vc_status"><option value="planned" selected>Запланирован</option><option value="completed">Завершён</option><option value="cancelled">Отменён</option><option value="postponed">На рассмотрении</option></select></div><div class="form-group"><label>Комментарий</label><textarea id="vc_comment" rows="3" maxlength="5000" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px" placeholder="При статусе «Завершён» обязательно укажите, что было сделано (мин. 10 символов)"></textarea><p id="vc_comment_counter" style="font-size:12px;color:#666;margin:4px 0 0 0">0 / 5000</p><p id="vc_comment_hint" class="err" style="display:none;margin-top:4px">При статусе «Завершён» комментарий обязателен (минимум 10 символов). Укажите, что было сделано на визите.</p></div><p><button type="button" class="btn btn-primary" id="vc_save">Сохранить</button> <button type="button" class="btn btn-secondary" id="vc_cancel">Отмена</button></p></div>';
+        content.innerHTML = '<div class="card"><h2>Создать визит</h2><div id="vc_err" class="err"></div><div class="form-group"><label>Клиент *</label><input type="hidden" id="vc_customer"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn btn-secondary btn-small" id="vc_customer_pick">Выбрать клиента</button><input type="text" id="vc_customer_display" readonly placeholder="Не выбран" style="flex:1;min-width:260px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px"></div></div><div class="form-group"><label>Дата и время визита *</label><input type="text" id="vc_datetime" readonly placeholder="дд.мм.гггг чч:мм" style="max-width:280px;cursor:pointer;background:#fff"></div><div class="form-group"><label>Агент (ответственный) *</label><div id="vc_agent_badge" style="font-size:13px;margin-bottom:4px;color:#065f46;"></div><select id="vc_responsible"><option value="">—</option></select></div><div class="form-group"><label>Статус *</label><select id="vc_status"><option value="planned" selected>Запланирован</option><option value="completed">Завершён</option><option value="cancelled">Отменён</option><option value="postponed">На рассмотрении</option></select></div><div class="form-group"><label>Комментарий</label><textarea id="vc_comment" rows="3" maxlength="5000" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px" placeholder="При статусе «Завершён» обязательно укажите, что было сделано (мин. 10 символов)"></textarea><p id="vc_comment_counter" style="font-size:12px;color:#666;margin:4px 0 0 0">0 / 5000</p><p id="vc_comment_hint" class="err" style="display:none;margin-top:4px">При статусе «Завершён» комментарий обязателен (минимум 10 символов). Укажите, что было сделано на визите.</p></div><p style="text-align:center"><button type="button" class="btn btn-primary" id="vc_save">Сохранить</button> <button type="button" class="btn btn-secondary" id="vc_cancel">Отмена</button></p></div>';
         Promise.all([api('/api/v1/dictionary/user-logins').catch(function () { return []; })]).then(function (arr) {
           var userList = arr[0] || [];
           var respSel = document.getElementById('vc_responsible');
           var vcAgentBadge = document.getElementById('vc_agent_badge');
           var agents = (userList || []).filter(function (u) {
             var r = (u.role || '').toLowerCase();
-            return r === 'agent' || r === 'expeditor';
+            return r === 'agent';
           });
           if (respSel) {
             agents.forEach(function (u) {
@@ -4397,24 +4921,24 @@
               if (f && f !== n) return n + (n ? ' (' + f + ')' : f);
               return n || f || '—';
             }
-            function visitCompletedDisplay(r) {
-              return ((r.completed_visits | 0) > 0) ? 'Визит завершён' : '—';
-            }
             function renderRc(data) {
               var sorted = data.slice().sort(function (a, b) {
                 return tableSortCompare(a, b, rcSortCol, rcSortDir, function (r, c) {
                   if (c === 'orders_count') return (r[c] != null ? String(Number(r[c])).padStart(10, '0') : '');
                   if (c === 'orders_amount') return (r.orders_amount != null ? String(Number(r.orders_amount)).padStart(20, '0') : '');
+                  if (c === 'total_visits' || c === 'completed_visits') return (r[c] != null ? String(Number(r[c])).padStart(10, '0') : '');
                   return (r[c] || '').toString().toLowerCase();
                 });
               });
               var arrow = rcSortDir > 0 ? ' ▲' : ' ▼';
               var th = function (col, lbl) { return '<th class="sortable" data-col="' + col + '" style="cursor:pointer">' + lbl + (rcSortCol === col ? arrow : '') + '</th>'; };
-              var tb = '<div style="overflow-x:auto"><table><thead><tr><th>#</th>' + th('name_client', 'Клиент') + th('agent_fio', 'ФИО Агента') + th('expeditor_fio', 'ФИО Экспедитора') + th('completed_visits', 'Визит завершён') + th('orders_count', 'Кол-во заказов') + th('orders_amount', 'Сумма заказов') + '</tr></thead><tbody>';
+              var tb = '<div style="overflow-x:auto"><table><thead><tr><th>#</th>' + th('name_client', 'Клиент') + th('agent_fio', 'ФИО Агента') + th('expeditor_fio', 'ФИО Экспедитора') + th('total_visits', 'Кол-во визитов агентом') + th('completed_visits', 'Кол-во завершённых визитов агентом') + th('orders_count', 'Кол-во заказов') + th('orders_amount', 'Сумма заказов') + '</tr></thead><tbody>';
               sorted.forEach(function (r, i) {
                 var ordersCount = r.orders_count || 0;
                 var ordersAmount = (r.orders_amount != null) ? Number(r.orders_amount) : 0;
-                tb += '<tr><td>' + (i + 1) + '</td><td>' + escAttr(clientDisplay(r)) + '</td><td>' + escAttr(r.agent_fio || '') + '</td><td>' + escAttr(r.expeditor_fio || '') + '</td><td>' + visitCompletedDisplay(r) + '</td><td>' + ordersCount + '</td><td>' + (ordersAmount ? ordersAmount.toFixed(2) : '0.00') + '</td></tr>';
+                var totalVisits = r.total_visits != null ? r.total_visits : 0;
+                var completedVisits = r.completed_visits != null ? r.completed_visits : 0;
+                tb += '<tr><td>' + (i + 1) + '</td><td>' + escAttr(clientDisplay(r)) + '</td><td>' + escAttr(r.agent_fio || '') + '</td><td>' + escAttr(r.expeditor_fio || '') + '</td><td>' + totalVisits + '</td><td>' + completedVisits + '</td><td>' + ordersCount + '</td><td>' + (ordersAmount ? ordersAmount.toFixed(2) : '0.00') + '</td></tr>';
               });
               tb += '</tbody></table></div><p><strong>Итого клиентов: ' + total + '</strong></p>';
               document.getElementById('rc_table').innerHTML = tb;
@@ -4631,22 +5155,25 @@
         var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
         content.innerHTML = '<div class="card"><h2>Сводная аналитика</h2>' +
           '<div class="dashboard-filters" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:20px">' +
-          '<label>Дата с</label><input type="text" id="rd_date_from" placeholder="дд.мм.гггг" style="max-width:110px">' +
-          '<label>по</label><input type="text" id="rd_date_to" placeholder="дд.мм.гггг" style="max-width:110px">' +
+          '<label>Дата поставки заказа с</label><input type="text" id="rd_date_from" placeholder="дд.мм.гггг" style="max-width:110px" title="Дата поставки заказа с">' +
+          '<label>Дата поставки заказа по</label><input type="text" id="rd_date_to" placeholder="дд.мм.гггг" style="max-width:110px" title="Дата поставки заказа по">' +
           '<label>Статусы</label><select id="rd_status"><option value="">Открыто, Доставка, Доставлен</option><option value="open">Открыто</option><option value="delivery">Доставка</option><option value="completed">Доставлен</option></select>' +
           '<label>Категория</label><select id="rd_category"><option value="">Все</option></select>' +
-          '<label>Территория</label><input type="text" id="rd_territory" placeholder="Фильтр" style="max-width:100px">' +
+          '<label>Город</label><input type="text" id="rd_city" placeholder="Фильтр по городу" style="max-width:120px">' +
+          '<label>Территория</label><input type="text" id="rd_territory" placeholder="Фильтр по территории" style="max-width:120px">' +
           '<label>Кат. клиента</label><input type="text" id="rd_cat_client" placeholder="Фильтр" style="max-width:100px">' +
-          '<button type="button" class="btn btn-primary" id="rd_load">Фильтр</button>' +
+          '<button type="button" class="btn btn-primary" id="rd_load">Применить</button>' +
           '</div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;margin-bottom:20px">' +
           '<div id="rd_summary" class="dashboard-summary" style="padding:24px;background:linear-gradient(135deg,#0d9488 0%,#0f766e 100%);border-radius:12px;color:#fff;min-height:120px"><div style="font-size:14px;opacity:0.9">Загрузка...</div></div>' +
           '<div id="rd_chart_wrap" style="height:200px;min-width:200px"><canvas id="rd_chart"></canvas></div>' +
           '</div>' +
-          '<div id="rd_kpi" class="dashboard-kpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:20px"></div>' +
           '<div id="rd_table_wrap"><h3 style="margin:0 0 12px 0">По категориям продуктов</h3>' +
           '<p><button type="button" class="btn btn-secondary btn-small" id="rd_excel">Excel</button></p>' +
           '<div id="rd_table"></div></div>' +
+          '<div id="rd_territory_wrap" style="margin-top:24px"><h3 style="margin:0 0 12px 0">По территориям</h3>' +
+          '<p><button type="button" class="btn btn-secondary btn-small" id="rd_excel_territory">Выгрузить в Excel</button></p>' +
+          '<div id="rd_territory_table"></div></div>' +
           '<p style="margin-top:16px;color:#64748b"><strong>Топ агентов и клиентов</strong> — см. отчёты по агентам и по клиентам.</p></div>';
         var rdFrom = document.getElementById('rd_date_from');
         var rdTo = document.getElementById('rd_date_to');
@@ -4654,9 +5181,10 @@
           if (rdFrom) window.flatpickr(rdFrom, { locale: 'ru', dateFormat: 'Y-m-d', altInput: true, altFormat: 'd.m.Y', defaultDate: todayStr, allowInput: true });
           if (rdTo) window.flatpickr(rdTo, { locale: 'ru', dateFormat: 'Y-m-d', altInput: true, altFormat: 'd.m.Y', defaultDate: todayStr, allowInput: true });
         }
+        var CATEGORY_LABELS = { 'Tvorog': 'Творог', 'Yogurt': 'Йогурт', 'Tara': 'Тара', 'Milk': 'Молоко', 'Kefir': 'Кефир', 'Smetana': 'Сметана', 'Maslo': 'Масло' };
         api('/api/v1/dictionary/products/types').catch(function () { return []; }).then(function (types) {
           var sel = document.getElementById('rd_category');
-          if (sel && types && types.length) types.forEach(function (t) { var o = document.createElement('option'); o.value = t.name; o.textContent = t.name; sel.appendChild(o); });
+          if (sel && types && types.length) types.forEach(function (t) { var o = document.createElement('option'); o.value = t.name; o.textContent = CATEGORY_LABELS[t.name] || t.name || t.description || ''; sel.appendChild(o); });
         });
         var rdChart = null;
         function render(res) {
@@ -4695,13 +5223,14 @@
               rdChart = new Chart(ctx, chartOpts);
             }
           } catch (chartErr) { if (console && console.warn) console.warn('Chart:', chartErr); }
-          var kpi = (res && res.kpi) ? res.kpi : {};
-          var kpiHtml = '';
-          kpiHtml += '<div style="padding:16px;background:#fee2e2;border-radius:8px;border-left:4px solid #dc2626"><div style="font-size:11px;color:#7f1d1d">Визиты</div><div style="font-size:22px;font-weight:700;color:#991b1b">' + (kpi.visits_total || 0) + '</div><div style="font-size:12px">Завершено: ' + (kpi.visits_completed || 0) + ' (' + (kpi.visits_success_rate || 0) + '%)</div></div>';
-          kpiHtml += '<div style="padding:16px;background:#d1fae5;border-radius:8px;border-left:4px solid #059669"><div style="font-size:11px;color:#065f46">Успешные визиты</div><div style="font-size:22px;font-weight:700;color:#047857">' + (kpi.visits_success_rate || 0) + '%</div><div style="font-size:12px">Визиты: ' + (kpi.visits_total || 0) + ', Заказ: ' + (kpi.visits_completed || 0) + '</div></div>';
-          kpiHtml += '<div style="padding:16px;background:#dbeafe;border-radius:8px;border-left:4px solid #2563eb"><div style="font-size:11px;color:#1e3a8a">Активные клиенты</div><div style="font-size:22px;font-weight:700;color:#1d4ed8">' + (kpi.active_customers_pct || 0) + '%</div><div style="font-size:12px">Всего: ' + (kpi.total_customers || 0) + ', Неактивны: ' + (kpi.inactive_count || 0) + '</div><div style="font-size:10px;color:#64748b;margin-top:4px">По визитам за 30 дней</div></div>';
-          kpiHtml += '<div style="padding:16px;background:#fef3c7;border-radius:8px;border-left:4px solid #d97706"><div style="font-size:11px;color:#92400e">Фото отчёты</div><div style="font-size:22px;font-weight:700;color:#b45309">' + (kpi.photo_reports_rate || 0) + '%</div><div style="font-size:12px">Визиты: ' + (kpi.visits_total || 0) + ', Фото: ' + (kpi.photo_reports_count || 0) + '</div></div>';
-          document.getElementById('rd_kpi').innerHTML = kpiHtml;
+          var byTerr = (res && res.by_territory) ? res.by_territory : [];
+          var terrTb = '<div style="overflow-x:auto"><table><thead><tr><th>Город</th><th>Территория</th><th>Количество клиентов</th><th>Количество заказов</th><th>Сумма</th></tr></thead><tbody>';
+          byTerr.forEach(function (r) {
+            terrTb += '<tr><td>' + escAttr(r.city || '') + '</td><td>' + escAttr(r.territory || '') + '</td><td style="text-align:right">' + (r.customers_count || 0) + '</td><td style="text-align:right">' + (r.orders_count || 0) + '</td><td style="text-align:right">' + (r.orders_sum != null ? Number(r.orders_sum).toLocaleString('ru-RU', {minimumFractionDigits:2}) : '0') + '</td></tr>';
+          });
+          terrTb += '</tbody></table></div>';
+          var rtEl = document.getElementById('rd_territory_table');
+          if (rtEl) rtEl.innerHTML = byTerr.length ? terrTb : '<p>Нет данных по территориям.</p>';
           var tb = '<div style="overflow-x:auto"><table><thead><tr><th>Категория</th><th>Доля %</th><th>Сумма</th><th>Объём</th></tr></thead><tbody>';
           var totalSum = 0, totalQty = 0;
           byCat.forEach(function (r) { totalSum += Number(r.sum_amount || 0); totalQty += Number(r.quantity || 0); });
@@ -4717,9 +5246,10 @@
           var dt = dateToApiFormat((document.getElementById('rd_date_to') && document.getElementById('rd_date_to').value) || '');
           var status = document.getElementById('rd_status') && document.getElementById('rd_status').value;
           var cat = document.getElementById('rd_category') && document.getElementById('rd_category').value;
+          var city = document.getElementById('rd_city') && document.getElementById('rd_city').value;
           var terr = document.getElementById('rd_territory') && document.getElementById('rd_territory').value;
           var catClient = document.getElementById('rd_cat_client') && document.getElementById('rd_cat_client').value;
-          var params = []; if (df) params.push('date_from=' + encodeURIComponent(df)); if (dt) params.push('date_to=' + encodeURIComponent(dt)); if (status) params.push('status_codes=' + encodeURIComponent(status)); if (cat) params.push('product_category=' + encodeURIComponent(cat)); if (terr) params.push('territory=' + encodeURIComponent(terr)); if (catClient) params.push('category_client=' + encodeURIComponent(catClient));
+          var params = []; if (df) params.push('date_from=' + encodeURIComponent(df)); if (dt) params.push('date_to=' + encodeURIComponent(dt)); if (status) params.push('status_codes=' + encodeURIComponent(status)); if (cat) params.push('product_category=' + encodeURIComponent(cat)); if (city) params.push('city=' + encodeURIComponent(city)); if (terr) params.push('territory=' + encodeURIComponent(terr)); if (catClient) params.push('category_client=' + encodeURIComponent(catClient));
           var url = '/api/v1/reports/dashboard'; if (params.length) url += '?' + params.join('&');
           api(url).then(render).catch(function (e) { render({ error: (e && e.data && e.data.detail) ? String(e.data.detail) : 'Ошибка загрузки' }); });
         }
@@ -4730,9 +5260,23 @@
           var dt = dateToApiFormat((document.getElementById('rd_date_to') && document.getElementById('rd_date_to').value) || '');
           var status = document.getElementById('rd_status') && document.getElementById('rd_status').value;
           var cat = document.getElementById('rd_category') && document.getElementById('rd_category').value;
+          var city = document.getElementById('rd_city') && document.getElementById('rd_city').value;
           var terr = document.getElementById('rd_territory') && document.getElementById('rd_territory').value;
           var catClient = document.getElementById('rd_cat_client') && document.getElementById('rd_cat_client').value;
-          var params = []; if (df) params.push('date_from=' + encodeURIComponent(df)); if (dt) params.push('date_to=' + encodeURIComponent(dt)); if (status) params.push('status_codes=' + encodeURIComponent(status)); if (cat) params.push('product_category=' + encodeURIComponent(cat)); if (terr) params.push('territory=' + encodeURIComponent(terr)); if (catClient) params.push('category_client=' + encodeURIComponent(catClient));
+          var params = []; if (df) params.push('date_from=' + encodeURIComponent(df)); if (dt) params.push('date_to=' + encodeURIComponent(dt)); if (status) params.push('status_codes=' + encodeURIComponent(status)); if (cat) params.push('product_category=' + encodeURIComponent(cat)); if (city) params.push('city=' + encodeURIComponent(city)); if (terr) params.push('territory=' + encodeURIComponent(terr)); if (catClient) params.push('category_client=' + encodeURIComponent(catClient));
+          var url = '/api/v1/reports/dashboard/export'; if (params.length) url += '?' + params.join('&');
+          fetch(url, { method: 'GET', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) { if (!r.ok) throw new Error(); return r.blob(); }).then(function (blob) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dashboard_categories.xlsx'; a.click(); URL.revokeObjectURL(a.href); }).catch(function () { alert('Ошибка выгрузки'); });
+        };
+        var rdExcelTerr = document.getElementById('rd_excel_territory');
+        if (rdExcelTerr) rdExcelTerr.onclick = function () {
+          var df = dateToApiFormat((document.getElementById('rd_date_from') && document.getElementById('rd_date_from').value) || '');
+          var dt = dateToApiFormat((document.getElementById('rd_date_to') && document.getElementById('rd_date_to').value) || '');
+          var status = document.getElementById('rd_status') && document.getElementById('rd_status').value;
+          var cat = document.getElementById('rd_category') && document.getElementById('rd_category').value;
+          var city = document.getElementById('rd_city') && document.getElementById('rd_city').value;
+          var terr = document.getElementById('rd_territory') && document.getElementById('rd_territory').value;
+          var catClient = document.getElementById('rd_cat_client') && document.getElementById('rd_cat_client').value;
+          var params = []; if (df) params.push('date_from=' + encodeURIComponent(df)); if (dt) params.push('date_to=' + encodeURIComponent(dt)); if (status) params.push('status_codes=' + encodeURIComponent(status)); if (cat) params.push('product_category=' + encodeURIComponent(cat)); if (city) params.push('city=' + encodeURIComponent(city)); if (terr) params.push('territory=' + encodeURIComponent(terr)); if (catClient) params.push('category_client=' + encodeURIComponent(catClient));
           var url = '/api/v1/reports/dashboard/export'; if (params.length) url += '?' + params.join('&');
           fetch(url, { method: 'GET', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) { if (!r.ok) throw new Error(); return r.blob(); }).then(function (blob) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dashboard_categories.xlsx'; a.click(); URL.revokeObjectURL(a.href); }).catch(function () { alert('Ошибка выгрузки'); });
         };
@@ -4749,10 +5293,10 @@
             document.getElementById('rp_stats').innerHTML = '<p><strong>Всего фото:</strong> ' + (stats.total_photos || 0) + ', Клиентов с фото: ' + (stats.customers_with_photos || 0) + ', Без фото: ' + (stats.customers_without_photos || 0) + '</p>';
             var without = (res && res.customers_without_photos) ? res.customers_without_photos : [];
             var recent = (res && res.recent_uploads) ? res.recent_uploads : [];
-            var tb = '<div style="overflow-x:auto;margin-top:16px"><table><thead><tr><th>Клиент</th><th>Дата загрузки</th><th>Загружено</th></tr></thead><tbody>';
+            var tb = '<div style="overflow-x:auto;margin-top:16px"><table><thead><tr><th>Клиент</th><th>Адрес</th><th>Город</th><th>Территория</th><th>Телефон</th><th>Контактное лицо</th><th>ИНН</th><th>Дата загрузки</th><th>Загружено</th></tr></thead><tbody>';
             recent.forEach(function (p) {
               var dt = (p.uploaded_at || '').replace('T', ' ').substring(0, 19);
-              tb += '<tr><td>' + escAttr(p.customer_name || '') + '</td><td>' + escAttr(dt) + '</td><td>' + escAttr(p.uploaded_by || '') + '</td></tr>';
+              tb += '<tr><td>' + escAttr(p.customer_name || '') + '</td><td>' + escAttr(p.address || '') + '</td><td>' + escAttr(p.city || '') + '</td><td>' + escAttr(p.territory || '') + '</td><td>' + escAttr(p.phone || '') + '</td><td>' + escAttr(p.contact_person || '') + '</td><td>' + escAttr(p.tax_id || '') + '</td><td>' + escAttr(dt) + '</td><td>' + escAttr(p.uploaded_by || '') + '</td></tr>';
             });
             tb += '</tbody></table></div>';
             var html = '';

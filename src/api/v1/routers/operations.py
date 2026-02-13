@@ -166,8 +166,10 @@ async def list_operations(
         c_result = await session.execute(select(Customer.id, Customer.name_client, Customer.firm_name).where(Customer.id.in_(customer_ids)))
         for r in c_result.all():
             customer_names[r[0]] = (r[1] or r[2] or "")
+    STATUS_RU = {"pending": "В ожидании", "completed": "Выполнено", "cancelled": "Отменено", "canceled": "Отменено"}
     out = []
     for o in rows:
+        st = (o.status or "").strip().lower()
         out.append({
             "id": str(o.id),
             "operation_number": o.operation_number,
@@ -175,6 +177,7 @@ async def list_operations(
             "type_code": o.type_code,
             "type_name": types_name_map.get(o.type_code) if o.type_code else None,
             "status": o.status,
+            "status_name_ru": STATUS_RU.get(st, o.status or ""),
             "warehouse_from": o.warehouse_from,
             "warehouse_to": o.warehouse_to,
             "customer_id": o.customer_id,
@@ -343,6 +346,8 @@ async def get_operation(
         row = c.scalar_one_or_none()
         if row:
             customer_name = row[0] or row[1]
+    STATUS_RU = {"pending": "В ожидании", "completed": "Выполнено", "cancelled": "Отменено", "canceled": "Отменено"}
+    st = (op.status or "").strip().lower()
     return {
         "id": str(op.id),
         "operation_number": op.operation_number,
@@ -351,6 +356,7 @@ async def get_operation(
         "type_code": op.type_code,
         "type_name": type_name,
         "status": op.status,
+        "status_name_ru": STATUS_RU.get(st, op.status or ""),
         "warehouse_from": op.warehouse_from,
         "warehouse_to": op.warehouse_to,
         "product_code": op.product_code,

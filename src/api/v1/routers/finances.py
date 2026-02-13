@@ -301,6 +301,8 @@ async def export_orders_for_confirmation_excel(
     payment_type_code: str | None = Query(None),
     status_code: str | None = Query(None),
     payment_confirmed: str | None = Query(None),
+    scheduled_delivery_from: str | None = Query(None),
+    scheduled_delivery_to: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
@@ -318,6 +320,14 @@ async def export_orders_for_confirmation_excel(
         if status_code and status_code.strip():
             conditions.append("o.status_code = :status_code")
             params["status_code"] = status_code.strip()
+        df_del = _parse_date_to_iso(scheduled_delivery_from)
+        dt_del = _parse_date_to_iso(scheduled_delivery_to)
+        if df_del:
+            conditions.append("(o.scheduled_delivery_at::date >= :scheduled_delivery_from)")
+            params["scheduled_delivery_from"] = df_del
+        if dt_del:
+            conditions.append("(o.scheduled_delivery_at::date <= :scheduled_delivery_to)")
+            params["scheduled_delivery_to"] = dt_del
         pc_val = (payment_confirmed or "").strip().lower()
         if pc_val == "true":
             conditions.append("EXISTS (SELECT 1 FROM \"Sales\".operations op WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no)")
@@ -379,6 +389,8 @@ async def get_orders_for_cashier_confirmation(
     payment_type_code: str | None = Query(None, description="Фильтр по типу оплаты"),
     status_code: str | None = Query(None, description="Фильтр по статусу заказа"),
     payment_confirmed: str | None = Query(None, description="Фильтр: true=подтверждённые, false=не подтверждённые, пусто=все"),
+    scheduled_delivery_from: str | None = Query(None, description="Дата поставки с (YYYY-MM-DD)"),
+    scheduled_delivery_to: str | None = Query(None, description="Дата поставки по (YYYY-MM-DD)"),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
@@ -396,6 +408,14 @@ async def get_orders_for_cashier_confirmation(
         if status_code and status_code.strip():
             conditions.append("o.status_code = :status_code")
             params["status_code"] = status_code.strip()
+        df_del = _parse_date_to_iso(scheduled_delivery_from)
+        dt_del = _parse_date_to_iso(scheduled_delivery_to)
+        if df_del:
+            conditions.append("(o.scheduled_delivery_at::date >= :scheduled_delivery_from)")
+            params["scheduled_delivery_from"] = df_del
+        if dt_del:
+            conditions.append("(o.scheduled_delivery_at::date <= :scheduled_delivery_to)")
+            params["scheduled_delivery_to"] = dt_del
         pc_val = (payment_confirmed or "").strip().lower()
         if pc_val == "true":
             conditions.append("""

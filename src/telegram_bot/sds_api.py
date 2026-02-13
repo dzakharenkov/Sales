@@ -185,6 +185,30 @@ class SDSApi:
         """GET /api/v1/dictionary/payment-types"""
         return await self._request("GET", "/api/v1/dictionary/payment-types", token=token)
 
+    # ---------- Operations ----------
+
+    async def create_payment_receipt(
+        self,
+        token: str,
+        order_id: int,
+        customer_id: int,
+        amount: float,
+        payment_type_code: str,
+    ) -> dict:
+        """POST /api/v1/operations/payment_receipt_from_customer/create — операция приёма платежа от клиента (сдача наличных)."""
+        payload = {
+            "order_id": order_id,
+            "customer_id": customer_id,
+            "amount": amount,
+            "payment_type_code": payment_type_code or "cash",
+        }
+        return await self._request(
+            "POST",
+            "/api/v1/operations/payment_receipt_from_customer/create",
+            token=token,
+            json=payload,
+        )
+
 
 # Глобальный singleton
 api = SDSApi()

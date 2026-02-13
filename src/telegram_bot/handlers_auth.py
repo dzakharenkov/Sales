@@ -29,6 +29,8 @@ def main_menu_keyboard(role: str) -> InlineKeyboardMarkup:
     buttons = []
     if role_lower == "expeditor":
         buttons.append([InlineKeyboardButton("🗺 Мой маршрут", callback_data="exp_orders")])
+        buttons.append([InlineKeyboardButton("📦 Мои заказы на сегодня", callback_data="exp_orders_today")])
+        buttons.append([InlineKeyboardButton("✅ Выполненные сегодня", callback_data="exp_orders_done_today")])
         buttons.append([InlineKeyboardButton("💰 Получить оплату", callback_data="exp_payment")])
     elif role_lower == "agent":
         buttons.append([InlineKeyboardButton("📋 Мои визиты", callback_data="agent_visits")])
@@ -85,6 +87,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except SDSApiError as e:
             if e.status == 401:
                 await delete_session(tg_id)
+                await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+                return ConversationHandler.END
             else:
                 logger.warning("Token check failed: %s", e)
                 await delete_session(tg_id)

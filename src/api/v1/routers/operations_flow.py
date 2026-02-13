@@ -53,9 +53,30 @@ class DeliveryDT(BaseModel):
     quantity: int = Field(..., ge=QUANTITY_MIN, le=QUANTITY_MAX)
     customer_id: int
     order_id: int | None = None
-    amount: Decimal = Field(..., ge=AMOUNT_MIN, le=AMOUNT_MAX)
+    amount: Decimal | None = None  # если не передан — рассчитывается как price * quantity
     payment_type_code: str
     expeditor_login: str
+    created_by: str
+    comment: str | None = None
+
+
+class WriteOffDT(BaseModel):
+    warehouse_from: str
+    product_code: str
+    batch_code: str
+    quantity: int = Field(..., ge=QUANTITY_MIN, le=QUANTITY_MAX)
+    amount: Decimal | None = None
+    created_by: str
+    comment: str | None = None
+
+
+class TransferDT(BaseModel):
+    """Перемещение между складами (без экспедитора)."""
+    warehouse_from: str
+    warehouse_to: str
+    product_code: str
+    batch_code: str
+    quantity: int = Field(..., ge=QUANTITY_MIN, le=QUANTITY_MAX)
     created_by: str
     comment: str | None = None
 
@@ -357,7 +378,9 @@ async def post_delivery(
     """Доставка клиенту. ТЗ-ALG-003."""
     if not await validate_warehouse(session, dt.warehouse_from):
         raise error_400("INVALID_WAREHOUSE", "Склад не найден", {"warehouse_from": dt.warehouse_from})
-    if not await validate_product(session, dt.product_code):
+    prod_result = await session.execute(select(Product).where(Product.code == dt.product_code))
+    product = prod_result.scalar_one_or_none()
+    if not product:
         raise error_400("INVALID_PRODUCT", "Товар не найден", {"product_code": dt.product_code})
     if not await validate_customer(session, dt.customer_id):
         raise error_400("INVALID_CUSTOMER", "Клиент не найден", {"customer_id": dt.customer_id})
@@ -383,6 +406,11 @@ async def post_delivery(
         if not batch:
             raise error_400("INVALID_BATCH", "Партия не найдена", {"batch_code": dt.batch_code})
 
+        unit_price = float(product.price) if product.price is not None else 0
+        calc_amount = unit_price * dt.quantity
+        amount_to_use = float(dt.amount) if dt.amount is not None and float(dt.amount) > 0 else calc_amount
+        if amount_to_use < AMOUNT_MIN or amount_to_use > AMOUNT_MAX:
+            amount_to_use = calc_amount
         op_number = await generate_op_number(session)
         op = Operation(
             operation_number=op_number,
@@ -393,7 +421,7 @@ async def post_delivery(
             quantity=dt.quantity,
             customer_id=dt.customer_id,
             order_id=dt.order_id,
-            amount=float(dt.amount),
+            amount=amount_to_use,
             payment_type_code=dt.payment_type_code,
             expeditor_login=dt.expeditor_login,
             created_by=dt.created_by,
@@ -417,11 +445,164 @@ async def post_delivery(
             type_code="delivery",
             status="pending",
             customer_id=dt.customer_id,
-            amount=float(dt.amount),
+            amount=amount_to_use,
             quantity=dt.quantity,
             warehouse_stock_after={dt.warehouse_from: {dt.product_code: {dt.batch_code: stock_after}}},
             created_at=op.operation_date.isoformat() if op.operation_date else None,
             message="Товар отправлен клиенту. Ожидание оплаты.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise error_400("DATABASE_ERROR", str(e)[:200], {})
+
+
+# ─── POST /operations/write_off ──────────────────────────────────────────────
+
+@router.post("/operations/write_off", status_code=201)
+async def post_write_off(
+    dt: WriteOffDT,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Списание товара со склада."""
+    if not await validate_warehouse(session, dt.warehouse_from):
+        raise error_400("INVALID_WAREHOUSE", "Склад не найден", {"warehouse_from": dt.warehouse_from})
+    if not await validate_product(session, dt.product_code):
+        raise error_400("INVALID_PRODUCT", "Товар не найден", {"product_code": dt.product_code})
+
+    available = await get_stock_from_view(session, dt.warehouse_from, dt.product_code, dt.batch_code)
+    if available < dt.quantity:
+        raise error_400(
+            "INSUFFICIENT_STOCK",
+            "Недостаточно товара на складе",
+            {"warehouse": dt.warehouse_from, "product_code": dt.product_code, "batch_code": dt.batch_code, "requested": dt.quantity, "available": available},
+        )
+
+    r = await session.execute(
+        select(Batch).where(Batch.product_code == dt.product_code, Batch.batch_code == dt.batch_code)
+    )
+    batch = r.scalar_one_or_none()
+    if not batch:
+        raise error_400("INVALID_BATCH", "Партия не найдена", {"batch_code": dt.batch_code})
+    batch_id = batch.id
+
+    amount_to_use = dt.amount
+    if amount_to_use is None or amount_to_use <= 0:
+        prod_result = await session.execute(select(Product).where(Product.code == dt.product_code))
+        product = prod_result.scalar_one_or_none()
+        price = float(product.price) if product and product.price is not None else 0
+        amount_to_use = Decimal(str(price)) * dt.quantity
+
+    if not await validate_user_role(session, dt.created_by, ["admin", "stockman"]):
+        raise error_400("INVALID_USER", "Пользователь не найден или роль не admin/stockman", {"created_by": dt.created_by})
+
+    try:
+        op_number = await generate_op_number(session)
+        op = Operation(
+            operation_number=op_number,
+            type_code="write_off",
+            warehouse_from=dt.warehouse_from,
+            product_code=dt.product_code,
+            batch_id=batch_id,
+            quantity=dt.quantity,
+            amount=float(amount_to_use),
+            created_by=dt.created_by,
+            status="completed",
+            comment=dt.comment,
+        )
+        session.add(op)
+        await session.commit()
+        await session.refresh(op)
+
+        stock_after = await get_stock_from_view(session, dt.warehouse_from, dt.product_code, dt.batch_code)
+        return success_201(
+            operation_id=str(op.id),
+            operation_number=op_number,
+            type_code="write_off",
+            status="completed",
+            quantity=dt.quantity,
+            amount=float(amount_to_use),
+            warehouse_stock_after={dt.warehouse_from: {dt.product_code: {dt.batch_code: stock_after}}},
+            created_at=op.operation_date.isoformat() if op.operation_date else None,
+            message="Товар успешно списан",
+        )
+    except Exception as e:
+        await session.rollback()
+        raise error_400("DATABASE_ERROR", str(e)[:200], {})
+
+
+# ─── POST /operations/transfer (перемещение между складами) ────────────────
+
+@router.post("/operations/transfer", status_code=201)
+async def post_transfer(
+    dt: TransferDT,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Перемещение товара между складами (без экспедитора)."""
+    if not await validate_warehouse(session, dt.warehouse_from):
+        raise error_400("INVALID_WAREHOUSE", "Склад от не найден", {"warehouse_from": dt.warehouse_from})
+    if not await validate_warehouse(session, dt.warehouse_to):
+        raise error_400("INVALID_WAREHOUSE", "Склад в не найден", {"warehouse_to": dt.warehouse_to})
+    if dt.warehouse_from == dt.warehouse_to:
+        raise error_400("SAME_WAREHOUSE", "Склад от и склад в не должны совпадать", {})
+    if not await validate_product(session, dt.product_code):
+        raise error_400("INVALID_PRODUCT", "Товар не найден", {"product_code": dt.product_code})
+
+    available = await get_stock_from_view(session, dt.warehouse_from, dt.product_code, dt.batch_code)
+    if available < dt.quantity:
+        raise error_400(
+            "INSUFFICIENT_STOCK",
+            "Недостаточно товара на складе",
+            {"warehouse": dt.warehouse_from, "product_code": dt.product_code, "batch_code": dt.batch_code, "requested": dt.quantity, "available": available},
+        )
+
+    if not await validate_user_role(session, dt.created_by, ["admin", "stockman"]):
+        raise error_400("INVALID_USER", "Пользователь не найден или роль не admin/stockman", {"created_by": dt.created_by})
+
+    try:
+        r = await session.execute(
+            select(Batch).where(Batch.product_code == dt.product_code, Batch.batch_code == dt.batch_code)
+        )
+        batch = r.scalar_one_or_none()
+        if not batch:
+            raise error_400("INVALID_BATCH", "Партия не найдена", {"batch_code": dt.batch_code})
+        batch_id = batch.id
+
+        op_number = await generate_op_number(session)
+        op = Operation(
+            operation_number=op_number,
+            type_code="transfer",
+            warehouse_from=dt.warehouse_from,
+            warehouse_to=dt.warehouse_to,
+            product_code=dt.product_code,
+            batch_id=batch_id,
+            quantity=dt.quantity,
+            created_by=dt.created_by,
+            status="completed",
+            comment=dt.comment,
+        )
+        session.add(op)
+        await session.commit()
+        await session.refresh(op)
+
+        from_after = await get_stock_from_view(session, dt.warehouse_from, dt.product_code, dt.batch_code)
+        to_after = await get_stock_from_view(session, dt.warehouse_to, dt.product_code, dt.batch_code)
+        return success_201(
+            operation_id=str(op.id),
+            operation_number=op_number,
+            type_code="transfer",
+            warehouse_from=dt.warehouse_from,
+            warehouse_to=dt.warehouse_to,
+            quantity=dt.quantity,
+            warehouse_stock_after={
+                dt.warehouse_from: {dt.product_code: {dt.batch_code: from_after}},
+                dt.warehouse_to: {dt.product_code: {dt.batch_code: to_after}},
+            },
+            created_at=op.operation_date.isoformat() if op.operation_date else None,
+            message="Товар успешно перемещён",
         )
     except HTTPException:
         raise
