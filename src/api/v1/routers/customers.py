@@ -115,7 +115,9 @@ async def list_customers(
     user: User = Depends(get_current_user),
 ):
     """Список клиентов с поиском по ключевым полям. Без параметров не возвращает записи (нужен хотя бы один фильтр или пустой поиск — тогда первые limit по id)."""
-    sql = 'SELECT id, name_client, firm_name, category_client, address, city, territory, landmark, phone, contact_person, tax_id, status, login_agent, login_expeditor, latitude, longitude, pinfl, contract_no, account_no, bank, mfo, oked, vat_code FROM "Sales".customers'
+    sql = '''SELECT c.id, c.name_client, c.firm_name, c.category_client, c.address, c.city, c.territory, c.landmark, c.phone, c.contact_person, c.tax_id, c.status, c.login_agent, c.login_expeditor, c.latitude, c.longitude, c.pinfl, c.contract_no, c.account_no, c.bank, c.mfo, c.oked, c.vat_code,
+             EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) AS has_photo
+             FROM "Sales".customers c'''
     conditions = []
     params = {}
     # Расширенный поиск: одно поле search — по name_client, tax_id (ИНН), account_no (р/с)
@@ -145,7 +147,7 @@ async def list_customers(
         params["tax_id"] = "%" + tax_id.strip() + "%"
     if conditions:
         sql += " WHERE " + " AND ".join(conditions)
-    sql += " ORDER BY id LIMIT :lim"
+    sql += " ORDER BY c.id LIMIT :lim"
     params["lim"] = limit
     result = await session.execute(text(sql), params)
     rows = result.fetchall()
@@ -175,6 +177,7 @@ async def list_customers(
             "MFO": r[20],
             "OKED": r[21],
             "VAT_code": r[22],
+            "has_photo": bool(r[23]) if len(r) > 23 else False,
         })
     return out
 
@@ -499,14 +502,19 @@ async def update_customer(
     customer_id: int,
     body: CustomerUpdate,
     session: AsyncSession = Depends(get_db_session),
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
 ):
-    """Изменить клиента. Только admin."""
+    """Изменить клиента. Admin — все поля; агент/экспедитор — только login_agent и login_expeditor (при сохранении заказа)."""
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     c = result.scalar_one_or_none()
     if not c:
         raise HTTPException(status_code=404, detail="Клиент не найден")
-    for key, value in body.model_dump(exclude_unset=True).items():
+    dump = body.model_dump(exclude_unset=True)
+    if (user.role or "").lower() != "admin":
+        # Агент/экспедитор может менять только привязку агента и экспедитора у клиента
+        allowed = {"login_agent", "login_expeditor"}
+        dump = {k: v for k, v in dump.items() if k in allowed}
+    for key, value in dump.items():
         setattr(c, key, value)
     await session.commit()
     await session.refresh(c)

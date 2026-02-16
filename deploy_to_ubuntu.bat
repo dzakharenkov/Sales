@@ -1,38 +1,37 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
 
-REM ========== НАСТРОЙКИ ==========
+REM ========== SETTINGS ==========
 set SERVER=dima@45.141.76.83
 set HOST=45.141.76.83
 set REMOTE_PATH=/var/www/sales.zakharenkov.ru/html
 REM ================================
 
 echo ========================================
-echo   Копирование на сервер Ubuntu
+echo   Deploy to Ubuntu server
 echo ========================================
-echo   Сервер: %SERVER%
-echo   Папка:  %REMOTE_PATH%
+echo   Server: %SERVER%
+echo   Path:   %REMOTE_PATH%
 echo.
 
-REM Добавить хост в known_hosts (убрать запрос yes/no)
+REM Ensure .ssh exists for known_hosts
 if not exist "%USERPROFILE%\.ssh" mkdir "%USERPROFILE%\.ssh"
-echo Добавление хоста в trusted...
+echo Adding host to trusted...
 ssh-keyscan -H %HOST% >> "%USERPROFILE%\.ssh\known_hosts" 2>nul
 echo.
 
-echo   Пароль будет запрошен при подключении
+echo   Password will be prompted on connect
 echo ========================================
 echo.
 
-scp -r src migrations requirements.txt .env.example sales_sql.sql %SERVER%:%REMOTE_PATH%/
+scp -r src migrations requirements.txt .env sales_sql.sql %SERVER%:%REMOTE_PATH%/
 if errorlevel 1 (
-    echo [ОШИБКА] Не удалось скопировать
+    echo [ERROR] Copy failed
     pause
     exit /b 1
 )
 
 echo.
-echo   ✓ Файлы скопированы
+echo   Done. Files copied.
 echo.
 pause

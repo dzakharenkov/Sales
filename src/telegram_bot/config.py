@@ -7,10 +7,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Telegram Bot Token (получить у @BotFather)
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 
 # SDS API base URL (бот ходит в API)
-SDS_API_URL = os.getenv("SDS_API_URL", "http://127.0.0.1:8000")
+SDS_API_URL = os.getenv("SDS_API_URL", "http://127.0.0.1:8000").strip()
 
 # Таймаут запросов к API (сек)
 API_TIMEOUT = int(os.getenv("API_TIMEOUT", "10"))
@@ -19,7 +19,7 @@ API_TIMEOUT = int(os.getenv("API_TIMEOUT", "10"))
 CACHE_TTL = int(os.getenv("CACHE_TTL", "3600"))  # 1 час
 
 # Часовой пояс
-TIMEZONE = os.getenv("TIMEZONE", "Asia/Tashkent")
+TIMEZONE = os.getenv("TIMEZONE", "Asia/Tashkent").strip()
 
 # Блокировка после N неудачных попыток
 MAX_LOGIN_ATTEMPTS = 5

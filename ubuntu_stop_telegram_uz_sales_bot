@@ -1,0 +1,20 @@
+#!/bin/bash
+# Остановка Telegram-бота SDS на Ubuntu.
+# Использование: ./ubuntu_stop_telegram_uz_sales_bot
+
+cd "$(dirname "$0")"
+PIDFILE="telegram_bot.pid"
+
+if [ ! -f "$PIDFILE" ]; then
+  echo "No PID file. Bot may not be running."
+  exit 0
+fi
+
+PID=$(cat "$PIDFILE")
+if kill -0 "$PID" 2>/dev/null; then
+  kill "$PID"
+  echo "Telegram bot stopped (PID $PID)."
+else
+  echo "Process $PID not running."
+fi
+rm -f "$PIDFILE"

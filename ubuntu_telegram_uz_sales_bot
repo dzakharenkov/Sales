@@ -1,0 +1,30 @@
+#!/bin/bash
+# Запуск Telegram-бота SDS на Ubuntu.
+# Использование: ./ubuntu_telegram_uz_sales_bot
+# Запускает бота в фоне, PID сохраняется в telegram_bot.pid
+
+cd "$(dirname "$0")"
+PIDFILE="telegram_bot.pid"
+
+if [ -f "$PIDFILE" ]; then
+  OLD_PID=$(cat "$PIDFILE")
+  if kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "Bot already running (PID $OLD_PID). Stop it first: ./ubuntu_stop_telegram_uz_sales_bot"
+    exit 1
+  fi
+  rm -f "$PIDFILE"
+fi
+
+# Опционально: активация venv, если есть
+if [ -d "venv" ]; then
+  source venv/bin/activate
+elif [ -d ".venv" ]; then
+  source .venv/bin/activate
+fi
+
+# Загрузка .env из текущей директории
+export $(grep -v '^#' .env 2>/dev/null | xargs) 2>/dev/null || true
+
+nohup python3 -m src.telegram_bot.bot >> telegram_bot.log 2>&1 &
+echo $! > "$PIDFILE"
+echo "Telegram bot started (PID $(cat "$PIDFILE")). Log: telegram_bot.log"

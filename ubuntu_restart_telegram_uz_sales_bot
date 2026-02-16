@@ -1,0 +1,17 @@
+#!/bin/bash
+# Перезапуск Telegram-бота SDS на Ubuntu после деплоя.
+# Использование: ./ubuntu_restart_telegram_uz_sales_bot
+
+cd "$(dirname "$0")"
+
+echo "Stopping Telegram bot..."
+./ubuntu_stop_telegram_uz_sales_bot
+
+echo "Waiting 2 seconds..."
+sleep 2
+
+echo "Starting Telegram bot..."
+./ubuntu_telegram_uz_sales_bot
+
+echo "Done! Bot restarted."
+echo "Check logs: tail -f telegram_bot.log"

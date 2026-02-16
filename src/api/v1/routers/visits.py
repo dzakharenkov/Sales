@@ -22,6 +22,7 @@ STATUS_RU = {"planned": "Запланирован", "completed": "Завершё
 
 
 class VisitCreate(BaseModel):
+    customer_id: int
     visit_date: str  # YYYY-MM-DD
     visit_time: str | None = None
     status: str = "planned"
@@ -35,6 +36,46 @@ class VisitUpdate(BaseModel):
     status: str | None = None
     responsible_login: str | None = None
     comment: str | None = None
+
+
+@router.post("/visits")
+async def create_visit(
+    body: VisitCreate,
+    session: AsyncSession = Depends(get_db_session),
+    user: UserModel = Depends(get_current_user),
+):
+    """Создать новый визит."""
+    # Проверить что клиент существует
+    r = await session.execute(select(Customer).where(Customer.id == body.customer_id))
+    customer = r.scalar_one_or_none()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+
+    # Создать визит
+    visit = CustomerVisit(
+        customer_id=body.customer_id,
+        visit_date=date.fromisoformat(body.visit_date[:10]),
+        visit_time=None,
+        status=body.status or "planned",
+        responsible_login=body.responsible_login or user.login,
+        comment=body.comment,
+        created_by=user.login,
+        updated_by=user.login,
+    )
+
+    # Обработать время визита
+    if body.visit_time and body.visit_time.strip():
+        parts = body.visit_time.strip()[:5].split(":")
+        if len(parts) == 2:
+            try:
+                visit.visit_time = time(int(parts[0]), int(parts[1]))
+            except (ValueError, TypeError):
+                pass
+
+    session.add(visit)
+    await session.commit()
+    await session.refresh(visit)
+    return {"id": visit.id, "message": "created"}
 
 
 @router.get("/visits/search")

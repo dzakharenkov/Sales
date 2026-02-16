@@ -32,7 +32,9 @@ def main_menu_keyboard(role: str) -> InlineKeyboardMarkup:
         buttons.append([InlineKeyboardButton("📦 Мои заказы на сегодня", callback_data="exp_orders_today")])
         buttons.append([InlineKeyboardButton("✅ Выполненные сегодня", callback_data="exp_orders_done_today")])
         buttons.append([InlineKeyboardButton("💰 Получить оплату", callback_data="exp_payment")])
+        buttons.append([InlineKeyboardButton("💵 Полученная оплата", callback_data="exp_received_payments")])
     elif role_lower == "agent":
+        buttons.append([InlineKeyboardButton("🆕 Создать визит", callback_data="agent_create_visit")])
         buttons.append([InlineKeyboardButton("📋 Мои визиты", callback_data="agent_visits")])
         buttons.append([InlineKeyboardButton("➕ Добавить клиента", callback_data="agent_add_customer")])
         buttons.append([InlineKeyboardButton("📸 Загрузить фото клиента", callback_data="agent_photo")])
@@ -41,6 +43,8 @@ def main_menu_keyboard(role: str) -> InlineKeyboardMarkup:
         # admin и др. — все кнопки
         buttons.append([InlineKeyboardButton("🗺 Мой маршрут", callback_data="exp_orders")])
         buttons.append([InlineKeyboardButton("💰 Получить оплату", callback_data="exp_payment")])
+        buttons.append([InlineKeyboardButton("💵 Полученная оплата", callback_data="exp_received_payments")])
+        buttons.append([InlineKeyboardButton("🆕 Создать визит", callback_data="agent_create_visit")])
         buttons.append([InlineKeyboardButton("📋 Мои визиты", callback_data="agent_visits")])
         buttons.append([InlineKeyboardButton("➕ Добавить клиента", callback_data="agent_add_customer")])
         buttons.append([InlineKeyboardButton("📸 Загрузить фото клиента", callback_data="agent_photo")])

@@ -105,9 +105,10 @@ async def health():
 
 
 # Подключение роутеров API v1
-from src.api.v1.routers import auth, dictionary, customers, users, orders, operations, operations_flow, stock, warehouse, finances, customer_photos, visits, reports
+from src.api.v1.routers import auth, dictionary, customers, users, orders, operations, operations_flow, stock, warehouse, finances, customer_photos, visits, reports, menu
 
 app.include_router(auth.router, prefix="/api/v1", tags=["auth"])
+app.include_router(menu.router, prefix="/api/v1", tags=["menu"])
 app.include_router(dictionary.router, prefix="/api/v1/dictionary", tags=["dictionary"])
 app.include_router(customers.router, prefix="/api/v1", tags=["customers"])
 app.include_router(users.router, prefix="/api/v1", tags=["users"])

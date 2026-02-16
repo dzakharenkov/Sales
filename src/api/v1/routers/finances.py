@@ -6,7 +6,7 @@ GET /finances/cash-received — принятые деньги за период 
 GET /finances/orders-for-confirmation — заказы для подтверждения оплаты кассиром.
 """
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -41,6 +41,18 @@ def _parse_date_to_iso(s: str | None) -> str | None:
                 except (ValueError, TypeError):
                     pass
     return None
+
+
+def _parse_date_to_date(s: str | None) -> date | None:
+    """Приводит строку даты к объекту date для использования с asyncpg."""
+    iso_str = _parse_date_to_iso(s)
+    if not iso_str:
+        return None
+    try:
+        parts = iso_str.split("-")
+        return date(int(parts[0]), int(parts[1]), int(parts[2]))
+    except (ValueError, IndexError):
+        return None
 
 
 class AcceptHandoverBody(BaseModel):
@@ -320,8 +332,8 @@ async def export_orders_for_confirmation_excel(
         if status_code and status_code.strip():
             conditions.append("o.status_code = :status_code")
             params["status_code"] = status_code.strip()
-        df_del = _parse_date_to_iso(scheduled_delivery_from)
-        dt_del = _parse_date_to_iso(scheduled_delivery_to)
+        df_del = _parse_date_to_date(scheduled_delivery_from)
+        dt_del = _parse_date_to_date(scheduled_delivery_to)
         if df_del:
             conditions.append("(o.scheduled_delivery_at::date >= :scheduled_delivery_from)")
             params["scheduled_delivery_from"] = df_del
@@ -338,6 +350,7 @@ async def export_orders_for_confirmation_excel(
         SELECT o.order_no, COALESCE(c.name_client, c.firm_name, '') AS customer_name,
                c.tax_id, c.account_no, ua.fio AS agent_fio, ue.fio AS expeditor_fio,
                o.total_amount, pt.name AS payment_type_name, s.name AS status_name,
+               o.scheduled_delivery_at,
                EXISTS (SELECT 1 FROM "Sales".operations op WHERE op.type_code = 'cash_receipt'
                  AND op.status = 'completed' AND op.order_id = o.order_no) AS payment_confirmed
         FROM "Sales".orders o
@@ -356,7 +369,7 @@ async def export_orders_for_confirmation_excel(
     wb = Workbook()
     ws = wb.active
     ws.title = "Заказы для подтверждения"
-    headers = ["№ заказа", "Клиент", "ИНН", "Р/С", "Агент", "Экспедитор", "Сумма", "Тип оплаты", "Статус", "Оплата подтверждена"]
+    headers = ["№ заказа", "Клиент", "ИНН", "Р/С", "Агент", "Экспедитор", "Сумма", "Тип оплаты", "Статус", "Дата поставки заказа", "Оплата подтверждена"]
     for col, h in enumerate(headers, start=1):
         ws.cell(row=1, column=col, value=h)
     for row_idx, row in enumerate(rows[:50000], start=2):
@@ -370,7 +383,8 @@ async def export_orders_for_confirmation_excel(
             float(row[6]) if len(row) > 6 and row[6] is not None else "",
             row[7] if len(row) > 7 else "",
             row[8] if len(row) > 8 else "",
-            "Да" if len(row) > 9 and row[9] else "Нет",
+            row[9].isoformat() if len(row) > 9 and row[9] is not None else "",
+            "Да" if len(row) > 10 and row[10] else "Нет",
         ]
         for col_idx, v in enumerate(vals, start=1):
             ws.cell(row=row_idx, column=col_idx, value=v)
@@ -408,8 +422,8 @@ async def get_orders_for_cashier_confirmation(
         if status_code and status_code.strip():
             conditions.append("o.status_code = :status_code")
             params["status_code"] = status_code.strip()
-        df_del = _parse_date_to_iso(scheduled_delivery_from)
-        dt_del = _parse_date_to_iso(scheduled_delivery_to)
+        df_del = _parse_date_to_date(scheduled_delivery_from)
+        dt_del = _parse_date_to_date(scheduled_delivery_to)
         if df_del:
             conditions.append("(o.scheduled_delivery_at::date >= :scheduled_delivery_from)")
             params["scheduled_delivery_from"] = df_del
@@ -430,6 +444,7 @@ async def get_orders_for_cashier_confirmation(
         where_clause = " AND ".join(conditions)
         q = f"""
         SELECT o.order_no, o.customer_id, o.total_amount, o.payment_type_code, o.status_code,
+               o.scheduled_delivery_at,
                COALESCE(c.name_client, c.firm_name, '') AS customer_name,
                c.tax_id, c.account_no, c.login_agent, c.login_expeditor,
                pt.name AS payment_type_name,
@@ -466,6 +481,7 @@ async def get_orders_for_cashier_confirmation(
                 "agent_name": (d.get("agent_fio") or d.get("login_agent") or "").strip() or None,
                 "login_expeditor": d.get("login_expeditor"),
                 "expeditor_name": (d.get("expeditor_fio") or d.get("login_expeditor") or "").strip() or None,
+                "scheduled_delivery_at": d.get("scheduled_delivery_at").isoformat() if d.get("scheduled_delivery_at") else None,
                 "total_amount": float(d["total_amount"]) if d.get("total_amount") is not None else None,
                 "payment_type_code": d.get("payment_type_code"),
                 "payment_type_name": (d.get("payment_type_name") or d.get("payment_type_code") or "").strip() or None,

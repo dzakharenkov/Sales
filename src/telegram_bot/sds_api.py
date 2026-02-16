@@ -127,6 +127,10 @@ class SDSApi:
         """PUT /api/v1/visits/{visit_id}"""
         return await self._request("PUT", f"/api/v1/visits/{visit_id}", token=token, json=data)
 
+    async def create_visit(self, token: str, data: dict) -> dict:
+        """POST /api/v1/visits"""
+        return await self._request("POST", "/api/v1/visits", token=token, json=data)
+
     # ---------- Customers ----------
 
     async def search_customers(self, token: str, **params) -> list:
@@ -187,6 +191,10 @@ class SDSApi:
 
     # ---------- Operations ----------
 
+    async def get_operations(self, token: str, **params) -> list:
+        """GET /api/v1/operations"""
+        return await self._request("GET", "/api/v1/operations", token=token, params=params)
+
     async def create_payment_receipt(
         self,
         token: str,
@@ -194,6 +202,7 @@ class SDSApi:
         customer_id: int,
         amount: float,
         payment_type_code: str,
+        expeditor_login: str | None = None,
     ) -> dict:
         """POST /api/v1/operations/payment_receipt_from_customer/create — операция приёма платежа от клиента (сдача наличных)."""
         payload = {
@@ -202,6 +211,8 @@ class SDSApi:
             "amount": amount,
             "payment_type_code": payment_type_code or "cash",
         }
+        if expeditor_login:
+            payload["expeditor_login"] = expeditor_login
         return await self._request(
             "POST",
             "/api/v1/operations/payment_receipt_from_customer/create",

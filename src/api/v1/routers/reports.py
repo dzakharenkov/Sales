@@ -502,9 +502,6 @@ async def report_dashboard(
     date_to: str | None = Query(None),
     status_codes: str | None = Query(None),
     product_category: str | None = Query(None),
-    territory: str | None = Query(None),
-    city: str | None = Query(None),
-    category_client: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
@@ -547,15 +544,6 @@ async def report_dashboard(
         if product_category and product_category.strip():
             extra_joins += ' JOIN "Sales".items it0 ON it0.order_id = o.order_no JOIN "Sales".product pr0 ON pr0.code = it0.product_code AND pr0.type_id = :product_category'
             params["product_category"] = product_category.strip()
-        if territory and territory.strip():
-            extra_where.append("c.territory = :territory")
-            params["territory"] = territory.strip()
-        if city and city.strip():
-            extra_where.append("c.city = :city")
-            params["city"] = city.strip()
-        if category_client and category_client.strip():
-            extra_where.append("c.category_client = :category_client")
-            params["category_client"] = category_client.strip()
         cust_join = 'LEFT JOIN "Sales".customers c ON o.customer_id = c.id'
         extra_where_sql = " AND " + " AND ".join(extra_where) if extra_where else ""
 
@@ -664,12 +652,6 @@ async def report_dashboard(
         WHERE 1=1
         """
         terr_params = dict(params)
-        if territory and territory.strip():
-            q_terr += " AND c.territory = :territory"
-        if city and city.strip():
-            q_terr += " AND c.city = :city"
-        if category_client and category_client.strip():
-            q_terr += " AND c.category_client = :category_client"
         q_terr += " GROUP BY c.city, c.territory ORDER BY c.city, c.territory"
         try:
             r_terr = await session.execute(text(q_terr), terr_params)
@@ -697,14 +679,11 @@ async def report_dashboard_export(
     date_to: str | None = Query(None),
     status_codes: str | None = Query(None),
     product_category: str | None = Query(None),
-    territory: str | None = Query(None),
-    city: str | None = Query(None),
-    category_client: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
     """Экспорт сводной аналитики по категориям и по территориям в Excel."""
-    res = await report_dashboard(date_from, date_to, status_codes, product_category, territory, city, category_client, session, user)
+    res = await report_dashboard(date_from, date_to, status_codes, product_category, session, user)
     data = res.get("by_category") or []
     by_territory = res.get("by_territory") or []
     wb = Workbook()

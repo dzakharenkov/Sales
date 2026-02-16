@@ -40,6 +40,8 @@ def _clear_agent_state(context: ContextTypes.DEFAULT_TYPE):
         "vcomplete_id", "vcancel_id", "order_geo_step", "order_photo_step",
         "order_cart", "order_customer_id", "order_payment", "order_lat",
         "order_lon", "order_photo_uploaded", "products_page",
+        "create_visit_search", "create_visit_customer_id", "create_visit_date",
+        "create_visit_time", "create_visit_date_input", "create_visit_time_input",
     ]
     for k in keys:
         context.user_data.pop(k, None)
@@ -92,8 +94,10 @@ async def _handle_add_customer_text(update: Update, context: ContextTypes.DEFAUL
 
     elif step == "inn":
         inn = update.message.text.strip()
+        logger.info(f"User {update.effective_user.id} entered INN: {inn}")
         # Валидация ИНН: 9-12 цифр
         if not re.match(r"^\d{9,12}$", inn):
+            logger.warning(f"Invalid INN format: {inn}")
             await update.message.reply_text(
                 "❌ ИНН должен содержать от 9 до 12 цифр. Введите снова:",
                 reply_markup=InlineKeyboardMarkup([
@@ -103,7 +107,9 @@ async def _handle_add_customer_text(update: Update, context: ContextTypes.DEFAUL
             return True
         context.user_data["add_cust_inn"] = inn
         context.user_data["add_cust_step"] = "fields"
+        logger.info(f"User {update.effective_user.id}: INN validated, showing fields menu")
         await _show_add_customer_fields_menu(update, context, is_callback=False)
+        logger.info(f"User {update.effective_user.id}: Fields menu sent")
         return True
 
     if step == "fields":
@@ -151,6 +157,9 @@ def _field_btn(label: str, field_key: str, value) -> list:
 
 async def _show_add_customer_fields_menu(update, context, is_callback: bool):
     """Меню полей клиента с галочками для заполненных. После ИНН."""
+    user_id = update.effective_user.id if update.effective_user else "unknown"
+    logger.info(f"User {user_id}: Showing fields menu (is_callback={is_callback})")
+
     name = context.user_data.get("add_cust_name", "")
     inn = context.user_data.get("add_cust_inn") or ""
     address = context.user_data.get("add_cust_address", "")
@@ -164,6 +173,8 @@ async def _show_add_customer_fields_menu(update, context, is_callback: bool):
     lon = context.user_data.get("add_cust_lon")
     has_geo = lat is not None and lon is not None
     has_photo = context.user_data.get("add_cust_photo_bytes") is not None
+
+    logger.info(f"User {user_id}: Fields - name={bool(name)}, inn={bool(inn)}, address={bool(address)}")
 
     lines = ["📋 *Заполните данные клиента*\nНажмите на поле, введите значение и отправьте. Для координат — отправьте геолокацию.\n"]
     buttons = []
@@ -210,7 +221,16 @@ async def cb_agent_addcust_field(update: Update, context: ContextTypes.DEFAULT_T
         "photo": "📸 Отправьте *фото* клиента (вывеска, магазин):",
     }
     prompt = prompts.get(field, "Введите значение:")
-    await q.edit_message_text(prompt, parse_mode="Markdown")
+    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад к меню полей", callback_data="agent_addcust_back_to_fields")]])
+    await q.edit_message_text(prompt, parse_mode="Markdown", reply_markup=back_kb)
+
+
+async def cb_agent_addcust_back_to_fields(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Возврат к меню полей без ввода значения."""
+    q = update.callback_query
+    await q.answer()
+    context.user_data["add_cust_editing_field"] = None
+    await _show_add_customer_fields_menu(update, context, is_callback=True)
 
 
 async def cb_agent_addcust_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -656,6 +676,201 @@ async def _handle_vcancel_comment(update: Update, context: ContextTypes.DEFAULT_
     return True
 
 
+# ====================== СОЗДАТЬ ВИЗИТ ======================
+
+async def cb_agent_create_visit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало создания визита."""
+    q = update.callback_query
+    await q.answer()
+    session, _ = await _get_auth(update)
+    if not session:
+        return
+    _clear_agent_state(context)
+    context.user_data["create_visit_search"] = True
+    logger.info(f"User {q.from_user.id}: Starting visit creation, create_visit_search=True")
+    await q.edit_message_text(
+        "🆕 *Создать визит*\n\nВведите название клиента или ИНН для поиска:",
+        reply_markup=back_button(), parse_mode="Markdown",
+    )
+
+
+async def _handle_create_visit_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Поиск клиента для создания визита."""
+    if not context.user_data.get("create_visit_search"):
+        return False
+    logger.info(f"User {update.effective_user.id}: Handling create visit search")
+    session = await get_session(update.effective_user.id)
+    if not session:
+        logger.warning(f"User {update.effective_user.id}: No session found")
+        return True
+    query = update.message.text.strip()
+    logger.info(f"User {update.effective_user.id}: Searching customers with query: {query}")
+    try:
+        customers = await api.search_customers(session.jwt_token, search=query, limit=10)
+        logger.info(f"User {update.effective_user.id}: Found {len(customers) if customers else 0} customers")
+    except SDSApiError as e:
+        logger.error(f"User {update.effective_user.id}: API error searching customers: {e}")
+        if getattr(e, "status", None) == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return True
+        customers = []
+    if not customers or not isinstance(customers, list) or len(customers) == 0:
+        logger.info(f"User {update.effective_user.id}: No customers found")
+        await update.message.reply_text("Клиенты не найдены. Попробуйте другой запрос:")
+        return True
+    buttons = []
+    for c in customers:
+        cid = c.get("id")
+        name = c.get("name_client") or c.get("firm_name") or f"#{cid}"
+        buttons.append([InlineKeyboardButton(name, callback_data=f"agent_createvisit_cust_{cid}")])
+    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
+    context.user_data.pop("create_visit_search", None)
+    logger.info(f"User {update.effective_user.id}: Sending {len(customers)} customer buttons")
+    await update.message.reply_text("Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
+    return True
+
+
+async def cb_agent_create_visit_customer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Клиент выбран, запрос даты визита."""
+    q = update.callback_query
+    await q.answer()
+    session, _ = await _get_auth(update)
+    if not session:
+        return
+    cid = int(q.data.replace("agent_createvisit_cust_", ""))
+    context.user_data["create_visit_customer_id"] = cid
+    context.user_data["create_visit_date_input"] = True
+    await q.edit_message_text(
+        f"🆕 *Создать визит*\n\nКлиент: #{cid}\n\nВведите *дату визита* (ДД.ММ.ГГГГ):",
+        reply_markup=back_button("main_menu"), parse_mode="Markdown",
+    )
+
+
+async def _handle_create_visit_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка ввода даты визита."""
+    if not context.user_data.get("create_visit_date_input"):
+        return False
+    session = await get_session(update.effective_user.id)
+    if not session:
+        return True
+    date_str = update.message.text.strip()
+    # Парсим дату ДД.ММ.ГГГГ
+    try:
+        parts = date_str.split(".")
+        if len(parts) != 3:
+            raise ValueError
+        day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
+        visit_date = date(year, month, day)
+    except (ValueError, IndexError):
+        await update.message.reply_text("❌ Неверный формат даты. Введите дату в формате ДД.ММ.ГГГГ (например, 25.12.2024):")
+        return True
+
+    context.user_data["create_visit_date"] = visit_date.isoformat()
+    context.user_data.pop("create_visit_date_input", None)
+    context.user_data["create_visit_time_input"] = True
+    await update.message.reply_text(
+        f"✅ Дата: {fmt_date(visit_date.isoformat())}\n\nВведите *время визита* (ЧЧ:ММ) или нажмите /skip чтобы пропустить:",
+        parse_mode="Markdown",
+    )
+    return True
+
+
+async def _handle_create_visit_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка ввода времени визита."""
+    if not context.user_data.get("create_visit_time_input"):
+        return False
+    session = await get_session(update.effective_user.id)
+    if not session:
+        return True
+
+    time_str = update.message.text.strip()
+
+    # Проверка команды skip
+    if time_str.lower() == "/skip":
+        context.user_data["create_visit_time"] = None
+        context.user_data.pop("create_visit_time_input", None)
+        await _show_create_visit_confirm(update, context, is_callback=False)
+        return True
+
+    # Парсим время ЧЧ:ММ
+    if not re.match(r"^\d{1,2}:\d{2}$", time_str):
+        await update.message.reply_text("❌ Неверный формат времени. Введите время в формате ЧЧ:ММ (например, 14:30) или /skip:")
+        return True
+
+    context.user_data["create_visit_time"] = time_str
+    context.user_data.pop("create_visit_time_input", None)
+    await _show_create_visit_confirm(update, context, is_callback=False)
+    return True
+
+
+async def _show_create_visit_confirm(update, context, is_callback: bool):
+    """Показать подтверждение создания визита."""
+    cid = context.user_data.get("create_visit_customer_id")
+    visit_date = context.user_data.get("create_visit_date")
+    visit_time = context.user_data.get("create_visit_time")
+
+    lines = [
+        "📋 *Подтверждение визита:*\n",
+        f"*Клиент:* #{cid}",
+        f"*Дата:* {fmt_date(visit_date)}",
+        f"*Время:* {visit_time or '—'}",
+    ]
+
+    buttons = [
+        [InlineKeyboardButton("✅ Создать визит", callback_data="agent_createvisit_confirm")],
+        [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
+    ]
+    text = "\n".join(lines)
+    if is_callback:
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+    else:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+
+
+async def cb_agent_create_visit_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение создания визита."""
+    q = update.callback_query
+    await q.answer()
+    session, token = await _get_auth(update)
+    if not session:
+        return
+
+    cid = context.user_data.get("create_visit_customer_id")
+    visit_date = context.user_data.get("create_visit_date")
+    visit_time = context.user_data.get("create_visit_time")
+
+    try:
+        visit = await api.create_visit(token, {
+            "customer_id": cid,
+            "visit_date": visit_date,
+            "visit_time": visit_time,
+            "status": "planned",
+            "responsible_login": session.login,
+        })
+        visit_id = visit.get("id")
+
+        await log_action(q.from_user.id, session.login, session.role,
+                         "visit_created", f"visit={visit_id}, customer={cid}", "success")
+
+        for k in ["create_visit_customer_id", "create_visit_date", "create_visit_time",
+                   "create_visit_date_input", "create_visit_time_input"]:
+            context.user_data.pop(k, None)
+
+        await q.edit_message_text(
+            f"✅ *Визит создан!*\n\nВизит #{visit_id}\nКлиент: #{cid}\nДата: {fmt_date(visit_date)}\nВремя: {visit_time or '—'}",
+            reply_markup=back_button(), parse_mode="Markdown",
+        )
+    except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
+        await log_action(q.from_user.id, session.login, session.role,
+                         "visit_created", f"customer={cid}", "error", e.detail)
+        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+
+
 # ====================== ФОТОГРАФИИ ======================
 
 async def cb_agent_photo_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -712,7 +927,7 @@ async def _handle_photo_search(update: Update, context: ContextTypes.DEFAULT_TYP
         return True
     query = update.message.text.strip()
     try:
-        customers = await api.search_customers(session.jwt_token, name_client=query, limit=10)
+        customers = await api.search_customers(session.jwt_token, search=query, limit=10)
     except SDSApiError as e:
         if getattr(e, "status", None) == 401:
             await delete_session(update.effective_user.id)
@@ -811,7 +1026,7 @@ async def _handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYP
         return True
     query = update.message.text.strip()
     try:
-        customers = await api.search_customers(session.jwt_token, name_client=query, limit=10)
+        customers = await api.search_customers(session.jwt_token, search=query, limit=10)
     except SDSApiError as e:
         if getattr(e, "status", None) == 401:
             await delete_session(update.effective_user.id)
@@ -1159,6 +1374,19 @@ async def cb_agent_order_confirm(update: Update, context: ContextTypes.DEFAULT_T
 
 async def msg_agent_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Единый обработчик текстовых сообщений агента."""
+    user_id = update.effective_user.id
+    text_preview = update.message.text[:50] if update.message and update.message.text else ""
+    logger.debug(f"User {user_id}: Text message received: '{text_preview}'")
+
+    # Log current states
+    states = {
+        "add_cust_step": context.user_data.get("add_cust_step"),
+        "create_visit_search": context.user_data.get("create_visit_search"),
+        "create_visit_date_input": context.user_data.get("create_visit_date_input"),
+        "create_visit_time_input": context.user_data.get("create_visit_time_input"),
+    }
+    logger.debug(f"User {user_id}: Active states: {states}")
+
     if context.user_data.get("add_cust_step") in ("name", "inn", "fields"):
         if await _handle_add_customer_text(update, context):
             return
@@ -1167,6 +1395,15 @@ async def msg_agent_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     if context.user_data.get("vcancel_id"):
         if await _handle_vcancel_comment(update, context):
+            return
+    if context.user_data.get("create_visit_search"):
+        if await _handle_create_visit_search(update, context):
+            return
+    if context.user_data.get("create_visit_date_input"):
+        if await _handle_create_visit_date(update, context):
+            return
+    if context.user_data.get("create_visit_time_input"):
+        if await _handle_create_visit_time(update, context):
             return
     if context.user_data.get("photo_search"):
         if await _handle_photo_search(update, context):
@@ -1198,6 +1435,7 @@ def register_agent_handlers(app):
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_skip_geo, pattern="^agent_addcust_skip_geo$"))
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_skip_photo, pattern="^agent_addcust_skip_photo$"))
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_field, pattern="^agent_addcust_field_.+$"))
+    app.add_handler(CallbackQueryHandler(cb_agent_addcust_back_to_fields, pattern="^agent_addcust_back_to_fields$"))
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_finish, pattern="^agent_addcust_finish$"))
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_confirm, pattern="^agent_addcust_confirm$"))
     # Визиты
@@ -1208,6 +1446,10 @@ def register_agent_handlers(app):
     app.add_handler(CallbackQueryHandler(cb_agent_visit_detail, pattern=r"^agent_visit_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_agent_vcomplete, pattern=r"^agent_vcomplete_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_agent_vcancel, pattern=r"^agent_vcancel_\d+$"))
+    # Создать визит
+    app.add_handler(CallbackQueryHandler(cb_agent_create_visit, pattern="^agent_create_visit$"))
+    app.add_handler(CallbackQueryHandler(cb_agent_create_visit_customer, pattern=r"^agent_createvisit_cust_\d+$"))
+    app.add_handler(CallbackQueryHandler(cb_agent_create_visit_confirm, pattern="^agent_createvisit_confirm$"))
     # Фото
     app.add_handler(CallbackQueryHandler(cb_agent_photo_menu, pattern="^agent_photo$"))
     app.add_handler(CallbackQueryHandler(cb_agent_vphotos, pattern=r"^agent_vphotos_\d+$"))

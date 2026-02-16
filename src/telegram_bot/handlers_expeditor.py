@@ -392,18 +392,37 @@ async def cb_exp_confirm_delivery(update: Update, context: ContextTypes.DEFAULT_
 # ---------- Доставлен (только информирование, оплата — в «Получить оплату») ----------
 
 async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение доставки без оплаты. Статус → completed. Оплата опционально через раздел «Получить оплату»."""
     q = update.callback_query
     await q.answer()
+    session, token = await _get_auth(update)
+    if not session:
+        return
     order_no = int(q.data.replace("exp_delivered_", ""))
-    await q.edit_message_text(
-        f"✅ Заказ №{order_no} отмечен как доставленный.\n\n"
-        "Для приёма оплаты используйте раздел «Получить оплату».",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("◀️ К заказу", callback_data=f"exp_order_{order_no}")],
-            [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
-        ]),
-        parse_mode="Markdown",
-    )
+
+    try:
+        # Обновить статус заказа на completed (доставлен, оплата опционально)
+        await api.update_order(token, order_no, {"status_code": "completed"})
+        await log_action(q.from_user.id, session.login, session.role, "order_delivered",
+                         f"order={order_no}", "success")
+        await q.edit_message_text(
+            f"✅ *Заказ №{order_no} доставлен!*\n\n"
+            "Заказ отмечен как выполненный.\n"
+            "Если клиент оплатил, используйте раздел «💰 Получить оплату» для приёма оплаты.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💰 Получить оплату", callback_data="exp_payment")],
+                [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
+            ]),
+            parse_mode="Markdown",
+        )
+    except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
+        await log_action(q.from_user.id, session.login, session.role, "order_delivered",
+                         f"order={order_no}", "error", e.detail)
+        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
 
 
 # ---------- Получить оплату ----------
@@ -507,7 +526,7 @@ async def cb_exp_pay_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if customer_id and amount > 0:
             try:
                 await api.create_payment_receipt(
-                    token, order_no, customer_id, amount, payment_type_code
+                    token, order_no, customer_id, amount, payment_type_code, session.login
                 )
             except SDSApiError as op_err:
                 await log_action(q.from_user.id, session.login, session.role, "payment_receipt_create",
@@ -575,7 +594,7 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if customer_id and amount > 0:
             try:
                 await api.create_payment_receipt(
-                    session.jwt_token, order_no, customer_id, amount, payment_type_code
+                    session.jwt_token, order_no, customer_id, amount, payment_type_code, session.login
                 )
             except SDSApiError as op_err:
                 await log_action(update.effective_user.id, session.login, session.role, "payment_receipt_create",
@@ -596,6 +615,58 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"❌ Ошибка: {e.detail}")
 
 
+# ---------- Полученная оплата (просмотр операций cash_handover_from_expeditor) ----------
+
+async def cb_exp_received_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Список операций передачи наличных от экспедитора кассиру."""
+    q = update.callback_query
+    await q.answer()
+    session, token = await _get_auth(update)
+    if not session:
+        return
+
+    try:
+        # Получить операции cash_handover_from_expeditor для текущего экспедитора
+        operations = await api.get_operations(
+            token,
+            type_code="cash_handover_from_expeditor",
+            created_by=session.login,
+        )
+    except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
+        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        return
+
+    if not operations or len(operations) == 0:
+        await q.edit_message_text(
+            "💵 *Полученная оплата*\n\nНет записей о переданных деньгах.",
+            reply_markup=back_button(),
+            parse_mode="Markdown",
+        )
+        return
+
+    lines = ["💵 *Полученная оплата от клиентов:*\n"]
+    for op in operations:
+        op_num = op.get("operation_number", "—")
+        amount = op.get("amount", 0)
+        status = op.get("status", "")
+        status_ru = {"pending": "Ожидает передачи", "completed": "Передано", "cancelled": "Отменено"}.get(status, status)
+        order_id = op.get("order_id") or "—"
+        op_date = op.get("operation_date", "")
+        date_str = fmt_date(op_date[:10]) if op_date else "—"
+
+        lines.append(f"• {op_num} | Заказ №{order_id} | {fmt_money(amount)} | {status_ru} | {date_str}")
+
+    await q.edit_message_text(
+        "\n".join(lines),
+        reply_markup=back_button(),
+        parse_mode="Markdown",
+    )
+
+
 # ---------- Register ----------
 
 def register_expeditor_handlers(app):
@@ -614,6 +685,7 @@ def register_expeditor_handlers(app):
     app.add_handler(CallbackQueryHandler(cb_exp_pay_order, pattern=r"^exp_pay_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_full, pattern=r"^exp_payfull_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_other, pattern=r"^exp_payother_\d+$"))
+    app.add_handler(CallbackQueryHandler(cb_exp_received_payments, pattern="^exp_received_payments$"))
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.Regex(r"^\d"),
         msg_exp_pay_amount,
