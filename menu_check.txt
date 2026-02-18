@@ -1,0 +1,7 @@
+Menu items:
+code=ref_cities, label=Города, url=cities, active=True
+code=ref_territories, label=Территории, url=territories, active=True
+
+Access for admin:
+code=ref_cities, role=admin, access=full
+code=ref_territories, role=admin, access=full

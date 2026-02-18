@@ -1,0 +1,18 @@
+Admin menu (same as API /menu returns):
+code=users, label=Пользователи, access=full
+code=references, label=Справочники, access=full
+code=ref_payment, label=Типы оплат, access=full
+code=ref_products, label=Типы продуктов, access=full
+code=ref_operations, label=Типы операций, access=full
+code=ref_currency, label=Валюта, access=full
+code=warehouses, label=Склады, access=full
+code=products, label=Товары, access=full
+code=ref_cities, label=Города, access=full
+code=ref_territories, label=Территории, access=full
+code=customers, label=Клиенты, access=full
+code=visits, label=Визиты, access=full
+code=orders, label=Заказы, access=full
+code=operations, label=Операции, access=full
+code=balances, label=Остатки, access=full
+code=cashier, label=Касса, access=full
+code=reports, label=Отчётность, access=full

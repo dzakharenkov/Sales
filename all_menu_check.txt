@@ -1,0 +1,25 @@
+All menu items:
+code=users, label=Пользователи, sort=10, active=True
+code=references, label=Справочники, sort=20, active=True
+code=ref_cities, label=Города, sort=21, active=True
+code=ref_territories, label=Территории, sort=22, active=True
+code=customers, label=Клиенты, sort=30, active=True
+code=visits, label=Визиты, sort=40, active=True
+code=orders, label=Заказы, sort=50, active=True
+code=operations, label=Операции, sort=60, active=True
+code=balances, label=Остатки, sort=70, active=True
+code=cashier, label=Касса, sort=80, active=True
+code=reports, label=Отчётность, sort=90, active=True
+
+Admin access:
+code=users, access=full
+code=references, access=full
+code=ref_cities, access=full
+code=ref_territories, access=full
+code=customers, access=full
+code=visits, access=full
+code=orders, access=full
+code=operations, access=full
+code=balances, access=full
+code=cashier, access=full
+code=reports, access=full
