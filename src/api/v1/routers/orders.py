@@ -76,6 +76,7 @@ async def list_order_statuses(
 
 @router.get("/orders")
 async def list_orders(
+    order_no: int | None = Query(None, description="Номер заказа"),
     customer_id: int | None = Query(None, description="ID клиента"),
     customer_name: str | None = Query(None, description="Поиск по названию клиента или фирмы"),
     status_code: str | None = Query(None, description="Статус заказа"),
@@ -95,6 +96,8 @@ async def list_orders(
         .outerjoin(PaymentType, Order.payment_type_code == PaymentType.code)
         .order_by(Order.scheduled_delivery_at.desc().nullslast(), Order.order_date.desc())
     )
+    if order_no is not None:
+        q = q.where(Order.order_no == order_no)
     if customer_id is not None:
         q = q.where(Order.customer_id == customer_id)
     if customer_name and customer_name.strip():

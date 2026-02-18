@@ -6,7 +6,7 @@ import re
 from datetime import date, datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters, ApplicationHandlerStop
 
 from .session import get_session, touch_session, log_action, delete_session
 from .sds_api import api, SDSApiError
@@ -14,8 +14,22 @@ from .helpers import (
     fmt_money, fmt_date, date_picker_keyboard, calendar_keyboard,
     back_button, STATUS_RU, PAYMENT_RU, get_cached_products, get_cached_payment_types,
 )
+from .handlers_agent_v3_add_customer import get_add_customer_v3_handler
+from .handlers_agent_create_visit import get_create_visit_handler
 
 logger = logging.getLogger(__name__)
+
+
+async def debug_log_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочный хендлер - логирует ВСЕ входящие сообщения."""
+    if update.message:
+        user_id = update.effective_user.id
+        text = update.message.text if update.message.text else f"<non-text: {type(update.message).__name__}>"
+        logger.info(f"[DEBUG ALL MESSAGES] User {user_id}: '{text}'")
+    if update.callback_query:
+        user_id = update.effective_user.id
+        data = update.callback_query.data
+        logger.info(f"[DEBUG ALL CALLBACKS] User {user_id}: '{data}'")
 
 
 async def _get_auth(update: Update):
@@ -38,8 +52,6 @@ def _clear_agent_state(context: ContextTypes.DEFAULT_TYPE):
         "add_cust_contact", "add_cust_firm_name", "add_cust_account_no", "add_cust_editing_field",
         "photo_search", "photo_customer_id", "order_search", "adding_product",
         "vcomplete_id", "vcancel_id", "order_geo_step", "order_photo_step",
-        "order_cart", "order_customer_id", "order_payment", "order_lat",
-        "order_lon", "order_photo_uploaded", "products_page",
         "create_visit_search", "create_visit_customer_id", "create_visit_date",
         "create_visit_time", "create_visit_date_input", "create_visit_time_input",
     ]
@@ -620,10 +632,30 @@ async def _handle_vcomplete_comment(update: Update, context: ContextTypes.DEFAUL
         return True
     try:
         await api.update_visit(session.jwt_token, vid, {"status": "completed", "comment": comment})
+
+        # Получить информацию о визите для вывода
+        visit_info = await api.get_visit(session.jwt_token, vid)
+        customer_id = visit_info.get("customer_id")
+        customer = await api.get_customer(session.jwt_token, customer_id)
+        customer_name = customer.get("name_client", "—")
+        customer_inn = customer.get("tax_id", "—")
+        visit_date = visit_info.get("visit_date", "—")
+        visit_time = visit_info.get("visit_time", "—")
+
         await log_action(update.effective_user.id, session.login, session.role,
                          "visit_completed", f"visit={vid}", "success")
         context.user_data.pop("vcomplete_id", None)
-        await update.message.reply_text(f"✅ Визит #{vid} отмечен выполненным!")
+
+        text = (
+            f"✅ *Визит завершен!*\n\n"
+            f"📋 *ID визита:* {vid}\n"
+            f"👤 *Клиент:* {customer_name}\n"
+            f"🔢 *ИНН:* {customer_inn}\n"
+            f"📅 *Дата:* {visit_date}\n"
+            f"⏰ *Время:* {visit_time}\n"
+        )
+
+        await update.message.reply_text(text, parse_mode="Markdown")
         from .handlers_auth import show_main_menu
         await show_main_menu(update, context, session)
     except SDSApiError as e:
@@ -941,7 +973,9 @@ async def _handle_photo_search(update: Update, context: ContextTypes.DEFAULT_TYP
     for c in customers:
         cid = c.get("id")
         name = c.get("name_client") or c.get("firm_name") or f"#{cid}"
-        buttons.append([InlineKeyboardButton(name, callback_data=f"agent_vphotos_{cid}")])
+        tax_id = c.get("tax_id", "")
+        display = f"{name}" + (f" ({tax_id})" if tax_id else "")
+        buttons.append([InlineKeyboardButton(display, callback_data=f"agent_vphotos_{cid}")])
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
     context.user_data.pop("photo_search", None)
     await update.message.reply_text("Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
@@ -994,6 +1028,12 @@ async def msg_agent_photo_upload(update: Update, context: ContextTypes.DEFAULT_T
         await log_action(update.effective_user.id, session.login, session.role,
                          "photo_upload", f"customer={customer_id}", "success")
         await update.message.reply_text(f"✅ Фото загружено! ({auto_filename})")
+        # Показать главное меню после загрузки фото
+        from .handlers_auth import main_menu_keyboard, ROLE_RU
+        role_ru = ROLE_RU.get(session.role, session.role)
+        menu_text = f"🏠 *Главное меню*\n\n{session.fio} ({role_ru})"
+        kb = main_menu_keyboard(session.role)
+        await update.message.reply_text(menu_text, reply_markup=kb, parse_mode="Markdown")
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(update.effective_user.id)
@@ -1040,7 +1080,9 @@ async def _handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYP
     for c in customers:
         cid = c.get("id")
         name = c.get("name_client") or c.get("firm_name") or f"#{cid}"
-        buttons.append([InlineKeyboardButton(name, callback_data=f"agent_ordercust_{cid}")])
+        tax_id = c.get("tax_id", "")
+        display = f"{name}" + (f" ({tax_id})" if tax_id else "")
+        buttons.append([InlineKeyboardButton(display, callback_data=f"agent_ordercust_{cid}")])
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
     context.user_data.pop("order_search", None)
     await update.message.reply_text("Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
@@ -1064,8 +1106,9 @@ async def _show_products_page(q, context, session):
     page = context.user_data.get("products_page", 0)
     products = await get_cached_products(session.jwt_token)
     total = len(products)
-    start = page * 5
-    end = start + 5
+    PAGE_SIZE = 10
+    start = page * PAGE_SIZE
+    end = start + PAGE_SIZE
     page_items = products[start:end]
 
     cart = context.user_data.get("order_cart", [])
@@ -1079,7 +1122,8 @@ async def _show_products_page(q, context, session):
             cart_lines.append(f"  • {item['name']}: {item['qty']} × {fmt_money(item['price'])}")
         cart_text = "\n🛒 *Корзина:*\n" + "\n".join(cart_lines) + f"\n*Итого:* {fmt_money(total_sum)}\n"
 
-    lines = [f"📦 *Выберите товар* (стр. {page + 1}/{(total + 4) // 5}){cart_text}\n"]
+    total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+    lines = [f"📦 *Выберите товар* (стр. {page + 1}/{total_pages}){cart_text}\n"]
     buttons = []
     for p in page_items:
         code = p.get("code")
@@ -1160,13 +1204,23 @@ async def _handle_product_qty(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["order_cart"] = cart
     context.user_data.pop("adding_product", None)
     total = sum(i["qty"] * i["price"] for i in cart)
+
+    # Формируем список товаров в корзине
+    cart_lines = []
+    for item in cart:
+        s = item["qty"] * item["price"]
+        cart_lines.append(f"  • {item['name']}: {item['qty']} × {fmt_money(item['price'])} = {fmt_money(s)}")
+
+    cart_text = "🛒 *Корзина:*\n" + "\n".join(cart_lines) + f"\n\n*Итого:* {fmt_money(total)}"
+
     buttons = [
         [InlineKeyboardButton("✅ Добавить ещё", callback_data=f"agent_ordercust_{context.user_data.get('order_customer_id', 0)}")],
         [InlineKeyboardButton("🛒 Оформить заказ", callback_data="agent_ordercheckout")],
     ]
     await update.message.reply_text(
-        f"✅ Добавлено: {product['name']} × {qty}\n🛒 Итого: {fmt_money(total)}\n\nДобавить ещё товар?",
+        f"✅ Добавлено: {product['name']} × {qty}\n\n{cart_text}\n\nДобавить ещё товар?",
         reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode="Markdown",
     )
     return True
 
@@ -1200,7 +1254,7 @@ async def cb_agent_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cb_agent_order_pay(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """После выбора оплаты — запрос геолокации (обязательно по ТЗ)."""
+    """После выбора оплаты — сразу подтверждение заказа."""
     q = update.callback_query
     await q.answer()
     session, _ = await _get_auth(update)
@@ -1208,16 +1262,7 @@ async def cb_agent_order_pay(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     pay_code = q.data.replace("agent_orderpay_", "")
     context.user_data["order_payment"] = pay_code
-    context.user_data["order_geo_step"] = True
-    await q.edit_message_text(
-        "📍 *Геолокация доставки* (обязательно)\n\n"
-        "Отправьте геолокацию через Telegram\n"
-        "(нажмите 📎 → Геолокация)",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("◀️ Назад", callback_data="agent_ordercheckout")],
-        ]),
-        parse_mode="Markdown",
-    )
+    await _show_order_confirm(update, context, is_callback=True)
 
 
 async def _handle_order_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1283,8 +1328,6 @@ async def _show_order_confirm(update, context, is_callback: bool):
     cid = context.user_data.get("order_customer_id")
     pay_code = context.user_data.get("order_payment", "cash_sum")
     pay_name = PAYMENT_RU.get(pay_code, pay_code)
-    lat = context.user_data.get("order_lat")
-    lon = context.user_data.get("order_lon")
 
     lines = [
         "📋 *Подтверждение заказа:*\n",
@@ -1294,10 +1337,6 @@ async def _show_order_confirm(update, context, is_callback: bool):
         lines.append(f"• {item['name']}: {item['qty']} × {fmt_money(item['price'])}")
     lines.append(f"\n*Итого:* {fmt_money(total)}")
     lines.append(f"*Оплата:* {pay_name}")
-    if lat and lon:
-        lines.append(f"📍 Координаты: {lat:.6f}, {lon:.6f}")
-    if context.user_data.get("order_photo_uploaded"):
-        lines.append("📷 Фото: ✅")
 
     buttons = [
         [InlineKeyboardButton("✅ Подтвердить", callback_data="agent_orderconfirm")],
@@ -1321,8 +1360,6 @@ async def cb_agent_order_confirm(update: Update, context: ContextTypes.DEFAULT_T
     cart = context.user_data.get("order_cart", [])
     pay_code = context.user_data.get("order_payment", "cash_sum")
     total = sum(i["qty"] * i["price"] for i in cart)
-    lat = context.user_data.get("order_lat")
-    lon = context.user_data.get("order_lon")
 
     try:
         order = await api.create_order(token, {
@@ -1340,26 +1377,51 @@ async def cb_agent_order_confirm(update: Update, context: ContextTypes.DEFAULT_T
             })
         await api.update_order_total(token, order_no, total)
 
-        # Обновить координаты клиента если получены
-        if lat and lon and cid:
-            try:
-                await api.update_customer(token, cid, {"latitude": lat, "longitude": lon})
-            except Exception:
-                pass
-
-        coord_info = f", lat={lat}, lon={lon}" if lat else ""
         await log_action(q.from_user.id, session.login, session.role,
-                         "order_created", f"order={order_no}, total={total}{coord_info}", "success")
+                         "order_created", f"order={order_no}, total={total}", "success")
 
-        for k in ["order_cart", "order_customer_id", "order_payment",
-                   "order_lat", "order_lon", "order_photo_uploaded",
-                   "order_photo_step", "order_geo_step", "products_page"]:
+        for k in ["order_cart", "order_customer_id", "order_payment", "products_page"]:
             context.user_data.pop(k, None)
 
+        # Получить информацию о клиенте
+        try:
+            customer = await api.get_customer(token, cid)
+            customer_name = customer.get("name_client", "—")
+            customer_inn = customer.get("tax_id", "—")
+        except Exception:
+            customer_name = f"#{cid}"
+            customer_inn = "—"
+
+        # Формируем детали заказа
+        order_lines = [
+            "✅ *Заказ успешно создан!*",
+            f"",
+            f"📋 *Номер заказа:* {order_no}",
+            f"👤 *Клиент:* {customer_name}",
+            f"🔢 *ИНН:* {customer_inn}",
+            f"",
+            f"🛒 *Товары:*",
+        ]
+
+        for item in cart:
+            s = item["qty"] * item["price"]
+            order_lines.append(f"  • {item['name']}")
+            order_lines.append(f"    {item['qty']} × {fmt_money(item['price'])} = {fmt_money(s)}")
+
+        order_lines.append(f"")
+        order_lines.append(f"💰 *Сумма:* {fmt_money(total)}")
+
         await q.edit_message_text(
-            f"✅ *Заказ №{order_no} создан!*\n\nКлиент: #{cid}\nСумма: {fmt_money(total)}",
-            reply_markup=back_button(), parse_mode="Markdown",
+            "\n".join(order_lines),
+            parse_mode="Markdown",
         )
+
+        # Показываем главное меню
+        from .handlers_auth import main_menu_keyboard, ROLE_RU
+        role_ru = ROLE_RU.get(session.role, session.role)
+        menu_text = f"🏠 *Главное меню*\n\n{session.fio} ({role_ru})"
+        kb = main_menu_keyboard(session.role)
+        await update.effective_chat.send_message(menu_text, reply_markup=kb, parse_mode="Markdown")
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
@@ -1389,31 +1451,34 @@ async def msg_agent_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if context.user_data.get("add_cust_step") in ("name", "inn", "fields"):
         if await _handle_add_customer_text(update, context):
-            return
+            raise ApplicationHandlerStop
     if context.user_data.get("vcomplete_id"):
         if await _handle_vcomplete_comment(update, context):
-            return
+            raise ApplicationHandlerStop
     if context.user_data.get("vcancel_id"):
         if await _handle_vcancel_comment(update, context):
-            return
+            raise ApplicationHandlerStop
     if context.user_data.get("create_visit_search"):
         if await _handle_create_visit_search(update, context):
-            return
+            raise ApplicationHandlerStop
     if context.user_data.get("create_visit_date_input"):
         if await _handle_create_visit_date(update, context):
-            return
+            raise ApplicationHandlerStop
     if context.user_data.get("create_visit_time_input"):
         if await _handle_create_visit_time(update, context):
-            return
+            raise ApplicationHandlerStop
     if context.user_data.get("photo_search"):
         if await _handle_photo_search(update, context):
-            return
+            raise ApplicationHandlerStop
     if context.user_data.get("order_search"):
         if await _handle_order_search(update, context):
-            return
+            raise ApplicationHandlerStop
     if context.user_data.get("adding_product"):
         if await _handle_product_qty(update, context):
-            return
+            raise ApplicationHandlerStop
+    if context.user_data.get("location_search"):
+        if await _handle_location_search(update, context):
+            raise ApplicationHandlerStop
 
 
 async def msg_agent_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1424,12 +1489,152 @@ async def msg_agent_location(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if context.user_data.get("order_geo_step"):
         await _handle_order_location(update, context)
         return
+    if context.user_data.get("update_location_step"):
+        await _handle_update_location(update, context)
+        return
+
+
+# ====================== ОБНОВИТЬ ЛОКАЦИЮ КЛИЕНТА ======================
+
+async def cb_agent_update_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало процесса обновления локации клиента."""
+    q = update.callback_query
+    await q.answer()
+    session, _ = await _get_auth(update)
+    if not session:
+        return
+    _clear_agent_state(context)
+    context.user_data["location_search"] = True
+    await q.edit_message_text(
+        "📍 *Обновить локацию клиента*\n\nВведите ИНН или название клиента для поиска:",
+        reply_markup=back_button(), parse_mode="Markdown",
+    )
+
+
+async def _handle_location_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Поиск клиента для обновления локации."""
+    if not context.user_data.get("location_search"):
+        return False
+    session = await get_session(update.effective_user.id)
+    if not session:
+        return True
+    query = update.message.text.strip()
+    try:
+        customers = await api.search_customers(session.jwt_token, search=query, limit=10)
+    except SDSApiError as e:
+        if getattr(e, "status", None) == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return True
+        customers = []
+    if not customers or not isinstance(customers, list) or len(customers) == 0:
+        await update.message.reply_text("Клиенты не найдены. Попробуйте другой запрос:")
+        return True
+    buttons = []
+    for c in customers:
+        cid = c.get("id")
+        name = c.get("name_client") or c.get("firm_name") or f"#{cid}"
+        tax_id = c.get("tax_id", "")
+        display = f"{name}" + (f" ({tax_id})" if tax_id else "")
+        buttons.append([InlineKeyboardButton(display, callback_data=f"agent_updloc_{cid}")])
+    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
+    context.user_data.pop("location_search", None)
+    await update.message.reply_text("Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
+    return True
+
+
+async def cb_agent_update_loc_customer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Выбор клиента для обновления локации."""
+    q = update.callback_query
+    await q.answer()
+    session, _ = await _get_auth(update)
+    if not session:
+        return
+    cid = int(q.data.replace("agent_updloc_", ""))
+    context.user_data["update_location_customer_id"] = cid
+    context.user_data["update_location_step"] = True
+
+    await q.edit_message_text(
+        "📍 *Отправьте геолокацию*\n\n"
+        "Нажмите кнопку 📎 → Геолокация для отправки координат",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
+        ]),
+        parse_mode="Markdown",
+    )
+
+
+async def _handle_update_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка геолокации для обновления локации клиента."""
+    if not context.user_data.get("update_location_step"):
+        return False
+
+    cid = context.user_data.get("update_location_customer_id")
+    session = await get_session(update.effective_user.id)
+    if not session or not cid:
+        return False
+
+    loc = update.message.location
+    if not loc:
+        await update.message.reply_text("❌ Пожалуйста, отправьте геолокацию через кнопку 📎")
+        return True
+
+    try:
+        # Получить информацию о клиенте
+        customer = await api.get_customer(session.jwt_token, cid)
+        customer_name = customer.get("name_client", "—")
+        customer_inn = customer.get("tax_id", "—")
+
+        # Обновить координаты клиента
+        await api.update_customer(session.jwt_token, cid, {
+            "latitude": loc.latitude,
+            "longitude": loc.longitude,
+        })
+
+        context.user_data.pop("update_location_step", None)
+        context.user_data.pop("update_location_customer_id", None)
+
+        text = (
+            f"✅ *Локация обновлена!*\n\n"
+            f"👤 *Клиент:* {customer_name}\n"
+            f"🔢 *ИНН:* {customer_inn}\n"
+            f"📍 *Координаты:* {loc.latitude:.6f}, {loc.longitude:.6f}\n"
+        )
+
+        await log_action(update.effective_user.id, session.login, session.role,
+                         "location_updated", f"customer={cid}, lat={loc.latitude}, lon={loc.longitude}", "success")
+
+        await update.message.reply_text(text, parse_mode="Markdown")
+        from .handlers_auth import show_main_menu
+        await show_main_menu(update, context, session)
+    except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(update.effective_user.id)
+            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return True
+        await update.message.reply_text(f"❌ Ошибка: {e.detail}")
+    except Exception as e:
+        logger.error(f"Error updating location: {e}")
+        await update.message.reply_text(f"❌ Ошибка при обновлении локации: {str(e)}")
+
+    return True
 
 
 # ---------- Register ----------
 
 def register_agent_handlers(app):
-    # Добавить клиента
+    # Добавить клиента v3 (FSM) - ПЕРВЫМ в группе 0!
+    app.add_handler(get_add_customer_v3_handler())
+
+    # ОТЛАДКА: Логировать ВСЕ входящие сообщения в группе 1 (ПОСЛЕ ConversationHandlers)
+    from telegram.ext import MessageHandler, CallbackQueryHandler
+    app.add_handler(MessageHandler(filters.ALL, debug_log_all_messages), group=1)
+    app.add_handler(CallbackQueryHandler(debug_log_all_messages), group=1)
+
+    # Создать визит (FSM)
+    app.add_handler(get_create_visit_handler())
+
+    # Добавить клиента (старая версия, оставлена для совместимости)
     app.add_handler(CallbackQueryHandler(cb_agent_add_customer, pattern="^agent_add_customer$"))
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_skip_inn, pattern="^agent_addcust_skip_inn$"))
     app.add_handler(CallbackQueryHandler(cb_agent_addcust_skip_geo, pattern="^agent_addcust_skip_geo$"))
@@ -1461,8 +1666,11 @@ def register_agent_handlers(app):
     app.add_handler(CallbackQueryHandler(cb_agent_checkout, pattern="^agent_ordercheckout$"))
     app.add_handler(CallbackQueryHandler(cb_agent_order_pay, pattern=r"^agent_orderpay_.+$"))
     app.add_handler(CallbackQueryHandler(cb_agent_order_confirm, pattern="^agent_orderconfirm$"))
-    # Единый текстовый обработчик
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, msg_agent_text))
+    # Обновить локацию клиента
+    app.add_handler(CallbackQueryHandler(cb_agent_update_location, pattern="^agent_update_location$"))
+    app.add_handler(CallbackQueryHandler(cb_agent_update_loc_customer, pattern=r"^agent_updloc_\d+$"))
+    # Единый текстовый обработчик (group=5: после ConversationHandlers group=0, но до expeditor group=10)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, msg_agent_text), group=5)
     # Геолокация
     app.add_handler(MessageHandler(filters.LOCATION, msg_agent_location))
     # Фото upload

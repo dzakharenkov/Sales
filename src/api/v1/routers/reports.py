@@ -6,6 +6,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from openpyxl import Workbook
+from openpyxl.styles import Alignment
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -157,6 +158,7 @@ async def report_customers_export(
     wb = Workbook()
     ws = wb.active
     ws.title = "По клиентам"
+    center_align = Alignment(horizontal='center', vertical='center')
     def _client_display(r):
         n = (r.get("name_client") or "").strip()
         f = (r.get("firm_name") or "").strip()
@@ -165,7 +167,8 @@ async def report_customers_export(
         return n or f or ""
     headers = ["Клиент", "ФИО Агента", "ФИО Экспедитора", "Кол-во визитов агентом", "Кол-во завершённых визитов агентом", "Кол-во заказов", "Сумма заказов"]
     for col, h in enumerate(headers, start=1):
-        ws.cell(row=1, column=col, value=h)
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.alignment = center_align
     for row_idx, r in enumerate(data[:50000], start=2):
         vals = [
             _client_display(r),
@@ -177,7 +180,8 @@ async def report_customers_export(
             float(r.get("orders_amount") or 0),
         ]
         for col_idx, v in enumerate(vals, start=1):
-            ws.cell(row=row_idx, column=col_idx, value=v)
+            cell = ws.cell(row=row_idx, column=col_idx, value=v)
+            cell.alignment = center_align
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -273,9 +277,11 @@ async def report_agents_export(
     wb = Workbook()
     ws = wb.active
     ws.title = "Агенты"
+    center_align = Alignment(horizontal='center', vertical='center')
     headers = ["Логин", "ФИО", "Клиентов", "Визитов", "Завершено", "% завершённости визитов", "Сумма заказов", "Кол-во заказов", "% завершённости заказов"]
     for col, h in enumerate(headers, start=1):
-        ws.cell(row=1, column=col, value=h)
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.alignment = center_align
     for row_idx, r in enumerate(data[:50000], start=2):
         visit_rate = r.get("visit_completion_rate") or 0
         order_rate = r.get("orders_completion_rate") or 0
@@ -291,7 +297,8 @@ async def report_agents_export(
             order_rate,
         ]
         for col_idx, v in enumerate(vals, start=1):
-            ws.cell(row=row_idx, column=col_idx, value=v)
+            cell = ws.cell(row=row_idx, column=col_idx, value=v)
+            cell.alignment = center_align
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -380,9 +387,11 @@ async def report_expeditors_export(
     wb = Workbook()
     ws = wb.active
     ws.title = "Экспедиторы"
+    center_align = Alignment(horizontal='center', vertical='center')
     headers = ["Логин", "ФИО", "Заказов", "Сумма", "Открыто", "В доставке", "Доставлено", "Отменено"]
     for col, h in enumerate(headers, start=1):
-        ws.cell(row=1, column=col, value=h)
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.alignment = center_align
     for row_idx, r in enumerate(data[:50000], start=2):
         vals = [
             r.get("login") or "",
@@ -395,7 +404,8 @@ async def report_expeditors_export(
             r.get("orders_cancelled") or 0,
         ]
         for col_idx, v in enumerate(vals, start=1):
-            ws.cell(row=row_idx, column=col_idx, value=v)
+            cell = ws.cell(row=row_idx, column=col_idx, value=v)
+            cell.alignment = center_align
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -469,9 +479,11 @@ async def report_visits_export(
     wb = Workbook()
     ws = wb.active
     ws.title = "Аналитика визитов"
+    center_align = Alignment(horizontal='center', vertical='center')
     headers = ["Дата", "Всего", "Завершено", "Запланировано", "Отменено"]
     for col, h in enumerate(headers, start=1):
-        ws.cell(row=1, column=col, value=h)
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.alignment = center_align
     for row_idx, r in enumerate(by_date[:50000], start=2):
         vals = [
             r.get("date") or "",
@@ -481,11 +493,15 @@ async def report_visits_export(
             r.get("cancelled") or 0,
         ]
         for col_idx, v in enumerate(vals, start=1):
-            ws.cell(row=row_idx, column=col_idx, value=v)
+            cell = ws.cell(row=row_idx, column=col_idx, value=v)
+            cell.alignment = center_align
     row_final = len(by_date) + 2
-    ws.cell(row=row_final, column=1, value="Итого")
-    ws.cell(row=row_final, column=2, value=summary.get("total_visits") or 0)
-    ws.cell(row=row_final, column=3, value=summary.get("completed") or 0)
+    cell = ws.cell(row=row_final, column=1, value="Итого")
+    cell.alignment = center_align
+    cell = ws.cell(row=row_final, column=2, value=summary.get("total_visits") or 0)
+    cell.alignment = center_align
+    cell = ws.cell(row=row_final, column=3, value=summary.get("completed") or 0)
+    cell.alignment = center_align
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -617,21 +633,6 @@ async def report_dashboard(
         status_labels = {"open": "Открыто", "delivery": "Доставка", "completed": "Доставлен", "canceled": "Отменён", "cancelled": "Отменён"}
         orders_by_status = [{"status": status_labels.get(str(r[0]), str(r[0])), "status_code": str(r[0]), "count": int(r[1]), "amount": float(r[2])} for r in r_obs.fetchall()]
 
-        # --- Топ-5 клиентов по сумме ---
-        q_top_clients = f"""
-        SELECT c.id, COALESCE(c.name_client, c.firm_name, '') AS name,
-               COUNT(DISTINCT o.order_no)::int AS orders_count,
-               COALESCE(SUM(o.total_amount), 0) AS orders_sum
-        FROM "Sales".orders o
-        JOIN "Sales".customers c ON o.customer_id = c.id
-        WHERE {date_cond} AND {status_cond}
-        GROUP BY c.id, c.name_client, c.firm_name
-        ORDER BY orders_sum DESC
-        LIMIT 5
-        """
-        r_tc = await session.execute(text(q_top_clients), params)
-        top_clients = [{"id": int(r[0]), "name": str(r[1]), "orders_count": int(r[2]), "orders_sum": float(r[3])} for r in r_tc.fetchall()]
-
         # --- Кол-во заказов и общее число ---
         q_orders_cnt = f"""
         SELECT COUNT(*)::int FROM "Sales".orders o
@@ -643,16 +644,18 @@ async def report_dashboard(
 
         # По территориям: город, территория, кол-во клиентов, кол-во заказов, сумма
         q_terr = f"""
-        SELECT COALESCE(c.city, '') AS city, COALESCE(c.territory, '') AS territory,
+        SELECT COALESCE(ct.name, '') AS city, COALESCE(tr.name, '') AS territory,
                COUNT(DISTINCT c.id)::int AS customers_count,
                COUNT(DISTINCT o.order_no)::int AS orders_count,
                COALESCE(SUM(o.total_amount), 0) AS orders_sum
         FROM "Sales".customers c
+        LEFT JOIN "Sales".cities ct ON ct.id = c.city_id
+        LEFT JOIN "Sales".territories tr ON tr.id = c.territory_id
         LEFT JOIN "Sales".orders o ON o.customer_id = c.id AND {date_cond} AND {status_cond}
         WHERE 1=1
         """
         terr_params = dict(params)
-        q_terr += " GROUP BY c.city, c.territory ORDER BY c.city, c.territory"
+        q_terr += " GROUP BY ct.name, tr.name ORDER BY ct.name, tr.name"
         try:
             r_terr = await session.execute(text(q_terr), terr_params)
             by_territory = [{"city": str(r[0] or ""), "territory": str(r[1] or ""), "customers_count": int(r[2] or 0), "orders_count": int(r[3] or 0), "orders_sum": float(r[4] or 0)} for r in r_terr.fetchall()]
@@ -666,7 +669,6 @@ async def report_dashboard(
             "by_territory": by_territory,
             "orders_by_day": orders_by_day,
             "orders_by_status": orders_by_status,
-            "top_clients": top_clients,
             "filters": {"date_from": df, "date_to": dt},
         }
     except Exception as e:
@@ -689,22 +691,34 @@ async def report_dashboard_export(
     wb = Workbook()
     ws = wb.active
     ws.title = "По категориям"
+    center_align = Alignment(horizontal='center', vertical='center')
     for col, h in enumerate(["Категория", "Доля %", "Сумма", "Количество"], start=1):
-        ws.cell(row=1, column=col, value=h)
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.alignment = center_align
     for row_idx, r in enumerate(data[:5000], start=2):
-        ws.cell(row=row_idx, column=1, value=r.get("category") or "")
-        ws.cell(row=row_idx, column=2, value=float(r.get("share_pct") or 0))
-        ws.cell(row=row_idx, column=3, value=float(r.get("sum_amount") or 0))
-        ws.cell(row=row_idx, column=4, value=int(r.get("quantity") or 0))
+        cell1 = ws.cell(row=row_idx, column=1, value=r.get("category") or "")
+        cell1.alignment = center_align
+        cell2 = ws.cell(row=row_idx, column=2, value=float(r.get("share_pct") or 0))
+        cell2.alignment = center_align
+        cell3 = ws.cell(row=row_idx, column=3, value=float(r.get("sum_amount") or 0))
+        cell3.alignment = center_align
+        cell4 = ws.cell(row=row_idx, column=4, value=int(r.get("quantity") or 0))
+        cell4.alignment = center_align
     ws2 = wb.create_sheet("По территориям")
     for col, h in enumerate(["Город", "Территория", "Количество клиентов", "Количество заказов", "Сумма"], start=1):
-        ws2.cell(row=1, column=col, value=h)
+        cell = ws2.cell(row=1, column=col, value=h)
+        cell.alignment = center_align
     for row_idx, r in enumerate(by_territory[:5000], start=2):
-        ws2.cell(row=row_idx, column=1, value=r.get("city") or "")
-        ws2.cell(row=row_idx, column=2, value=r.get("territory") or "")
-        ws2.cell(row=row_idx, column=3, value=int(r.get("customers_count") or 0))
-        ws2.cell(row=row_idx, column=4, value=int(r.get("orders_count") or 0))
-        ws2.cell(row=row_idx, column=5, value=float(r.get("orders_sum") or 0))
+        cell1 = ws2.cell(row=row_idx, column=1, value=r.get("city") or "")
+        cell1.alignment = center_align
+        cell2 = ws2.cell(row=row_idx, column=2, value=r.get("territory") or "")
+        cell2.alignment = center_align
+        cell3 = ws2.cell(row=row_idx, column=3, value=int(r.get("customers_count") or 0))
+        cell3.alignment = center_align
+        cell4 = ws2.cell(row=row_idx, column=4, value=int(r.get("orders_count") or 0))
+        cell4.alignment = center_align
+        cell5 = ws2.cell(row=row_idx, column=5, value=float(r.get("orders_sum") or 0))
+        cell5.alignment = center_align
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -736,27 +750,39 @@ async def report_photos(
         without = total_c - with_photos
 
         # Клиенты без фото — полная таблица
-        q2_sql = 'SELECT id, name_client, firm_name FROM "Sales".v_customers_without_photos'
+        q2_sql = '''SELECT c.id, COALESCE(c.name_client, c.firm_name, '') AS customer_name,
+                   c.address, COALESCE(ct.name, '') AS city, COALESCE(tr.name, '') AS territory, c.phone, c.contact_person, c.tax_id
+                   FROM "Sales".customers c
+                   LEFT JOIN "Sales".cities ct ON ct.id = c.city_id
+                   LEFT JOIN "Sales".territories tr ON tr.id = c.territory_id
+                   WHERE NOT EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id)
+                   ORDER BY c.name_client'''
         try:
             r2 = await session.execute(text(q2_sql))
         except Exception:
             r2 = await session.execute(text(
-                'SELECT id, name_client, firm_name FROM "Sales".customers c '
-                'WHERE NOT EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) '
-                'ORDER BY c.name_client'
+                '''SELECT c.id, COALESCE(c.name_client, c.firm_name, '') AS customer_name,
+                   c.address, COALESCE(ct.name, '') AS city, COALESCE(tr.name, '') AS territory, c.phone, c.contact_person, c.tax_id
+                   FROM "Sales".customers c
+                   LEFT JOIN "Sales".cities ct ON ct.id = c.city_id
+                   LEFT JOIN "Sales".territories tr ON tr.id = c.territory_id
+                   WHERE NOT EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id)
+                   ORDER BY c.name_client'''
             ))
         rows2 = r2.fetchall()
-        without_list = [{"id": r[0], "name_client": r[1] or "", "firm_name": r[2] or "", "name": (r[1] or r[2] or "")} for r in rows2]
+        without_list = [{"id": r[0], "customer_name": str(r[1] or ""), "address": str(r[2] or ""), "city": str(r[3] or ""), "territory": str(r[4] or ""), "phone": str(r[5] or ""), "contact_person": str(r[6] or ""), "tax_id": str(r[7] or "")} for r in rows2]
 
         # Все фото — с полями клиента: адрес, город, территория, телефон, контактное лицо, ИНН
         q3 = """
         SELECT cp.id, cp.customer_id, COALESCE(c.name_client, c.firm_name, '') AS customer_name,
-               c.address, c.city, c.territory, c.phone, c.contact_person, c.tax_id,
+               c.address, COALESCE(ct.name, '') AS city, COALESCE(tr.name, '') AS territory, c.phone, c.contact_person, c.tax_id,
                cp.photo_path, cp.original_filename, cp.file_size,
                cp.description, cp.uploaded_by, cp.uploaded_at,
                u.fio AS uploader_fio
         FROM "Sales".customer_photo cp
         JOIN "Sales".customers c ON c.id = cp.customer_id
+        LEFT JOIN "Sales".cities ct ON ct.id = c.city_id
+        LEFT JOIN "Sales".territories tr ON tr.id = c.territory_id
         LEFT JOIN "Sales".users u ON cp.uploaded_by = u.login
         ORDER BY cp.uploaded_at DESC NULLS LAST
         """
@@ -831,32 +857,56 @@ async def report_photos_export(
     without = res.get("customers_without_photos") or []
     recent = res.get("recent_uploads") or []
     wb = Workbook()
+    center_align = Alignment(horizontal='center', vertical='center')
     ws1 = wb.active
     ws1.title = "Статистика"
     ws1.cell(row=1, column=1, value="Всего фото")
     ws1.cell(row=1, column=2, value=stats.get("total_photos") or 0)
+    ws1.cell(row=1, column=2).alignment = center_align
     ws1.cell(row=2, column=1, value="Клиентов с фото")
     ws1.cell(row=2, column=2, value=stats.get("customers_with_photos") or 0)
+    ws1.cell(row=2, column=2).alignment = center_align
     ws1.cell(row=3, column=1, value="Без фото")
     ws1.cell(row=3, column=2, value=stats.get("customers_without_photos") or 0)
+    ws1.cell(row=3, column=2).alignment = center_align
     ws2 = wb.create_sheet("Клиенты без фото")
-    ws2.cell(row=1, column=1, value="Клиент")
+    headers_without = ["Клиент", "Адрес", "Город", "Территория", "Телефон", "Контактное лицо", "ИНН"]
+    for col, h in enumerate(headers_without, start=1):
+        cell = ws2.cell(row=1, column=col, value=h)
+        cell.alignment = center_align
     for row_idx, c in enumerate(without[:5000], start=2):
-        ws2.cell(row=row_idx, column=1, value=(c.get("name_client") or c.get("firm_name") or c.get("name") or ""))
+        vals = [
+            c.get("customer_name") or "",
+            c.get("address") or "",
+            c.get("city") or "",
+            c.get("territory") or "",
+            c.get("phone") or "",
+            c.get("contact_person") or "",
+            c.get("tax_id") or "",
+        ]
+        for col_idx, v in enumerate(vals, start=1):
+            cell = ws2.cell(row=row_idx, column=col_idx, value=v)
+            cell.alignment = center_align
     ws3 = wb.create_sheet("Последние загрузки")
     headers_photos = ["Клиент", "Адрес", "Город", "Территория", "Телефон", "Контактное лицо", "ИНН", "Дата загрузки", "Загружено"]
     for col, h in enumerate(headers_photos, start=1):
-        ws3.cell(row=1, column=col, value=h)
+        cell = ws3.cell(row=1, column=col, value=h)
+        cell.alignment = center_align
     for row_idx, p in enumerate(recent[:500], start=2):
-        ws3.cell(row=row_idx, column=1, value=p.get("customer_name") or "")
-        ws3.cell(row=row_idx, column=2, value=p.get("address") or "")
-        ws3.cell(row=row_idx, column=3, value=p.get("city") or "")
-        ws3.cell(row=row_idx, column=4, value=p.get("territory") or "")
-        ws3.cell(row=row_idx, column=5, value=p.get("phone") or "")
-        ws3.cell(row=row_idx, column=6, value=p.get("contact_person") or "")
-        ws3.cell(row=row_idx, column=7, value=p.get("tax_id") or "")
-        ws3.cell(row=row_idx, column=8, value=p.get("uploaded_at") or "")
-        ws3.cell(row=row_idx, column=9, value=p.get("uploaded_by") or "")
+        vals = [
+            p.get("customer_name") or "",
+            p.get("address") or "",
+            p.get("city") or "",
+            p.get("territory") or "",
+            p.get("phone") or "",
+            p.get("contact_person") or "",
+            p.get("tax_id") or "",
+            p.get("uploaded_at") or "",
+            p.get("uploaded_by") or "",
+        ]
+        for col_idx, v in enumerate(vals, start=1):
+            cell = ws3.cell(row=row_idx, column=col_idx, value=v)
+            cell.alignment = center_align
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)

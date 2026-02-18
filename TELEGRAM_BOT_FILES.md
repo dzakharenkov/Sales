@@ -11,6 +11,7 @@
 | `src/telegram_bot/session.py` | Сессии в БД (`telegram_sessions`), блокировка попыток входа, логи действий |
 | `src/telegram_bot/handlers_auth.py` | Авторизация: ввод логина/пароля, вызов API, главное меню, выход |
 | `src/telegram_bot/handlers_agent.py` | Обработчики для роли «агент»: клиенты, заказы, создание заказов |
+| `src/telegram_bot/handlers_agent_v3_add_customer.py` | **[NEW v3]** FSM-обработчик добавления клиента с линейным диалогом |
 | `src/telegram_bot/handlers_expeditor.py` | Обработчики для роли «экспедитор»: рейсы, доставки, чеки |
 | `src/telegram_bot/helpers.py` | Вспомогательные функции (форматирование, клавиатуры и т.п.) |
 | `ubuntu_telegram_uz_sales_bot` | Скрипт запуска бота на Ubuntu (в фоне, лог в `telegram_bot.log`) |

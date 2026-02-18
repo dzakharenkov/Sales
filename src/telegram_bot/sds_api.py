@@ -87,6 +87,16 @@ class SDSApi:
         """GET /api/v1/auth/me"""
         return await self._request("GET", "/api/v1/auth/me", token=token)
 
+    # ---------- Users ----------
+
+    async def get_users(self, token: str) -> list:
+        """GET /api/v1/users — список всех пользователей"""
+        return await self._request("GET", "/api/v1/users", token=token)
+
+    async def get_user_logins(self, token: str) -> list:
+        """GET /api/v1/dictionary/user-logins — логины и ФИО (доступно всем авторизованным)"""
+        return await self._request("GET", "/api/v1/dictionary/user-logins", token=token)
+
     # ---------- Orders ----------
 
     async def get_orders(self, token: str, **params) -> Any:
@@ -188,6 +198,14 @@ class SDSApi:
     async def get_payment_types(self, token: str) -> list:
         """GET /api/v1/dictionary/payment-types"""
         return await self._request("GET", "/api/v1/dictionary/payment-types", token=token)
+
+    async def get_cities(self, token: str) -> list:
+        """GET /api/v1/dictionary/cities"""
+        return await self._request("GET", "/api/v1/dictionary/cities", token=token)
+
+    async def get_territories(self, token: str) -> list:
+        """GET /api/v1/dictionary/territories"""
+        return await self._request("GET", "/api/v1/dictionary/territories", token=token)
 
     # ---------- Operations ----------
 

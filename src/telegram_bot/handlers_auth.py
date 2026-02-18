@@ -36,7 +36,8 @@ def main_menu_keyboard(role: str) -> InlineKeyboardMarkup:
     elif role_lower == "agent":
         buttons.append([InlineKeyboardButton("🆕 Создать визит", callback_data="agent_create_visit")])
         buttons.append([InlineKeyboardButton("📋 Мои визиты", callback_data="agent_visits")])
-        buttons.append([InlineKeyboardButton("➕ Добавить клиента", callback_data="agent_add_customer")])
+        buttons.append([InlineKeyboardButton("➕ Добавить клиента", callback_data="agent_add_customer_v3")])
+        buttons.append([InlineKeyboardButton("📍 Обновить локацию клиента", callback_data="agent_update_location")])
         buttons.append([InlineKeyboardButton("📸 Загрузить фото клиента", callback_data="agent_photo")])
         buttons.append([InlineKeyboardButton("🛒 Создать заказ", callback_data="agent_order")])
     else:
@@ -281,11 +282,25 @@ async def cb_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("Сессия не найдена. Нажмите /start.")
         return
     role_ru = ROLE_RU.get(session.role, session.role)
+
+    # Получить расширенную информацию о пользователе
+    phone = "—"
+    email = "—"
+    try:
+        from .sds_api import api
+        user_info = await api.get_current_user(session.jwt_token)
+        phone = user_info.get("phone", "—") or "—"
+        email = user_info.get("email", "—") or "—"
+    except Exception:
+        pass
+
     text = (
-        f"👤 *Профиль*\n\n"
+        f"👤 *Профиль пользователя*\n\n"
         f"*ФИО:* {session.fio}\n"
         f"*Логин:* {session.login}\n"
         f"*Роль:* {role_ru}\n"
+        f"*Телефон:* {phone}\n"
+        f"*Email:* {email}\n"
     )
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="main_menu")]])
     await q.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")

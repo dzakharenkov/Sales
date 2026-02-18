@@ -60,9 +60,9 @@ async def get_cached_products(token: str) -> list:
     if key in _cache and time.time() - _cache[key][0] < CACHE_TTL:
         return _cache[key][1]
     data = await api.get_products(token)
-    items = [p for p in data if p.get("active", True)]
-    _cache[key] = (time.time(), items)
-    return items
+    # Показываем ВСЕ продукты номенклатуры (даже без остатков на складе)
+    _cache[key] = (time.time(), data)
+    return data
 
 
 async def get_cached_payment_types(token: str) -> list:
@@ -72,6 +72,23 @@ async def get_cached_payment_types(token: str) -> list:
     data = await api.get_payment_types(token)
     _cache[key] = (time.time(), data)
     return data
+
+
+async def get_cached_user_logins(token: str) -> list:
+    """Кэшированный список пользователей (экспедиторов). TTL=300сек."""
+    key = "user_logins"
+    if key in _cache and time.time() - _cache[key][0] < CACHE_TTL:
+        return _cache[key][1]
+    try:
+        data = await api.get_user_logins(token)
+        _cache[key] = (time.time(), data)
+        return data
+    except Exception as e:
+        logger.error(f"Error getting user logins: {e}")
+        # При ошибке вернуть пустой список или старые данные из кэша
+        if key in _cache:
+            return _cache[key][1]
+        return []
 
 
 # ---------- Клавиатуры ----------

@@ -3,6 +3,7 @@
 Валидация телефона и email с понятными сообщениями на русском.
 """
 import re
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
@@ -12,6 +13,8 @@ from src.database.connection import get_db_session
 from src.database.models import User
 from src.core.deps import get_current_user, require_admin
 from src.core.security import hash_password
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -31,25 +34,56 @@ class UserCreate(BaseModel):
     phone: str | None = None
     email: str | None = None
 
+    @field_validator("login")
+    @classmethod
+    def check_login(cls, v: str) -> str:
+        if not v or len(v) < 3:
+            raise ValueError("Логин должен быть минимум 3 символа.")
+        if not v.replace('_', '').isalnum():
+            raise ValueError("Логин: только латиница, цифры и подчёркивание.")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, v: str) -> str:
+        if not v or len(v) < 4:
+            raise ValueError("Пароль должен быть минимум 4 символа.")
+        return v
+
+    @field_validator("fio")
+    @classmethod
+    def check_fio(cls, v: str) -> str:
+        if not v or len(v.strip()) < 2:
+            raise ValueError("ФИО должно быть не менее 2 символов.")
+        return v
+
     @field_validator("phone")
     @classmethod
     def check_phone(cls, v: str | None) -> str | None:
-        if v is None or v.strip() == "":
+        if v is None:
             return None
-        v = v.strip()
-        if not PHONE_RE.match(v):
-            raise ValueError("Телефон: только цифры, +, пробелы, скобки и дефис (до 20 символов).")
-        return v
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return None
+            if not PHONE_RE.match(v):
+                raise ValueError("Телефон: только цифры, +, пробелы, скобки и дефис (до 20 символов).")
+            return v
+        return None
 
     @field_validator("email")
     @classmethod
     def check_email(cls, v: str | None) -> str | None:
-        if v is None or v.strip() == "":
+        if v is None:
             return None
-        v = v.strip()
-        if not EMAIL_RE.match(v):
-            raise ValueError("Неверный формат email. Пример: user@example.com")
-        return v
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return None
+            if not EMAIL_RE.match(v):
+                raise ValueError("Неверный формат email. Пример: user@example.com")
+            return v
+        return None
 
 
 class UserUpdate(BaseModel):
@@ -62,22 +96,30 @@ class UserUpdate(BaseModel):
     @field_validator("phone")
     @classmethod
     def check_phone(cls, v: str | None) -> str | None:
-        if v is None or (isinstance(v, str) and v.strip() == ""):
+        if v is None:
             return None
-        v = v.strip() if isinstance(v, str) else v
-        if not PHONE_RE.match(v):
-            raise ValueError("Телефон: только цифры, +, пробелы, скобки и дефис (до 20 символов).")
-        return v
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return None
+            if not PHONE_RE.match(v):
+                raise ValueError("Телефон: только цифры, +, пробелы, скобки и дефис (до 20 символов).")
+            return v
+        return None
 
     @field_validator("email")
     @classmethod
     def check_email(cls, v: str | None) -> str | None:
-        if v is None or (isinstance(v, str) and v.strip() == ""):
+        if v is None:
             return None
-        v = v.strip() if isinstance(v, str) else v
-        if not EMAIL_RE.match(v):
-            raise ValueError("Неверный формат email. Пример: user@example.com")
-        return v
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return None
+            if not EMAIL_RE.match(v):
+                raise ValueError("Неверный формат email. Пример: user@example.com")
+            return v
+        return None
 
 
 class UserSetPassword(BaseModel):
@@ -115,24 +157,30 @@ async def create_user(
     user: User = Depends(require_admin),
 ):
     """Создать пользователя с паролем. Только admin."""
-    if body.role not in ROLES:
-        raise HTTPException(status_code=400, detail="Роль должна быть одна из: admin, expeditor, agent, stockman, paymaster.")
-    result = await session.execute(select(User).where(User.login == body.login))
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Пользователь с таким логином уже существует. Выберите другой логин.")
-    new_user = User(
-        login=body.login,
-        fio=body.fio,
-        password=hash_password(body.password),
-        role=body.role,
-        phone=body.phone,
-        email=body.email,
-        status="активен",
-    )
-    session.add(new_user)
-    await session.commit()
-    await session.refresh(new_user)
-    return {"login": new_user.login, "fio": new_user.fio, "role": new_user.role, "message": "created"}
+    try:
+        if body.role not in ROLES:
+            raise HTTPException(status_code=400, detail="Роль должна быть одна из: admin, expeditor, agent, stockman, paymaster.")
+        result = await session.execute(select(User).where(User.login == body.login))
+        if result.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Пользователь с таким логином уже существует. Выберите другой логин.")
+        new_user = User(
+            login=body.login,
+            fio=body.fio,
+            password=hash_password(body.password),
+            role=body.role,
+            phone=body.phone,
+            email=body.email,
+            status="активен",
+        )
+        session.add(new_user)
+        await session.commit()
+        await session.refresh(new_user)
+        return {"login": new_user.login, "fio": new_user.fio, "role": new_user.role, "message": "created"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка при создании пользователя: {str(e)}")
 
 
 @router.patch("/users/{login}")

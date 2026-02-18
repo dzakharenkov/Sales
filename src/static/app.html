@@ -172,7 +172,7 @@
 
       var SECTION_TO_CODE = {
         users: 'users',
-        ref_parent: 'references', ref_payment: 'references', ref_products: 'references', ref_operations: 'references', ref_currency: 'references', warehouses: 'references', products: 'references',
+        ref_parent: 'references', ref_payment: 'ref_payment', ref_products: 'ref_products', ref_operations: 'ref_operations', ref_currency: 'ref_currency', ref_cities: 'ref_cities', ref_territories: 'ref_territories', warehouses: 'warehouses', products: 'products',
         customers_parent: 'customers', customers: 'customers', customers_create: 'customers', customers_map: 'customers',
         visits_parent: 'visits', visits_search: 'visits', visits_create: 'visits', visits_calendar: 'visits',
         orders_parent: 'orders', orders: 'orders', orders_create: 'orders', order_items: 'orders',
@@ -196,7 +196,7 @@
         chart: '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>'
       };
       var SIDEBAR_CHILDREN = {
-        references: [{ s: 'ref_payment', l: 'Типы оплат' }, { s: 'ref_products', l: 'Типы продуктов' }, { s: 'ref_operations', l: 'Типы операций' }, { s: 'ref_currency', l: 'Валюта' }, { s: 'warehouses', l: 'Склады' }, { s: 'products', l: 'Товары' }],
+        references: [{ s: 'ref_payment', l: 'Типы оплат' }, { s: 'ref_products', l: 'Типы продуктов' }, { s: 'ref_operations', l: 'Типы операций' }, { s: 'ref_currency', l: 'Валюта' }, { s: 'ref_cities', l: 'Города' }, { s: 'ref_territories', l: 'Территории' }, { s: 'warehouses', l: 'Склады' }, { s: 'products', l: 'Товары' }],
         customers: [{ s: 'customers', l: 'Поиск клиента' }, { s: 'customers_create', l: 'Создать клиента' }, { s: 'customers_map', l: 'Клиенты на карте' }],
         visits: [{ s: 'visits_search', l: 'Поиск визита' }, { s: 'visits_create', l: 'Создать визит' }, { s: 'visits_calendar', l: 'Календарь визитов' }],
         orders: [{ s: 'orders', l: 'Поиск заказов' }, { s: 'orders_create', l: 'Создать заказ' }, { s: 'order_items', l: 'Поиск позиций заказов' }],
@@ -213,9 +213,26 @@
         menuByCode = {};
         (items || []).forEach(function (m) { menuByCode[m.code] = m.access_level || 'view'; });
         menuItems = items || [];
+
+        // Пропускаем только подпункты справочников (ref_payment, ref_products и т.д.)
+        // которые возвращены API как отдельные записи
+        var skipCodes = {};
+        if (SIDEBAR_CHILDREN['references']) {
+          SIDEBAR_CHILDREN['references'].forEach(function (child) {
+            // Пропускаем только если этот подпункт справочника есть в API
+            if (menuByCode[child.s] && child.s !== 'references') {
+              skipCodes[child.s] = true;
+            }
+          });
+        }
+
         var html = '';
         (items || []).forEach(function (m) {
           var code = m.code;
+
+          // Пропускаем ТОЛЬКО подпункты справочников
+          if (skipCodes[code]) return;
+
           var section = SIDEBAR_SECTIONS[code];
           var label = m.label || code;
           var icon = SIDEBAR_ICONS[m.icon] || SIDEBAR_ICONS[code] || '';
@@ -254,7 +271,9 @@
       var loadMenu = function () {
         return api('/api/v1/menu').then(function (data) {
           var list = (data && data.menu) ? data.menu : [];
+          console.log('API /menu returned:', list);
           renderSidebar(list);
+          console.log('menuByCode after renderSidebar:', menuByCode);
           return list;
         }).catch(function () {
           menuByCode = {};
@@ -285,7 +304,11 @@
             if (p && p.then) p.then(closeModal).catch(function (e) {
               if (!errEl) return;
               var detail = e && e.data && e.data.detail;
-              if (!detail) { errEl.textContent = 'Ошибка соединения или сервера.'; return; }
+              if (!detail) {
+                var statusMsg = e && e.status ? ' [' + e.status + ']' : '';
+                errEl.textContent = 'Ошибка соединения или сервера.' + statusMsg;
+                return;
+              }
               if (typeof detail === 'string') { errEl.textContent = detail; return; }
               if (Array.isArray(detail)) {
                 var parts = detail.map(function (x) {
@@ -323,7 +346,9 @@
 
       var showSection = function (name) {
         var code = sectionToCode(name);
+        console.log('showSection: name=' + name + ', code=' + code + ', menuByCode[code]=' + menuByCode[code]);
         if (!menuByCode[code] || menuByCode[code] === 'none') {
+          console.error('Access denied for section: ' + name + ', code: ' + code);
           var content = document.getElementById('content');
           if (content) content.innerHTML = '<div class="card"><h2>Доступ запрещён</h2><p>Access Denied. У вас нет прав на этот раздел.</p><p><button type="button" class="btn btn-primary" id="accessDeniedBack">На главную</button></p></div>';
           document.getElementById('accessDeniedBack').onclick = function () {
@@ -336,7 +361,7 @@
         document.querySelectorAll('.sidebar a').forEach(function (a) {
           var s = a.getAttribute('data-section');
           a.classList.toggle('active', s === name);
-          if (a.id === 'refParent') a.classList.toggle('open', (name === 'ref_parent' || name === 'ref_payment' || name === 'ref_products' || name === 'ref_operations' || name === 'ref_currency' || name === 'warehouses' || name === 'products'));
+          if (a.id === 'refParent') a.classList.toggle('open', (name === 'ref_parent' || name === 'ref_payment' || name === 'ref_products' || name === 'ref_operations' || name === 'ref_currency' || name === 'ref_cities' || name === 'ref_territories' || name === 'warehouses' || name === 'products'));
           if (a.id === 'customersParent') a.classList.toggle('open', (name === 'customers_parent' || name === 'customers' || name === 'customers_create' || name === 'customers_map'));
           if (a.id === 'visitsParent') a.classList.toggle('open', (name === 'visits_parent' || name === 'visits_search' || name === 'visits_create' || name === 'visits_calendar'));
           if (a.id === 'ordersParent') a.classList.toggle('open', (name === 'orders_parent' || name === 'orders' || name === 'orders_create' || name === 'order_items'));
@@ -345,7 +370,7 @@
           if (a.id === 'reportsParent') a.classList.toggle('open', (name === 'reports_parent' || name === 'report_customers' || name === 'report_agents' || name === 'report_expeditors' || name === 'report_visits' || name === 'report_dashboard' || name === 'report_photos'));
         });
         var sub = document.getElementById('refSubmenu');
-        if (sub) sub.classList.toggle('open', name === 'ref_parent' || name === 'ref_payment' || name === 'ref_products' || name === 'ref_operations' || name === 'ref_currency' || name === 'warehouses' || name === 'products');
+        if (sub) sub.classList.toggle('open', name === 'ref_parent' || name === 'ref_payment' || name === 'ref_products' || name === 'ref_operations' || name === 'ref_currency' || name === 'ref_cities' || name === 'ref_territories' || name === 'warehouses' || name === 'products');
         var customersSub = document.getElementById('customersSubmenu');
         if (customersSub) customersSub.classList.toggle('open', name === 'customers_parent' || name === 'customers' || name === 'customers_create' || name === 'customers_map');
         var visitsSub = document.getElementById('visitsSubmenu');
@@ -363,7 +388,9 @@
         if (name === 'ref_parent' || name === 'ops_parent' || name === 'orders_parent' || name === 'customers_parent' || name === 'visits_parent' || name === 'cash_parent' || name === 'reports_parent') return;
         // Для пункта меню "Создать клиента" — форма сразу на странице (без модалки)
         if (name === 'customers_create') {
-          api('/api/v1/dictionary/user-logins').catch(function () { return []; }).then(function (userList) {
+          loadCitiesAndTerritories().then(function () {
+            return api('/api/v1/dictionary/user-logins').catch(function () { return []; });
+          }).then(function (userList) {
             userList = userList || [];
             var content = document.getElementById('content');
             if (!content) return;
@@ -409,6 +436,8 @@
         else if (name === 'ref_operations') loadSectionRefOperations();
         else if (name === 'ref_currency') loadSectionRefCurrency();
         else if (name === 'warehouses') loadSectionWarehouses();
+        else if (name === 'ref_cities') loadSectionCities();
+        else if (name === 'ref_territories') loadSectionTerritories();
         else if (name === 'customers') loadSectionCustomers();
         else if (name === 'orders') loadSectionOrders();
         else if (name === 'order_items') loadSectionOrderItems();
@@ -1051,19 +1080,61 @@
         });
         return opts;
       }
+      var citiesCache = [];
+      var territoriesCache = [];
+      function loadCitiesAndTerritories() {
+        console.log('=== loadCitiesAndTerritories CALLED ===');
+        return Promise.all([
+          api('/api/v1/dictionary/cities').then(function (data) {
+            console.log('Cities API returned:', data);
+            citiesCache = data || [];
+            console.log('citiesCache after assignment:', citiesCache);
+            return citiesCache;
+          }).catch(function (err) {
+            console.error('Error loading cities:', err);
+            citiesCache = [];
+            return citiesCache;
+          }),
+          api('/api/v1/dictionary/territories').then(function (data) {
+            console.log('Territories API returned:', data);
+            territoriesCache = data || [];
+            console.log('territoriesCache after assignment:', territoriesCache);
+            return territoriesCache;
+          }).catch(function (err) {
+            console.error('Error loading territories:', err);
+            territoriesCache = [];
+            return territoriesCache;
+          })
+        ]).then(function() {
+          console.log('=== loadCitiesAndTerritories COMPLETED ===');
+          console.log('Final citiesCache:', citiesCache);
+          console.log('Final territoriesCache:', territoriesCache);
+        });
+      }
       function custInputVal(v) { return (v != null && v !== '' ? String(v) : '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
       function custEditFormHtml(c, userList) {
+        console.log('custEditFormHtml called - citiesCache:', citiesCache, 'territoriesCache:', territoriesCache);
         var agOpts = custUserSelectHtml(userList, c.login_agent || '');
         var expUsers = (userList || []).filter(function (u) { return (u.role || '').toLowerCase() === 'expeditor'; });
         var exOpts = custUserSelectHtml(expUsers, c.login_expeditor || '');
         var f = function (label, id, val) { return '<div class="form-group"><label>' + label + '</label><input type="text" id="' + id + '" value="' + custInputVal(val) + '"></div>'; };
         var num = function (label, id, val) { return '<div class="form-group"><label>' + label + '</label><input type="number" step="any" id="' + id + '" value="' + custInputVal(val) + '"></div>'; };
-        return f('Название клиента', 'cust_name', c.name_client) + f('Название фирмы', 'cust_firm', c.firm_name) + f('Категория клиента', 'cust_category', c.category_client) + f('Адрес', 'cust_address', c.address) + f('Город', 'cust_city', c.city) + f('Территория', 'cust_territory', c.territory) + f('Ориентир', 'cust_landmark', c.landmark) + f('Телефон', 'cust_phone', c.phone) + f('Контактное лицо', 'cust_contact', c.contact_person) + f('ИНН', 'cust_tax_id', c.tax_id) + f('Статус', 'cust_status', c.status) + '<div class="form-group"><label>login агента</label><select id="cust_agent">' + agOpts + '</select></div><div class="form-group"><label>login экспедитора</label><select id="cust_expeditor">' + exOpts + '</select></div>' + num('Широта', 'cust_lat', c.latitude) + num('Долгота', 'cust_lon', c.longitude) + f('ПИНФЛ', 'cust_pinfl', c.PINFL) + f('Договор №', 'cust_contract_no', c.contract_no) + f('Р/С', 'cust_account_no', c.account_no) + f('Банк', 'cust_bank', c.bank) + f('МФО', 'cust_mfo', c.MFO) + f('ОКЭД', 'cust_oked', c.OKED) + f('Регистрационный код плательщика НДС', 'cust_vat_code', c.VAT_code);
+        var cityOpts = '<option value="">— Не выбрано —</option>';
+        citiesCache.forEach(function (ct) { cityOpts += '<option value="' + ct.id + '"' + (ct.id === c.city_id ? ' selected' : '') + '>' + escAttr(ct.name) + '</option>'; });
+        var territoryOpts = '<option value="">— Не выбрано —</option>';
+        territoriesCache.forEach(function (t) { territoryOpts += '<option value="' + t.id + '"' + (t.id === c.territory_id ? ' selected' : '') + '>' + escAttr(t.name) + '</option>'; });
+        console.log('Built cityOpts:', cityOpts);
+        console.log('Built territoryOpts:', territoryOpts);
+        return f('Название клиента', 'cust_name', c.name_client) + f('Название фирмы', 'cust_firm', c.firm_name) + f('Категория клиента', 'cust_category', c.category_client) + f('Адрес', 'cust_address', c.address) + '<div class="form-group"><label>Город</label><select id="cust_city">' + cityOpts + '</select></div><div class="form-group"><label>Территория</label><select id="cust_territory">' + territoryOpts + '</select></div>' + f('Ориентир', 'cust_landmark', c.landmark) + f('Телефон', 'cust_phone', c.phone) + f('Контактное лицо', 'cust_contact', c.contact_person) + f('ИНН', 'cust_tax_id', c.tax_id) + f('Статус', 'cust_status', c.status) + '<div class="form-group"><label>login агента</label><select id="cust_agent">' + agOpts + '</select></div><div class="form-group"><label>login экспедитора</label><select id="cust_expeditor">' + exOpts + '</select></div>' + num('Широта', 'cust_lat', c.latitude) + num('Долгота', 'cust_lon', c.longitude) + f('ПИНФЛ', 'cust_pinfl', c.PINFL) + f('Договор №', 'cust_contract_no', c.contract_no) + f('Р/С', 'cust_account_no', c.account_no) + f('Банк', 'cust_bank', c.bank) + f('МФО', 'cust_mfo', c.MFO) + f('ОКЭД', 'cust_oked', c.OKED) + f('Регистрационный код плательщика НДС', 'cust_vat_code', c.VAT_code);
       }
       function custFormBody() {
         var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
         var gn = function (id) { var v = g(id); return v === '' ? null : (Number(v)); };
-        return { name_client: g('cust_name') || null, firm_name: g('cust_firm') || null, category_client: g('cust_category') || null, address: g('cust_address') || null, city: g('cust_city') || null, territory: g('cust_territory') || null, landmark: g('cust_landmark') || null, phone: g('cust_phone') || null, contact_person: g('cust_contact') || null, tax_id: g('cust_tax_id') || null, status: g('cust_status') || null, login_agent: document.getElementById('cust_agent') ? document.getElementById('cust_agent').value || null : null, login_expeditor: document.getElementById('cust_expeditor') ? document.getElementById('cust_expeditor').value || null : null, latitude: gn('cust_lat'), longitude: gn('cust_lon'), PINFL: g('cust_pinfl') || null, contract_no: g('cust_contract_no') || null, account_no: g('cust_account_no') || null, bank: g('cust_bank') || null, MFO: g('cust_mfo') || null, OKED: g('cust_oked') || null, VAT_code: g('cust_vat_code') || null };
+        var citySelect = document.getElementById('cust_city');
+        var territorySelect = document.getElementById('cust_territory');
+        var cityId = citySelect && citySelect.value ? parseInt(citySelect.value, 10) : null;
+        var territoryId = territorySelect && territorySelect.value ? parseInt(territorySelect.value, 10) : null;
+        return { name_client: g('cust_name') || null, firm_name: g('cust_firm') || null, category_client: g('cust_category') || null, address: g('cust_address') || null, city_id: cityId, territory_id: territoryId, landmark: g('cust_landmark') || null, phone: g('cust_phone') || null, contact_person: g('cust_contact') || null, tax_id: g('cust_tax_id') || null, status: g('cust_status') || null, login_agent: document.getElementById('cust_agent') ? document.getElementById('cust_agent').value || null : null, login_expeditor: document.getElementById('cust_expeditor') ? document.getElementById('cust_expeditor').value || null : null, latitude: gn('cust_lat'), longitude: gn('cust_lon'), PINFL: g('cust_pinfl') || null, contract_no: g('cust_contract_no') || null, account_no: g('cust_account_no') || null, bank: g('cust_bank') || null, MFO: g('cust_mfo') || null, OKED: g('cust_oked') || null, VAT_code: g('cust_vat_code') || null };
       }
       function loadSectionCustomers() {
         api('/api/v1/dictionary/user-logins').catch(function () { return []; }).then(function (userList) {
@@ -1079,7 +1150,7 @@
             agentOpts += optHtml;
             if ((u.role || '').toLowerCase() === 'expeditor') expeditorOpts += optHtml;
           });
-          content.innerHTML = '<div class="card"><h2>Клиенты</h2><p style="margin:0 0 12px 0">' + addBtn + ' ' + exportBtn + '</p><div class="form-group" style="margin-bottom:12px"><label>Поиск</label></div><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px"><input id="custSearchName" placeholder="Название клиента" style="max-width:180px"><input id="custSearchFirm" placeholder="Название фирмы" style="max-width:180px"><input id="custSearchCity" placeholder="Город" style="max-width:140px"><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">login агента</label><select id="custSearchAgent" style="max-width:160px">' + agentOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">login экспедитора</label><select id="custSearchExpeditor" style="max-width:160px">' + expeditorOpts + '</select></div><input id="custSearchPhone" placeholder="Телефон" style="max-width:140px"><input id="custSearchTaxId" placeholder="ИНН" style="max-width:120px"><button type="button" class="btn btn-primary" id="btnCustSearch">Найти</button></div><div id="sectionTable"></div><div id="sectionErr" class="err"></div></div>';
+          content.innerHTML = '<div class="card"><h2>Клиенты</h2><p style="margin:0 0 12px 0">' + addBtn + ' ' + exportBtn + '</p><div class="form-group" style="margin-bottom:12px"><label>Поиск</label></div><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px"><input type="number" id="custSearchId" placeholder="ИД клиента" min="1" style="max-width:110px"><input id="custSearchName" placeholder="Название клиента" style="max-width:180px"><input id="custSearchFirm" placeholder="Название фирмы" style="max-width:180px"><input id="custSearchCity" placeholder="Город" style="max-width:140px"><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">login агента</label><select id="custSearchAgent" style="max-width:160px">' + agentOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">login экспедитора</label><select id="custSearchExpeditor" style="max-width:160px">' + expeditorOpts + '</select></div><input id="custSearchPhone" placeholder="Телефон" style="max-width:140px"><input id="custSearchTaxId" placeholder="ИНН" style="max-width:120px"><button type="button" class="btn btn-primary" id="btnCustSearch">Найти</button></div><div id="sectionTable"></div><div id="sectionErr" class="err"></div></div>';
           bindCustAdd(userList);
           var exportEl = document.getElementById('custExport');
           if (exportEl) exportEl.onclick = function () {
@@ -1092,6 +1163,7 @@
             }).catch(function (e) { alert('Ошибка выгрузки: ' + (e && e.data && e.data.detail ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : e.message || 'Ошибка')); });
           };
           function runCustomerSearch() {
+            var cust_id = document.getElementById('custSearchId') ? document.getElementById('custSearchId').value.trim() : '';
             var name_client = document.getElementById('custSearchName') ? document.getElementById('custSearchName').value.trim() : '';
             var firm_name = document.getElementById('custSearchFirm') ? document.getElementById('custSearchFirm').value.trim() : '';
             var city = document.getElementById('custSearchCity') ? document.getElementById('custSearchCity').value.trim() : '';
@@ -1100,6 +1172,7 @@
             var phone = document.getElementById('custSearchPhone') ? document.getElementById('custSearchPhone').value.trim() : '';
             var tax_id = document.getElementById('custSearchTaxId') ? document.getElementById('custSearchTaxId').value.trim() : '';
             var params = ['limit=500'];
+            if (cust_id) params.push('customer_id=' + encodeURIComponent(cust_id));
             if (name_client) params.push('name_client=' + encodeURIComponent(name_client));
             if (firm_name) params.push('firm_name=' + encodeURIComponent(firm_name));
             if (city) params.push('city=' + encodeURIComponent(city));
@@ -1112,27 +1185,44 @@
               var tableDiv = document.getElementById('sectionTable');
               if (!tableDiv) return;
               if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Нет клиентов.</p>'; return; }
-              var headers = ['Действия','ИД клиента','Название клиента','Название фирмы','Категория клиента','Адрес','Город','Территория','Ориентир','Телефон','Контактное лицо','ИНН','Статус','login агента','login экспедитора','Есть фото','Широта','Долгота','ПИНФЛ','Договор №','Р/С','Банк','МФО','ОКЭД','Регистрационный код плательщика НДС'];
-              var t = '<div style="overflow-x:auto"><table><thead><tr>';
-              headers.forEach(function (h) { t += '<th>' + h + '</th>'; });
-              t += '</tr></thead><tbody>';
-              list.forEach(function (c) {
-                var id = c.id;
-                var custJson = escAttr(JSON.stringify(c));
-                t += '<tr><td>';
-                t += ' <button type="button" class="btn btn-secondary btn-small" data-cust-visits data-id="' + id + '" data-name="' + escAttr((c.name_client || c.firm_name || '').toString()) + '">Визиты</button> <button type="button" class="btn btn-secondary btn-small" data-cust-photos data-id="' + id + '" data-name="' + escAttr((c.name_client || c.firm_name || '').toString()) + '">Фото</button>';
-                if (isAdmin()) t += ' <button type="button" class="btn btn-secondary btn-small" data-cust-edit data-id="' + id + '" data-cust-json="' + custJson + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-cust-del data-id="' + id + '">Удалить</button>';
-                t += '</td><td>' + (c.id != null ? c.id : '') + '</td><td>' + (c.name_client || '') + '</td><td>' + (c.firm_name || '') + '</td><td>' + (c.category_client || '') + '</td><td>' + (c.address || '') + '</td><td>' + (c.city || '') + '</td><td>' + (c.territory || '') + '</td><td>' + (c.landmark || '') + '</td><td>' + (c.phone || '') + '</td><td>' + (c.contact_person || '') + '</td><td>' + (c.tax_id || '') + '</td><td>' + (c.status || '') + '</td><td>' + (c.login_agent || '') + '</td><td>' + (c.login_expeditor || '') + '</td><td>' + (c.has_photo ? 'Да' : 'Нет') + '</td><td>' + (c.latitude != null ? c.latitude : '') + '</td><td>' + (c.longitude != null ? c.longitude : '') + '</td><td>' + (c.PINFL || '') + '</td><td>' + (c.contract_no || '') + '</td><td>' + (c.account_no || '') + '</td><td>' + (c.bank || '') + '</td><td>' + (c.MFO || '') + '</td><td>' + (c.OKED || '') + '</td><td>' + (c.VAT_code || '') + '</td></tr>';
-              });
-              t += '</tbody></table></div>';
-              tableDiv.innerHTML = t;
-              tableDiv.querySelectorAll('[data-cust-edit]').forEach(function (el) {
+              var custSortCol = 'name_client';
+              var custSortDir = 1;
+              var canEditCust = isAdmin() || (menuByCode['customers'] && menuByCode['customers'] !== 'none') || (menuByCode['customers_create'] && menuByCode['customers_create'] !== 'none');
+              function renderCustTable(data) {
+                var sorted = data.slice().sort(function (a, b) {
+                  return tableSortCompare(a, b, custSortCol, custSortDir, function (r, c) {
+                    if (c === 'has_photo') return (r.has_photo ? '1' : '0');
+                    if (c === 'id') return String(r[c] != null ? r[c] : 0).padStart(12, '0');
+                    if (c === 'latitude' || c === 'longitude') return (r[c] != null ? r[c] : '').toString();
+                    return (r[c] || '').toString().toLowerCase();
+                  });
+                });
+                var cols = [{ col: 'id', lbl: 'ИД клиента' }, { col: 'name_client', lbl: 'Название клиента' }, { col: 'firm_name', lbl: 'Название фирмы' }, { col: 'category_client', lbl: 'Категория клиента' }, { col: 'address', lbl: 'Адрес' }, { col: 'city', lbl: 'Город' }, { col: 'territory', lbl: 'Территория' }, { col: 'landmark', lbl: 'Ориентир' }, { col: 'phone', lbl: 'Телефон' }, { col: 'contact_person', lbl: 'Контактное лицо' }, { col: 'tax_id', lbl: 'ИНН' }, { col: 'status', lbl: 'Статус' }, { col: 'login_agent', lbl: 'login агента' }, { col: 'login_expeditor', lbl: 'login экспедитора' }, { col: 'has_photo', lbl: 'Есть фото' }, { col: 'latitude', lbl: 'Широта' }, { col: 'longitude', lbl: 'Долгота' }, { col: 'PINFL', lbl: 'ПИНФЛ' }, { col: 'contract_no', lbl: 'Договор №' }, { col: 'account_no', lbl: 'Р/С' }, { col: 'bank', lbl: 'Банк' }, { col: 'MFO', lbl: 'МФО' }, { col: 'OKED', lbl: 'ОКЭД' }, { col: 'VAT_code', lbl: 'Рег. код НДС' }];
+                var t = '<div style="overflow-x:auto"><table><thead><tr><th>Действия</th>';
+                cols.forEach(function (x) { t += sortableTh(x.col, x.lbl, custSortCol, custSortDir); });
+                t += '</tr></thead><tbody>';
+                sorted.forEach(function (c) {
+                  var id = c.id;
+                  var custJson = escAttr(JSON.stringify(c));
+                  t += '<tr><td>';
+                  t += ' <button type="button" class="btn btn-secondary btn-small" data-cust-visits data-id="' + id + '" data-name="' + escAttr((c.name_client || c.firm_name || '').toString()) + '">Визиты</button> <button type="button" class="btn btn-secondary btn-small" data-cust-photos data-id="' + id + '" data-name="' + escAttr((c.name_client || c.firm_name || '').toString()) + '">Фото</button> <button type="button" class="btn btn-secondary btn-small" data-cust-edit data-id="' + id + '" data-cust-json="' + custJson + '">Изменить</button>';
+                  if (isAdmin()) t += ' <button type="button" class="btn btn-secondary btn-small" data-cust-del data-id="' + id + '">Удалить</button>';
+                  t += '</td><td>' + (c.id != null ? c.id : '') + '</td><td>' + escAttr(c.name_client || '') + '</td><td>' + escAttr(c.firm_name || '') + '</td><td>' + escAttr(c.category_client || '') + '</td><td>' + escAttr(c.address || '') + '</td><td>' + escAttr(c.city || '') + '</td><td>' + escAttr(c.territory || '') + '</td><td>' + escAttr(c.landmark || '') + '</td><td>' + escAttr(c.phone || '') + '</td><td>' + escAttr(c.contact_person || '') + '</td><td>' + escAttr(c.tax_id || '') + '</td><td>' + escAttr(c.status || '') + '</td><td>' + escAttr(c.login_agent || '') + '</td><td>' + escAttr(c.login_expeditor || '') + '</td><td>' + (c.has_photo ? 'Да' : 'Нет') + '</td><td>' + (c.latitude != null ? c.latitude : '') + '</td><td>' + (c.longitude != null ? c.longitude : '') + '</td><td>' + escAttr(c.PINFL || '') + '</td><td>' + escAttr(c.contract_no || '') + '</td><td>' + escAttr(c.account_no || '') + '</td><td>' + escAttr(c.bank || '') + '</td><td>' + escAttr(c.MFO || '') + '</td><td>' + escAttr(c.OKED || '') + '</td><td>' + escAttr(c.VAT_code || '') + '</td></tr>';
+                });
+                t += '</tbody></table></div>';
+                tableDiv.innerHTML = t;
+                tableDiv.querySelectorAll('th.sortable').forEach(function (th) {
+                  th.onclick = function () { var col = th.getAttribute('data-col'); if (custSortCol === col) custSortDir = -custSortDir; else { custSortCol = col; custSortDir = 1; } renderCustTable(list); };
+                });
+                tableDiv.querySelectorAll('[data-cust-edit]').forEach(function (el) {
                 el.onclick = function () {
                   var id = el.getAttribute('data-id');
                   var jsonStr = (el.getAttribute('data-cust-json') || '').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&amp;/g, '&');
                   var c = {}; try { c = JSON.parse(jsonStr); } catch (e) {}
-                  showModal('Изменить клиента', custEditFormHtml(c, userList), function (errEl) {
-                    return api('/api/v1/customers/' + id, { method: 'PATCH', body: JSON.stringify(custFormBody()) }).then(function () { loadSectionCustomers(); });
+                  loadCitiesAndTerritories().then(function () {
+                    showModal('Изменить клиента', custEditFormHtml(c, userList), function (errEl) {
+                      return api('/api/v1/customers/' + id, { method: 'PATCH', body: JSON.stringify(custFormBody()) }).then(function () { loadSectionCustomers(); });
+                    });
                   });
                 };
               });
@@ -1287,6 +1377,8 @@
                   }, 150);
                 };
               });
+            }
+              renderCustTable(list);
             });
           }
           document.getElementById('btnCustSearch').onclick = runCustomerSearch;
@@ -1296,9 +1388,11 @@
           var btn = document.getElementById('custAdd');
           if (!btn || !isAdmin()) return;
           btn.onclick = function () {
-            var bodyHtml = custEditFormHtml({ status: 'Активный' }, userList);
-            showModal('Добавить клиента', bodyHtml, function (errEl) {
-              return api('/api/v1/customers', { method: 'POST', body: JSON.stringify(custFormBody()) }).then(function () { loadSectionCustomers(); });
+            loadCitiesAndTerritories().then(function () {
+              var bodyHtml = custEditFormHtml({ status: 'Активный' }, userList);
+              showModal('Добавить клиента', bodyHtml, function (errEl) {
+                return api('/api/v1/customers', { method: 'POST', body: JSON.stringify(custFormBody()) }).then(function () { loadSectionCustomers(); });
+              });
             });
           };
         }
@@ -1481,7 +1575,7 @@
           }
           var sorted = list.slice().sort(function (a, b) {
             return tableSortCompare(a, b, orderSortCol, orderSortDir, function (r, c) {
-              if (c === 'order_no') return String(r.order_no != null ? r.order_no : r.id || '');
+              if (c === 'order_no') return String(r.order_no != null ? r.order_no : (r.id || 0)).padStart(12, '0');
               if (c === 'total_amount') return (r.total_amount != null ? String(Number(r.total_amount)).padStart(20, '0') : '');
               if (c === 'order_date' || c === 'scheduled_delivery_at' || c === 'last_updated_at') return (r[c] || '').toString();
               return (r[c] || (r.customer_name || (r.customer_id != null ? 'ID ' + r.customer_id : '')) || '').toString().toLowerCase();
@@ -1562,6 +1656,7 @@
         var ORDER_SEARCH_STORAGE = 'orderSearchFilters';
         var ORDER_PRESETS_STORAGE = 'orderSearchPresets';
         function getOrderSearchFilters() {
+          var order_no = document.getElementById('orderSearchOrderNo') ? document.getElementById('orderSearchOrderNo').value : '';
           var customer_id = document.getElementById('orderSearchCustomerId') ? document.getElementById('orderSearchCustomerId').value : '';
           var status_code = document.getElementById('orderSearchStatus') ? document.getElementById('orderSearchStatus').value : '';
           var date_from = document.getElementById('orderSearchDateFrom') ? document.getElementById('orderSearchDateFrom').value : '';
@@ -1569,11 +1664,12 @@
           var login_agent = document.getElementById('orderSearchAgent') ? document.getElementById('orderSearchAgent').value : '';
           var login_expeditor = document.getElementById('orderSearchExpeditor') ? document.getElementById('orderSearchExpeditor').value : '';
           var last_updated_by = document.getElementById('orderSearchLastUpdatedBy') ? document.getElementById('orderSearchLastUpdatedBy').value : '';
-          return { customer_id: customer_id, status_code: status_code, date_from: date_from, date_to: date_to, login_agent: login_agent, login_expeditor: login_expeditor, last_updated_by: last_updated_by };
+          return { order_no: order_no, customer_id: customer_id, status_code: status_code, date_from: date_from, date_to: date_to, login_agent: login_agent, login_expeditor: login_expeditor, last_updated_by: last_updated_by };
         }
         function setOrderSearchFilters(f) {
           if (!f) return;
           var el;
+          if (el = document.getElementById('orderSearchOrderNo')) el.value = f.order_no || '';
           if (el = document.getElementById('orderSearchCustomerId')) el.value = f.customer_id || '';
           if (el = document.getElementById('orderSearchStatus')) el.value = f.status_code || '';
           if (el = document.getElementById('orderSearchDateFrom')) el.value = f.date_from || '';
@@ -1586,6 +1682,7 @@
           var f = getOrderSearchFilters();
           try { localStorage.setItem(ORDER_SEARCH_STORAGE, JSON.stringify(f)); } catch (e) {}
           var params = [];
+          if (f.order_no) params.push('order_no=' + encodeURIComponent(f.order_no));
           if (f.customer_id) params.push('customer_id=' + encodeURIComponent(f.customer_id));
           if (f.status_code) params.push('status_code=' + encodeURIComponent(f.status_code));
           if (f.date_from) params.push('scheduled_delivery_from=' + encodeURIComponent(f.date_from + 'T00:00:00'));
@@ -1621,7 +1718,7 @@
           try { var p = localStorage.getItem(ORDER_PRESETS_STORAGE); if (p) presets = JSON.parse(p); } catch (e) {}
           var presetOpts = '<option value="">— Текущий поиск —</option>';
           presets.forEach(function (pr, i) { presetOpts += '<option value="' + i + '">' + escAttr(pr.name || 'Вариант ' + (i + 1)) + '</option>'; });
-          searchRow.innerHTML = '<div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Сохранённый поиск</label><select id="orderSearchPreset" style="max-width:180px">' + presetOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Клиент</label><select id="orderSearchCustomerId" style="max-width:220px">' + custOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Статус</label><select id="orderSearchStatus" style="max-width:140px">' + statusOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Дата поставки с</label><input type="text" id="orderSearchDateFrom" style="max-width:130px" placeholder="дд.мм.гггг"></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">по</label><input type="text" id="orderSearchDateTo" style="max-width:130px" placeholder="дд.мм.гггг"></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Агент</label><select id="orderSearchAgent" style="max-width:160px">' + userOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Экспедитор</label><select id="orderSearchExpeditor" style="max-width:160px">' + expeditorUserOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Кто изменил</label><select id="orderSearchLastUpdatedBy" style="max-width:160px">' + userOpts + '</select></div><button type="button" class="btn btn-primary" id="orderSearchBtn">Найти</button> <button type="button" class="btn btn-secondary" id="orderSearchSavePreset">Сохранить вариант</button>';
+          searchRow.innerHTML = '<div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Сохранённый поиск</label><select id="orderSearchPreset" style="max-width:180px">' + presetOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Номер заказа</label><input type="number" id="orderSearchOrderNo" min="1" style="max-width:110px" placeholder="№ заказа"></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Клиент</label><select id="orderSearchCustomerId" style="max-width:220px">' + custOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Статус</label><select id="orderSearchStatus" style="max-width:140px">' + statusOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Дата поставки с</label><input type="text" id="orderSearchDateFrom" style="max-width:130px" placeholder="дд.мм.гггг"></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">по</label><input type="text" id="orderSearchDateTo" style="max-width:130px" placeholder="дд.мм.гггг"></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Агент</label><select id="orderSearchAgent" style="max-width:160px">' + userOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Экспедитор</label><select id="orderSearchExpeditor" style="max-width:160px">' + expeditorUserOpts + '</select></div><div><label style="font-size:11px;color:#666;display:block;margin-bottom:2px">Кто изменил</label><select id="orderSearchLastUpdatedBy" style="max-width:160px">' + userOpts + '</select></div><button type="button" class="btn btn-primary" id="orderSearchBtn">Найти</button> <button type="button" class="btn btn-secondary" id="orderSearchSavePreset">Сохранить вариант</button>';
           document.getElementById('orderSearchBtn').onclick = runOrderSearch;
           document.getElementById('orderSearchPreset').onchange = function () {
             var idx = this.value;
@@ -5297,12 +5394,11 @@
           '<div id="rd_chart_wrap" style="height:200px;min-width:200px"><canvas id="rd_chart"></canvas></div>' +
           '</div>' +
           '<div id="rd_table_wrap"><h3 style="margin:0 0 12px 0">По категориям продуктов</h3>' +
-          '<p><button type="button" class="btn btn-secondary btn-small" id="rd_excel">Excel</button></p>' +
+          '<p><button type="button" class="btn btn-secondary btn-small" id="rd_excel">Экспорт в Excel</button></p>' +
           '<div id="rd_table"></div></div>' +
           '<div id="rd_territory_wrap" style="margin-top:24px"><h3 style="margin:0 0 12px 0">По территориям</h3>' +
-          '<p><button type="button" class="btn btn-secondary btn-small" id="rd_excel_territory">Выгрузить в Excel</button></p>' +
-          '<div id="rd_territory_table"></div></div>' +
-          '<p style="margin-top:16px;color:#64748b"><strong>Топ агентов и клиентов</strong> — см. отчёты по агентам и по клиентам.</p></div>';
+          '<p><button type="button" class="btn btn-secondary btn-small" id="rd_excel_territory">Экспорт в Excel</button></p>' +
+          '<div id="rd_territory_table"></div></div>';
         var rdFrom = document.getElementById('rd_date_from');
         var rdTo = document.getElementById('rd_date_to');
         if (window.flatpickr) {
@@ -5319,11 +5415,10 @@
           var err = (res && res.error) ? res.error : null;
           if (err) { document.getElementById('rd_summary').innerHTML = '<p class="err">Ошибка: ' + escAttr(err) + '</p>'; return; }
           var total = (res && res.total_orders_sum) ? Number(res.total_orders_sum) : 0;
+          var totalCount = (res && res.total_orders_count) ? Number(res.total_orders_count) : 0;
           var f = (res && res.filters) ? res.filters : {};
-          var dateLabel = (f.date_from || f.date_to) ? ((f.date_from || '') + ' — ' + (f.date_to || '')) : 'на сегодня';
-          document.getElementById('rd_summary').innerHTML = '<div style="font-size:14px;opacity:0.9">Общая сумма заявок ' + dateLabel + '</div>' +
-            '<div style="font-size:32px;font-weight:700;margin:8px 0">' + (total ? total.toLocaleString('ru-RU', {minimumFractionDigits:2,maximumFractionDigits:2}) : '0') + ' сум</div>' +
-            '<div style="font-size:13px;opacity:0.85">Продажа ' + dateLabel + ': ' + (total ? total.toLocaleString('ru-RU', {minimumFractionDigits:2}) : '0') + ' сум</div>';
+          var dateLabel = (f.date_from || f.date_to) ? ('с ' + (f.date_from || '') + ' по ' + (f.date_to || '')) : 'сегодня';
+          document.getElementById('rd_summary').innerHTML = '<div style="font-size:16px;opacity:0.95">Всего <strong style="font-size:24px;font-weight:700">' + totalCount + '</strong> заказов ' + dateLabel + '<br/>- на сумму <strong style="font-size:24px;font-weight:700">' + (total ? total.toLocaleString('ru-RU', {minimumFractionDigits:2,maximumFractionDigits:2}) : '0') + '</strong> сум</div>';
           var byCat = (res && res.by_category) ? res.by_category : [];
           try {
             if (window.Chart && document.getElementById('rd_chart')) {
@@ -5352,20 +5447,20 @@
             }
           } catch (chartErr) { if (console && console.warn) console.warn('Chart:', chartErr); }
           var byTerr = (res && res.by_territory) ? res.by_territory : [];
-          var terrTb = '<div style="overflow-x:auto"><table><thead><tr><th>Город</th><th>Территория</th><th>Количество клиентов</th><th>Количество заказов</th><th>Сумма</th></tr></thead><tbody>';
+          var terrTb = '<div style="overflow-x:auto"><table style="text-align:center"><thead><tr><th>Город</th><th>Территория</th><th>Количество клиентов</th><th>Количество заказов</th><th>Сумма</th></tr></thead><tbody>';
           byTerr.forEach(function (r) {
-            terrTb += '<tr><td>' + escAttr(r.city || '') + '</td><td>' + escAttr(r.territory || '') + '</td><td style="text-align:right">' + (r.customers_count || 0) + '</td><td style="text-align:right">' + (r.orders_count || 0) + '</td><td style="text-align:right">' + (r.orders_sum != null ? Number(r.orders_sum).toLocaleString('ru-RU', {minimumFractionDigits:2}) : '0') + '</td></tr>';
+            terrTb += '<tr><td>' + escAttr(r.city || '') + '</td><td>' + escAttr(r.territory || '') + '</td><td>' + (r.customers_count || 0) + '</td><td>' + (r.orders_count || 0) + '</td><td>' + (r.orders_sum != null ? Number(r.orders_sum).toLocaleString('ru-RU', {minimumFractionDigits:2}) : '0') + '</td></tr>';
           });
           terrTb += '</tbody></table></div>';
           var rtEl = document.getElementById('rd_territory_table');
-          if (rtEl) rtEl.innerHTML = byTerr.length ? terrTb : '<p>Нет данных по территориям.</p>';
-          var tb = '<div style="overflow-x:auto"><table><thead><tr><th>Категория</th><th>Доля %</th><th>Сумма</th><th>Объём</th></tr></thead><tbody>';
+          if (rtEl) rtEl.innerHTML = terrTb;
+          var tb = '<div style="overflow-x:auto"><table style="text-align:center"><thead><tr><th>Категория</th><th>Доля %</th><th>Сумма</th><th>Объём</th></tr></thead><tbody>';
           var totalSum = 0, totalQty = 0;
           byCat.forEach(function (r) { totalSum += Number(r.sum_amount || 0); totalQty += Number(r.quantity || 0); });
           byCat.forEach(function (r) {
-            tb += '<tr><td>' + escAttr(r.category || '') + '</td><td>' + (r.share_pct != null ? r.share_pct.toFixed(2) : '0') + '</td><td style="text-align:right">' + (r.sum_amount != null ? Number(r.sum_amount).toLocaleString('ru-RU', {minimumFractionDigits:2}) : '0') + '</td><td style="text-align:right">' + (r.quantity || 0) + '</td></tr>';
+            tb += '<tr><td>' + escAttr(r.category || '') + '</td><td>' + (r.share_pct != null ? r.share_pct.toFixed(2) : '0') + '</td><td>' + (r.sum_amount != null ? Number(r.sum_amount).toLocaleString('ru-RU', {minimumFractionDigits:2}) : '0') + '</td><td>' + (r.quantity || 0) + '</td></tr>';
           });
-          tb += '<tr style="font-weight:600;background:#f8fafc"><td>Итог</td><td>100</td><td style="text-align:right">' + totalSum.toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td><td style="text-align:right">' + totalQty + '</td></tr>';
+          tb += '<tr style="font-weight:600;background:#f8fafc"><td>Итог</td><td>100</td><td>' + totalSum.toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td><td>' + totalQty + '</td></tr>';
           tb += '</tbody></table></div>';
           document.getElementById('rd_table').innerHTML = byCat.length ? tb : '<p>Нет данных по категориям.</p>';
         }
@@ -5397,13 +5492,14 @@
           var cat = document.getElementById('rd_category') && document.getElementById('rd_category').value;
           var params = []; if (df) params.push('date_from=' + encodeURIComponent(df)); if (dt) params.push('date_to=' + encodeURIComponent(dt)); if (status) params.push('status_codes=' + encodeURIComponent(status)); if (cat) params.push('product_category=' + encodeURIComponent(cat));
           var url = '/api/v1/reports/dashboard/export'; if (params.length) url += '?' + params.join('&');
-          fetch(url, { method: 'GET', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) { if (!r.ok) throw new Error(); return r.blob(); }).then(function (blob) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dashboard_categories.xlsx'; a.click(); URL.revokeObjectURL(a.href); }).catch(function () { alert('Ошибка выгрузки'); });
+          fetch(url, { method: 'GET', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) { if (!r.ok) throw new Error(); return r.blob(); }).then(function (blob) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dashboard_territories.xlsx'; a.click(); URL.revokeObjectURL(a.href); }).catch(function () { alert('Ошибка выгрузки'); });
         };
       }
 
       function loadSectionReportPhotos() {
         var content = document.getElementById('content');
         content.innerHTML = '<div class="card"><h2>Отчёт: Фотографии клиентов</h2><p><button type="button" class="btn btn-primary" id="rp_load">Показать</button> <button type="button" class="btn btn-secondary" id="rp_export">Экспорт в Excel</button></p><div id="rp_stats"></div><div id="rp_table_wrap"></div></div>';
+        var rpSortCol = null, rpSortDir = 1;
         function run() {
           document.getElementById('rp_stats').innerHTML = '<p>Загрузка...</p>';
           document.getElementById('rp_table_wrap').innerHTML = '';
@@ -5412,20 +5508,53 @@
             document.getElementById('rp_stats').innerHTML = '<p><strong>Всего фото:</strong> ' + (stats.total_photos || 0) + ', Клиентов с фото: ' + (stats.customers_with_photos || 0) + ', Без фото: ' + (stats.customers_without_photos || 0) + '</p>';
             var without = (res && res.customers_without_photos) ? res.customers_without_photos : [];
             var recent = (res && res.recent_uploads) ? res.recent_uploads : [];
-            var tb = '<div style="overflow-x:auto;margin-top:16px"><table><thead><tr><th>Клиент</th><th>Адрес</th><th>Город</th><th>Территория</th><th>Телефон</th><th>Контактное лицо</th><th>ИНН</th><th>Дата загрузки</th><th>Загружено</th></tr></thead><tbody>';
-            recent.forEach(function (p) {
-              var dt = (p.uploaded_at || '').replace('T', ' ').substring(0, 19);
-              tb += '<tr><td>' + escAttr(p.customer_name || '') + '</td><td>' + escAttr(p.address || '') + '</td><td>' + escAttr(p.city || '') + '</td><td>' + escAttr(p.territory || '') + '</td><td>' + escAttr(p.phone || '') + '</td><td>' + escAttr(p.contact_person || '') + '</td><td>' + escAttr(p.tax_id || '') + '</td><td>' + escAttr(dt) + '</td><td>' + escAttr(p.uploaded_by || '') + '</td></tr>';
-            });
-            tb += '</tbody></table></div>';
+            var sortData = function (data, col, dir) {
+              if (!col) return data;
+              return data.slice().sort(function (a, b) {
+                var av = (a[col] || '').toString().toLowerCase();
+                var bv = (b[col] || '').toString().toLowerCase();
+                return av === bv ? 0 : (av < bv ? -1 : 1) * dir;
+              });
+            };
+            var buildTable = function (data, fields, headers, includeDate) {
+              var tb = '<div style="overflow-x:auto;margin-top:16px"><table><thead><tr>';
+              for (var i = 0; i < headers.length; i++) {
+                var hdr = headers[i];
+                var col = fields[i];
+                tb += '<th' + (col ? ' data-col="' + col + '" style="cursor:pointer"' : '') + '>' + hdr + (col && rpSortCol === col ? (rpSortDir === 1 ? ' ▲' : ' ▼') : '') + '</th>';
+              }
+              tb += '</tr></thead><tbody>';
+              data.forEach(function (row) {
+                tb += '<tr>';
+                for (var i = 0; i < fields.length; i++) {
+                  var val = row[fields[i]];
+                  if (includeDate && fields[i] === 'uploaded_at' && val) val = val.replace('T', ' ').substring(0, 19);
+                  tb += '<td>' + escAttr(val || '') + '</td>';
+                }
+                tb += '</tr>';
+              });
+              tb += '</tbody></table></div>';
+              return tb;
+            };
+            var recentSorted = sortData(recent, rpSortCol, rpSortDir);
+            var tb = buildTable(recentSorted, ['customer_name', 'address', 'city', 'territory', 'phone', 'contact_person', 'tax_id', 'uploaded_at', 'uploaded_by'], ['Клиент', 'Адрес', 'Город', 'Территория', 'Телефон', 'Контактное лицо', 'ИНН', 'Дата загрузки', 'Загружено'], true);
+            var withoutSorted = sortData(without, rpSortCol, rpSortDir);
+            var tb2 = buildTable(withoutSorted, ['customer_name', 'address', 'city', 'territory', 'phone', 'contact_person', 'tax_id'], ['Клиент', 'Адрес', 'Город', 'Территория', 'Телефон', 'Контактное лицо', 'ИНН'], false);
             var html = '';
             if (without.length) {
-              html += '<h3 style="margin:16px 0 8px 0">Клиенты без фото</h3><div style="overflow-x:auto"><table><thead><tr><th>Клиент</th></tr></thead><tbody>';
-              without.forEach(function (c) { html += '<tr><td>' + escAttr(c.name || c.name_client || c.firm_name || '') + '</td></tr>'; });
-              html += '</tbody></table></div>';
+              html += '<h3 style="margin:16px 0 8px 0">Клиенты без фото</h3>' + tb2;
             }
             html += '<h3 style="margin:16px 0 8px 0">Последние загрузки</h3>' + (recent.length ? tb : '<p>Нет недавних загрузок.</p>');
             document.getElementById('rp_table_wrap').innerHTML = html;
+            var ths = document.querySelectorAll('#rp_table_wrap th[data-col]');
+            ths.forEach(function (th) {
+              th.onclick = function () {
+                var col = th.getAttribute('data-col');
+                if (rpSortCol === col) rpSortDir = -rpSortDir;
+                else { rpSortCol = col; rpSortDir = 1; }
+                run();
+              };
+            });
           }).catch(function (e) {
             document.getElementById('rp_stats').innerHTML = '<p class="err">Ошибка загрузки</p>';
           });
@@ -5445,6 +5574,122 @@
               a.click();
               URL.revokeObjectURL(a.href);
             }).catch(function () { alert('Ошибка выгрузки отчёта.'); });
+          };
+        }
+      }
+
+      // ========================================
+      // СПРАВОЧНИК: Города
+      // ========================================
+      function loadSectionCities() {
+        api('/api/v1/dictionary/cities').then(function (list) {
+          var content = document.getElementById('content');
+          if (!content) return;
+          var addBtn = isAdmin() ? '<button type="button" class="btn btn-primary" id="cityAdd">Добавить город</button>' : '';
+          var html = '<div class="card"><h2>Справочник: Города</h2><p style="margin:0 0 12px 0">' + addBtn + '</p><div id="citiesTable"></div></div>';
+          content.innerHTML = html;
+          var tableDiv = document.getElementById('citiesTable');
+          if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Нет данных.</p>'; bindCityAdd(); return; }
+          var t = '<table><thead><tr><th>ID</th><th>Название</th><th>Действия</th></tr></thead><tbody>';
+          list.forEach(function (city) {
+            t += '<tr><td>' + city.id + '</td><td>' + escAttr(city.name || '') + '</td><td>';
+            if (isAdmin()) {
+              t += '<button type="button" class="btn btn-secondary btn-small" data-edit data-id="' + city.id + '" data-name="' + escAttr(city.name || '') + '">Изменить</button> ';
+              t += '<button type="button" class="btn btn-secondary btn-small" data-del data-id="' + city.id + '" data-name="' + escAttr(city.name || '') + '">Удалить</button>';
+            }
+            t += '</td></tr>';
+          });
+          t += '</tbody></table>';
+          tableDiv.innerHTML = t;
+          bindCityAdd();
+          tableDiv.querySelectorAll('[data-edit]').forEach(function (btn) {
+            btn.onclick = function () {
+              var cityId = btn.getAttribute('data-id');
+              var cityName = btn.getAttribute('data-name');
+              showModal('Изменить город', '<div class="form-group"><label>Название города</label><input type="text" id="cityName" value="' + cityName.replace(/&quot;/g, '"') + '"></div>', function () {
+                var name = document.getElementById('cityName').value.trim();
+                if (!name) { alert('Введите название'); return Promise.reject(); }
+                return api('/api/v1/dictionary/cities/' + cityId, { method: 'PUT', body: JSON.stringify({ name: name }) }).then(function () { loadSectionCities(); });
+              });
+            };
+          });
+          tableDiv.querySelectorAll('[data-del]').forEach(function (btn) {
+            btn.onclick = function () {
+              var cityName = btn.getAttribute('data-name');
+              if (!confirm('Удалить город «' + cityName + '»?')) return;
+              api('/api/v1/dictionary/cities/' + btn.getAttribute('data-id'), { method: 'DELETE' }).then(function () { loadSectionCities(); }).catch(function (e) {
+                alert((e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : 'Ошибка удаления');
+              });
+            };
+          });
+        }).catch(function () { document.getElementById('content').innerHTML = '<div class="card"><p class="err">Ошибка загрузки городов.</p></div>'; });
+        function bindCityAdd() {
+          var btn = document.getElementById('cityAdd');
+          if (!btn || !isAdmin()) return;
+          btn.onclick = function () {
+            showModal('Добавить город', '<div class="form-group"><label>Название города</label><input type="text" id="cityName" placeholder="Например: Ташкент"></div>', function () {
+              var name = document.getElementById('cityName').value.trim();
+              if (!name) { alert('Введите название'); return Promise.reject(); }
+              return api('/api/v1/dictionary/cities', { method: 'POST', body: JSON.stringify({ name: name }) }).then(function () { loadSectionCities(); });
+            });
+          };
+        }
+      }
+
+      // ========================================
+      // СПРАВОЧНИК: Территории
+      // ========================================
+      function loadSectionTerritories() {
+        api('/api/v1/dictionary/territories').then(function (list) {
+          var content = document.getElementById('content');
+          if (!content) return;
+          var addBtn = isAdmin() ? '<button type="button" class="btn btn-primary" id="territoryAdd">Добавить территорию</button>' : '';
+          var html = '<div class="card"><h2>Справочник: Территории</h2><p style="margin:0 0 12px 0">' + addBtn + '</p><div id="territoriesTable"></div></div>';
+          content.innerHTML = html;
+          var tableDiv = document.getElementById('territoriesTable');
+          if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Нет данных.</p>'; bindTerritoryAdd(); return; }
+          var t = '<table><thead><tr><th>ID</th><th>Название</th><th>Действия</th></tr></thead><tbody>';
+          list.forEach(function (territory) {
+            t += '<tr><td>' + territory.id + '</td><td>' + escAttr(territory.name || '') + '</td><td>';
+            if (isAdmin()) {
+              t += '<button type="button" class="btn btn-secondary btn-small" data-edit data-id="' + territory.id + '" data-name="' + escAttr(territory.name || '') + '">Изменить</button> ';
+              t += '<button type="button" class="btn btn-secondary btn-small" data-del data-id="' + territory.id + '" data-name="' + escAttr(territory.name || '') + '">Удалить</button>';
+            }
+            t += '</td></tr>';
+          });
+          t += '</tbody></table>';
+          tableDiv.innerHTML = t;
+          bindTerritoryAdd();
+          tableDiv.querySelectorAll('[data-edit]').forEach(function (btn) {
+            btn.onclick = function () {
+              var territoryId = btn.getAttribute('data-id');
+              var territoryName = btn.getAttribute('data-name');
+              showModal('Изменить территорию', '<div class="form-group"><label>Название территории</label><input type="text" id="territoryName" value="' + territoryName.replace(/&quot;/g, '"') + '"></div>', function () {
+                var name = document.getElementById('territoryName').value.trim();
+                if (!name) { alert('Введите название'); return Promise.reject(); }
+                return api('/api/v1/dictionary/territories/' + territoryId, { method: 'PUT', body: JSON.stringify({ name: name }) }).then(function () { loadSectionTerritories(); });
+              });
+            };
+          });
+          tableDiv.querySelectorAll('[data-del]').forEach(function (btn) {
+            btn.onclick = function () {
+              var territoryName = btn.getAttribute('data-name');
+              if (!confirm('Удалить территорию «' + territoryName + '»?')) return;
+              api('/api/v1/dictionary/territories/' + btn.getAttribute('data-id'), { method: 'DELETE' }).then(function () { loadSectionTerritories(); }).catch(function (e) {
+                alert((e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : 'Ошибка удаления');
+              });
+            };
+          });
+        }).catch(function () { document.getElementById('content').innerHTML = '<div class="card"><p class="err">Ошибка загрузки территорий.</p></div>'; });
+        function bindTerritoryAdd() {
+          var btn = document.getElementById('territoryAdd');
+          if (!btn || !isAdmin()) return;
+          btn.onclick = function () {
+            showModal('Добавить территорию', '<div class="form-group"><label>Название территории</label><input type="text" id="territoryName" placeholder="Например: Центр"></div>', function () {
+              var name = document.getElementById('territoryName').value.trim();
+              if (!name) { alert('Введите название'); return Promise.reject(); }
+              return api('/api/v1/dictionary/territories', { method: 'POST', body: JSON.stringify({ name: name }) }).then(function () { loadSectionTerritories(); });
+            });
           };
         }
       }

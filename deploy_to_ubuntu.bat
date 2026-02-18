@@ -24,7 +24,8 @@ echo   Password will be prompted on connect
 echo ========================================
 echo.
 
-scp -r src migrations requirements.txt .env sales_sql.sql %SERVER%:%REMOTE_PATH%/
+REM ВНИМАНИЕ: .env НЕ копируется! На сервере должен быть свой .env с продакшн токеном и конфигурацией.
+scp -r src migrations requirements.txt sales_sql.sql %SERVER%:%REMOTE_PATH%/
 if errorlevel 1 (
     echo [ERROR] Copy failed
     pause

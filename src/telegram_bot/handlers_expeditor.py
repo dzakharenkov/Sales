@@ -686,7 +686,8 @@ def register_expeditor_handlers(app):
     app.add_handler(CallbackQueryHandler(cb_exp_pay_full, pattern=r"^exp_payfull_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_other, pattern=r"^exp_payother_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_received_payments, pattern="^exp_received_payments$"))
+    # ВАЖНО: группа 10, чтобы НЕ блокировать ConversationHandlers (группа 0)!
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.Regex(r"^\d"),
         msg_exp_pay_amount,
-    ))
+    ), group=10)

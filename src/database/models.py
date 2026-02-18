@@ -17,6 +17,7 @@ from sqlalchemy import (
     Date,
     Time,
     TIMESTAMP,
+    Enum as SAEnum,
     func,
     text,
 )
@@ -41,7 +42,11 @@ class User(Base):
     login = Column(String, primary_key=True)
     fio = Column(String, nullable=False)
     telegram_username = Column(String, nullable=True)
-    role = Column(String, nullable=False)  # ENUM в БД — маппим как String
+    role = Column(
+        SAEnum("admin", "expeditor", "agent", "stockman", "paymaster",
+               name="user_role", schema="Sales", create_type=False),
+        nullable=False,
+    )
     phone = Column(String, nullable=True)
     email = Column(String, nullable=True)
     password = Column(String, nullable=True)
@@ -138,8 +143,8 @@ class Customer(Base):
     firm_name = Column(Text, nullable=True)
     category_client = Column(Text, nullable=True)
     address = Column(Text, nullable=True)
-    city = Column(Text, nullable=True)
-    territory = Column(Text, nullable=True)
+    city_id = Column(Integer, nullable=True)
+    territory_id = Column(Integer, nullable=True)
     landmark = Column(Text, nullable=True)
     phone = Column(Text, nullable=True)
     contact_person = Column(Text, nullable=True)

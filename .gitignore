@@ -34,6 +34,11 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.bak
+tmpclaude-*-cwd
+nul
+
+# Claude Code
+.claude/
 
 # Archives (опционально - можно убрать, если хотите хранить в git)
 Архив/

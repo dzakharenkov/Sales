@@ -26,8 +26,10 @@ def _customer_to_dict(c: Customer) -> dict:
         "firm_name": c.firm_name,
         "category_client": c.category_client,
         "address": c.address,
-        "city": c.city,
-        "territory": c.territory,
+        "city_id": c.city_id,
+        "city": getattr(c, 'city_name', None),  # Если есть JOIN
+        "territory_id": c.territory_id,
+        "territory": getattr(c, 'territory_name', None),  # Если есть JOIN
         "landmark": c.landmark,
         "phone": c.phone,
         "contact_person": c.contact_person,
@@ -52,8 +54,8 @@ class CustomerCreate(BaseModel):
     firm_name: str | None = None
     category_client: str | None = None
     address: str | None = None
-    city: str | None = None
-    territory: str | None = None
+    city_id: int | None = None
+    territory_id: int | None = None
     landmark: str | None = None
     phone: str | None = None
     contact_person: str | None = None
@@ -77,8 +79,8 @@ class CustomerUpdate(BaseModel):
     firm_name: str | None = None
     category_client: str | None = None
     address: str | None = None
-    city: str | None = None
-    territory: str | None = None
+    city_id: int | None = None
+    territory_id: int | None = None
     landmark: str | None = None
     phone: str | None = None
     contact_person: str | None = None
@@ -99,6 +101,7 @@ class CustomerUpdate(BaseModel):
 
 @router.get("/customers")
 async def list_customers(
+    customer_id: int | None = Query(None, description="ИД клиента (точное совпадение)"),
     search: str | None = Query(
         None,
         description="Расширенный поиск по названию клиента И по ИНН (частичное совпадение, OR)",
@@ -115,11 +118,19 @@ async def list_customers(
     user: User = Depends(get_current_user),
 ):
     """Список клиентов с поиском по ключевым полям. Без параметров не возвращает записи (нужен хотя бы один фильтр или пустой поиск — тогда первые limit по id)."""
-    sql = '''SELECT c.id, c.name_client, c.firm_name, c.category_client, c.address, c.city, c.territory, c.landmark, c.phone, c.contact_person, c.tax_id, c.status, c.login_agent, c.login_expeditor, c.latitude, c.longitude, c.pinfl, c.contract_no, c.account_no, c.bank, c.mfo, c.oked, c.vat_code,
+    sql = '''SELECT c.id, c.name_client, c.firm_name, c.category_client, c.address,
+             c.city_id, ct.name AS city_name,
+             c.territory_id, t.name AS territory_name,
+             c.landmark, c.phone, c.contact_person, c.tax_id, c.status, c.login_agent, c.login_expeditor, c.latitude, c.longitude, c.pinfl, c.contract_no, c.account_no, c.bank, c.mfo, c.oked, c.vat_code,
              EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) AS has_photo
-             FROM "Sales".customers c'''
+             FROM "Sales".customers c
+             LEFT JOIN "Sales".cities ct ON c.city_id = ct.id
+             LEFT JOIN "Sales".territories t ON c.territory_id = t.id'''
     conditions = []
     params = {}
+    if customer_id is not None:
+        conditions.append("c.id = :customer_id")
+        params["customer_id"] = customer_id
     # Расширенный поиск: одно поле search — по name_client, tax_id (ИНН), account_no (р/с)
     if search and search.strip():
         conditions.append("(name_client ILIKE :search OR tax_id ILIKE :search OR account_no ILIKE :search)")
@@ -131,7 +142,7 @@ async def list_customers(
         conditions.append(" firm_name ILIKE :firm_name ")
         params["firm_name"] = "%" + firm_name.strip() + "%"
     if city and city.strip():
-        conditions.append(" city ILIKE :city ")
+        conditions.append(" ct.name ILIKE :city ")
         params["city"] = "%" + city.strip() + "%"
     if login_agent and login_agent.strip():
         conditions.append(" login_agent = :login_agent ")
@@ -159,25 +170,27 @@ async def list_customers(
             "firm_name": r[2],
             "category_client": r[3],
             "address": r[4],
-            "city": r[5],
-            "territory": r[6],
-            "landmark": r[7],
-            "phone": r[8],
-            "contact_person": r[9],
-            "tax_id": r[10],
-            "status": r[11],
-            "login_agent": r[12],
-            "login_expeditor": r[13],
-            "latitude": float(r[14]) if r[14] is not None else None,
-            "longitude": float(r[15]) if r[15] is not None else None,
-            "PINFL": r[16],
-            "contract_no": r[17],
-            "account_no": r[18],
-            "bank": r[19],
-            "MFO": r[20],
-            "OKED": r[21],
-            "VAT_code": r[22],
-            "has_photo": bool(r[23]) if len(r) > 23 else False,
+            "city_id": r[5],
+            "city": r[6],
+            "territory_id": r[7],
+            "territory": r[8],
+            "landmark": r[9],
+            "phone": r[10],
+            "contact_person": r[11],
+            "tax_id": r[12],
+            "status": r[13],
+            "login_agent": r[14],
+            "login_expeditor": r[15],
+            "latitude": float(r[16]) if r[16] is not None else None,
+            "longitude": float(r[17]) if r[17] is not None else None,
+            "PINFL": r[18],
+            "contract_no": r[19],
+            "account_no": r[20],
+            "bank": r[21],
+            "MFO": r[22],
+            "OKED": r[23],
+            "VAT_code": r[24],
+            "has_photo": bool(r[25]) if len(r) > 25 else False,
         })
     return out
 
@@ -202,11 +215,15 @@ async def export_customers_excel(
     user: User = Depends(require_admin),
 ):
     """Выгрузка всех клиентов в Excel (.xlsx), каждое поле в отдельной ячейке. Заголовки — русские, как в таблице. Только admin."""
-    sql = """SELECT c.id, c.name_client, c.firm_name, c.category_client, c.address, c.city, c.territory, c.landmark,
+    sql = """SELECT c.id, c.name_client, c.firm_name, c.category_client, c.address,
+             COALESCE(ct.name, '') AS city, COALESCE(t.name, '') AS territory, c.landmark,
              c.phone, c.contact_person, c.tax_id, c.status, c.login_agent, c.login_expeditor,
              c.latitude, c.longitude, c.pinfl, c.contract_no, c.account_no, c.bank, c.mfo, c.oked, c.vat_code,
              CASE WHEN EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) THEN 'Да' ELSE 'Нет' END
-             FROM "Sales".customers c ORDER BY c.id LIMIT 50000"""
+             FROM "Sales".customers c
+             LEFT JOIN "Sales".cities ct ON c.city_id = ct.id
+             LEFT JOIN "Sales".territories t ON c.territory_id = t.id
+             ORDER BY c.id LIMIT 50000"""
     result = await session.execute(text(sql))
     rows = result.fetchall()
     wb = Workbook()
@@ -355,8 +372,8 @@ async def create_customer(
         firm_name=body.firm_name,
         category_client=body.category_client,
         address=body.address,
-        city=body.city,
-        territory=body.territory,
+        city_id=body.city_id,
+        territory_id=body.territory_id,
         landmark=body.landmark,
         phone=body.phone,
         contact_person=body.contact_person,
@@ -504,16 +521,21 @@ async def update_customer(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Изменить клиента. Admin — все поля; агент/экспедитор — только login_agent и login_expeditor (при сохранении заказа)."""
+    """Изменить клиента. Admin — все поля; агент — все поля своих клиентов (login_agent=user); иначе только login_agent, login_expeditor."""
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     c = result.scalar_one_or_none()
     if not c:
         raise HTTPException(status_code=404, detail="Клиент не найден")
     dump = body.model_dump(exclude_unset=True)
     if (user.role or "").lower() != "admin":
-        # Агент/экспедитор может менять только привязку агента и экспедитора у клиента
-        allowed = {"login_agent", "login_expeditor"}
-        dump = {k: v for k, v in dump.items() if k in allowed}
+        is_own_client = (
+            (user.role or "").lower() == "agent"
+            and c.login_agent
+            and str(c.login_agent).strip().lower() == str(user.login or "").strip().lower()
+        )
+        if not is_own_client:
+            allowed = {"login_agent", "login_expeditor"}
+            dump = {k: v for k, v in dump.items() if k in allowed}
     for key, value in dump.items():
         setattr(c, key, value)
     await session.commit()

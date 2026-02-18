@@ -118,32 +118,32 @@ async def get_schema_info():
 
 async def check_data_integrity():
     """Проверка целостности данных."""
-    async with engine.begin() as conn:
-        checks = [
-            (
-                "Orders without customer",
-                'SELECT COUNT(*) FROM "Sales".orders WHERE customer_id NOT IN (SELECT id FROM "Sales".customers)',
-            ),
-            (
-                "Items without order",
-                'SELECT COUNT(*) FROM "Sales".items WHERE order_id NOT IN (SELECT id FROM "Sales".orders)',
-            ),
-            (
-                "Operations without type",
-                'SELECT COUNT(*) FROM "Sales".operations o WHERE o.type_code IS NOT NULL AND o.type_code NOT IN (SELECT code FROM "Sales".operation_types)',
-            ),
-            (
-                "Expired batches",
-                'SELECT COUNT(*) FROM "Sales".batches WHERE expiry_date < CURRENT_DATE',
-            ),
-        ]
-        for name, query in checks:
-            try:
+    checks = [
+        (
+            "Orders without customer",
+            'SELECT COUNT(*) FROM "Sales".orders WHERE customer_id NOT IN (SELECT id FROM "Sales".customers)',
+        ),
+        (
+            "Items without order",
+            'SELECT COUNT(*) FROM "Sales".items WHERE order_id NOT IN (SELECT id FROM "Sales".orders)',
+        ),
+        (
+            "Operations without type",
+            'SELECT COUNT(*) FROM "Sales".operations o WHERE o.type_code IS NOT NULL AND o.type_code NOT IN (SELECT code FROM "Sales".operation_types)',
+        ),
+        (
+            "Expired batches",
+            'SELECT COUNT(*) FROM "Sales".batches WHERE expiry_date < CURRENT_DATE',
+        ),
+    ]
+    for name, query in checks:
+        try:
+            async with engine.begin() as conn:
                 result = await conn.execute(text(query))
                 count = result.scalar()
                 logger.info("%s %s: %s", "WARN" if count and count > 0 else "OK", name, count)
-            except Exception as e:
-                logger.warning("Check %s failed: %s", name, e)
+        except Exception as e:
+            logger.warning("Check %s failed: %s", name, e)
 
 
 async def cleanup():
