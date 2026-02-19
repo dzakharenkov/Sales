@@ -10,6 +10,30 @@ def _is_sentry_enabled() -> bool:
     return os.getenv("SENTRY_ENABLED", "true").strip().lower() in _TRUE_VALUES
 
 
+def _is_telegram_getupdates_conflict(event: dict) -> bool:
+    msg = ((event.get("message") or "") + " " + (event.get("logentry", {}).get("message") or "")).lower()
+    if "terminated by other getupdates request" in msg:
+        return True
+    if "getupdates" in msg and "409" in msg and "conflict" in msg:
+        return True
+
+    for exc in event.get("exception", {}).get("values", []) or []:
+        value = str(exc.get("value") or "").lower()
+        exc_type = str(exc.get("type") or "").lower()
+        if "terminated by other getupdates request" in value:
+            return True
+        if "conflict" in exc_type and "getupdates" in value:
+            return True
+    return False
+
+
+def _before_send(event: dict, hint: dict):
+    ignore_conflict = os.getenv("SENTRY_IGNORE_TELEGRAM_CONFLICT", "true").strip().lower() in _TRUE_VALUES
+    if ignore_conflict and _is_telegram_getupdates_conflict(event):
+        return None
+    return event
+
+
 def init_sentry(service_name: str) -> None:
     """Initialize Sentry SDK once at application startup."""
     if not _is_sentry_enabled():
@@ -28,4 +52,5 @@ def init_sentry(service_name: str) -> None:
         environment=os.getenv("SENTRY_ENVIRONMENT", os.getenv("ENVIRONMENT", "production")),
         release=os.getenv("SENTRY_RELEASE"),
         server_name=service_name,
+        before_send=_before_send,
     )

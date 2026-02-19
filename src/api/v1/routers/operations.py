@@ -8,19 +8,233 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from openpyxl import Workbook
 from pydantic import BaseModel, field_validator
-from sqlalchemy import select, text, func
+from sqlalchemy import select, text, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy.exc import IntegrityError
 
 from src.database.connection import get_db_session
-from src.database.models import Operation, Customer, Product, Order, OperationConfig, OperationType, Batch
+from src.database.models import Operation, Customer, Product, Order, OperationConfig, OperationType, Batch, Item, Status
 from src.core.deps import get_current_user, require_admin
 from src.database.models import User
 import json
 import logging
 
 router = APIRouter()
+
+
+def _parse_delivery_date_input(raw: str) -> date:
+    """Parse delivery date from yyyy-mm-dd or dd.mm.yyyy."""
+    value = (raw or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="Не указана дата поставки.")
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    raise HTTPException(
+        status_code=400,
+        detail="Неверный формат даты поставки. Используйте дд.мм.гггг или yyyy-mm-dd.",
+    )
+
+
+@router.get("/operations/allocation/suggest-by-delivery-date")
+async def suggest_allocation_items_by_delivery_date(
+    warehouse_from: str = Query(..., description="Код склада от"),
+    expeditor_login: str = Query(..., description="Логин экспедитора"),
+    delivery_date: str = Query(..., description="Дата поставки (yyyy-mm-dd или dd.mm.yyyy)"),
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Автоподбор позиций для allocation на основе заказов в доставке по дате поставки."""
+    delivery_dt = _parse_delivery_date_input(delivery_date)
+
+    # 1) Находим ВСЕ активные (не закрытые) заказы экспедитора на выбранную дату.
+    status_code_l = func.lower(func.coalesce(Order.status_code, ""))
+    status_name_l = func.lower(func.coalesce(Status.name, ""))
+    matched_orders_result = await session.execute(
+        select(Order.order_no)
+        .select_from(Order)
+        .join(Customer, Customer.id == Order.customer_id)
+        .outerjoin(Status, Status.code == Order.status_code)
+        .where(Customer.login_expeditor == expeditor_login.strip())
+        .where(func.date(Order.scheduled_delivery_at) == delivery_dt)
+        .where(
+            ~or_(
+                status_code_l.in_(["completed", "cancelled", "canceled", "3", "4"]),
+                status_name_l.like("%отмен%"),
+                status_name_l.like("%доставлен%"),
+                status_name_l.like("%cancel%"),
+                status_name_l.like("%completed%"),
+                status_name_l.like("%closed%"),
+            )
+        )
+    )
+    matched_order_ids = [int(r[0]) for r in matched_orders_result.fetchall() if r and r[0] is not None]
+    if not matched_order_ids:
+        return {
+            "success": True,
+            "delivery_date": delivery_dt.isoformat(),
+            "expeditor_login": expeditor_login,
+            "warehouse_from": warehouse_from,
+            "no_orders": True,
+            "matched_orders_count": 0,
+            "matched_order_ids": [],
+            "message": f"На выбранную дату нет активных заказов для доставки экспедитором {expeditor_login}.",
+            "items": [],
+            "warnings": [],
+        }
+
+    # 2) Суммируем количества по товарам по ВСЕМ найденным заказам.
+    grouped_items_result = await session.execute(
+        select(
+            Item.product_code,
+            func.sum(func.coalesce(Item.quantity, 0)).label("required_qty"),
+        )
+        .select_from(Item)
+        .where(Item.order_id.in_(matched_order_ids))
+        .group_by(Item.product_code)
+    )
+    filtered_required: dict[str, int] = {}
+    for product_code, required_qty in grouped_items_result.fetchall():
+        if not product_code:
+            continue
+        filtered_required[product_code] = int(required_qty or 0)
+
+    product_codes = list(filtered_required.keys())
+
+    # 2) Получаем остатки по партиям со склада от.
+    stock_result = await session.execute(
+        text(
+            '''
+            SELECT warehouse_code, product_code, batch_code, batch_id, total_qty
+            FROM "Sales".v_warehouse_stock
+            WHERE warehouse_code = :warehouse_from
+              AND total_qty > 0
+              AND product_code = ANY(:product_codes)
+            ORDER BY product_code, batch_code
+            '''
+        ),
+        {"warehouse_from": warehouse_from, "product_codes": product_codes},
+    )
+    stock_rows = stock_result.fetchall()
+
+    by_product_stock: dict[str, list[dict]] = {pc: [] for pc in product_codes}
+    batch_ids = set()
+    for wh_code, product_code, batch_code, batch_id, total_qty in stock_rows:
+        if not product_code:
+            continue
+        if batch_id:
+            batch_ids.add(batch_id)
+        by_product_stock.setdefault(product_code, []).append(
+            {
+                "warehouse_code": wh_code,
+                "product_code": product_code,
+                "batch_code": batch_code,
+                "batch_id": batch_id,
+                "available_qty": int(total_qty or 0),
+            }
+        )
+
+    # 3) Подтягиваем справочные данные о сроках и товарах.
+    expiry_by_batch: dict = {}
+    if batch_ids:
+        batch_result = await session.execute(
+            select(Batch.id, Batch.expiry_date).where(Batch.id.in_(batch_ids))
+        )
+        for b_id, expiry_date in batch_result.fetchall():
+            expiry_by_batch[b_id] = expiry_date
+
+    product_info: dict[str, dict] = {}
+    product_result = await session.execute(
+        select(Product.code, Product.name, Product.price, Product.weight_g).where(Product.code.in_(product_codes))
+    )
+    for code, name, price, weight_g in product_result.fetchall():
+        product_info[code] = {
+            "product_name": name or code,
+            "unit_price": float(price) if price is not None else 0.0,
+            "weight_g": int(weight_g) if weight_g is not None else 0,
+        }
+
+    # 4) FEFO-алгоритм: распределяем требуемое количество по доступным партиям.
+    today = date.today()
+    items: list[dict] = []
+    warnings: list[str] = []
+
+    for product_code, required_qty in filtered_required.items():
+        stock_list = by_product_stock.get(product_code, [])
+        for row in stock_list:
+            exp_date = expiry_by_batch.get(row.get("batch_id"))
+            row["expiry_date"] = exp_date
+            row["days_until_expiry"] = (exp_date - today).days if exp_date else None
+        stock_list.sort(
+            key=lambda r: (r["days_until_expiry"] if r["days_until_expiry"] is not None else 10**9)
+        )
+
+        remaining = int(required_qty or 0)
+        allocated_total = 0
+        available_total = sum(int(r.get("available_qty") or 0) for r in stock_list)
+        product_meta = product_info.get(
+            product_code,
+            {"product_name": product_code, "unit_price": 0.0, "weight_g": 0},
+        )
+
+        allocations: list[dict] = []
+        for st in stock_list:
+            if remaining <= 0:
+                break
+            available = int(st.get("available_qty") or 0)
+            if available <= 0:
+                continue
+            take_qty = min(remaining, available)
+            remaining -= take_qty
+            allocated_total += take_qty
+            allocations.append(
+                {
+                    "product_code": product_code,
+                    "product_name": product_meta["product_name"],
+                    "batch_code": st.get("batch_code"),
+                    "expiry_date": st.get("expiry_date").isoformat() if st.get("expiry_date") else None,
+                    "days_until_expiry": st.get("days_until_expiry"),
+                    "available_qty": available,
+                    "required_qty": int(required_qty or 0),
+                    "allocated_qty": take_qty,
+                    "unit_price": product_meta["unit_price"],
+                    "weight_g": product_meta["weight_g"],
+                }
+            )
+
+        shortage_qty = max(0, int(required_qty or 0) - allocated_total)
+        if shortage_qty > 0:
+            warnings.append(
+                f"Товар '{product_meta['product_name']}' недостаточно на складе: "
+                f"требуется {int(required_qty or 0)} шт., доступно {available_total} шт., заполнено {allocated_total} шт."
+            )
+
+        items.append(
+            {
+                "product_code": product_code,
+                "product_name": product_meta["product_name"],
+                "required_qty": int(required_qty or 0),
+                "available_qty_total": available_total,
+                "allocated_qty_total": allocated_total,
+                "shortage_qty": shortage_qty,
+                "allocations": allocations,
+            }
+        )
+
+    return {
+        "success": True,
+        "delivery_date": delivery_dt.isoformat(),
+        "expeditor_login": expeditor_login,
+        "warehouse_from": warehouse_from,
+        "no_orders": False,
+        "matched_orders_count": len(matched_order_ids),
+        "matched_order_ids": matched_order_ids,
+        "items": items,
+        "warnings": warnings,
+    }
 
 
 @router.get("/operation-types")
@@ -989,7 +1203,7 @@ class AllocationCreate(BaseModel):
 async def create_allocation_operation(
     body: AllocationCreate,
     session: AsyncSession = Depends(get_db_session),
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
 ):
     """
     Создать одну операцию «allocation» (выдача экспедитору).
@@ -997,6 +1211,13 @@ async def create_allocation_operation(
     Использует существующую партию (batch) по product_code + batch_code,
     не создаёт новые партии.
     """
+    role = (user.role or "").strip().lower()
+    if role not in ("admin", "stockman"):
+        raise HTTPException(
+            status_code=403,
+            detail="Только кладовщик или администратор может создать эту операцию",
+        )
+
     # Найти партию по product_code + batch_code
     batch_result = await session.execute(
         select(Batch).where(

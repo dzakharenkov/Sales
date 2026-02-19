@@ -25,6 +25,6 @@ fi
 # Загрузка .env из текущей директории
 export $(grep -v '^#' .env 2>/dev/null | xargs) 2>/dev/null || true
 
-nohup python3 -m src.telegram_bot.bot >> telegram_bot.log 2>&1 &
+nohup python3 -m src.telegram_bot.bot >> telegram_bot_local.log 2>&1 &
 echo $! > "$PIDFILE"
-echo "Telegram bot started (PID $(cat "$PIDFILE")). Log: telegram_bot.log"
+echo "Telegram bot started (PID $(cat "$PIDFILE")). Log: telegram_bot_local.log"

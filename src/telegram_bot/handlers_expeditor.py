@@ -54,6 +54,32 @@ async def _fetch_customer_coords(token: str, customer_id: int) -> tuple:
         return None, None, "—"
 
 
+async def _get_paid_order_ids(token: str, login: str) -> set[int]:
+    """Вернуть номера заказов, по которым уже зафиксирована оплата экспедитором."""
+    try:
+        operations = await api.get_operations(
+            token,
+            type_code="payment_receipt_from_customer",
+            created_by=login,
+        )
+    except SDSApiError:
+        return set()
+
+    paid_order_ids: set[int] = set()
+    for op in (operations or []):
+        status = (op.get("status") or "").strip().lower()
+        if status in ("cancelled", "canceled"):
+            continue
+        order_id = op.get("order_id")
+        if order_id is None:
+            continue
+        try:
+            paid_order_ids.add(int(order_id))
+        except (TypeError, ValueError):
+            continue
+    return paid_order_ids
+
+
 # ---------- Мой маршрут ----------
 
 async def cb_exp_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -104,8 +130,16 @@ async def _exp_orders_list_today(update: Update, context: ContextTypes.DEFAULT_T
             parse_mode="Markdown",
         )
         return
+    all_completed = False
+    if not completed_only:
+        all_completed = all(
+            (o.get("status_code") or "").strip().lower() == "completed"
+            for o in all_orders
+        )
     context.user_data["exp_date"] = today
     lines = [title]
+    if all_completed:
+        lines.append("Все заказы завершены!\n")
     buttons = []
     for o in all_orders:
         order_no = o.get("order_no")
@@ -228,7 +262,7 @@ async def cb_exp_route(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if lat and lon:
             points.append((lat, lon))
             client = o.get("customer_name") or f"#{cid}"
-            point_names.append(f"📍 {client} ({addr})")
+            point_names.append(f"📍 {client} ({addr}) [{lat:.6f}, {lon:.6f}]")
 
     chosen_date = context.user_data.get("exp_date", date.today().isoformat())
 
@@ -240,11 +274,19 @@ async def cb_exp_route(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    url = yandex_route_url(points)
+    # Для одной точки открываем саму точку, для нескольких — маршрут через все точки.
+    if len(points) == 1:
+        lat, lon = points[0]
+        url = yandex_map_point_url(lat, lon)
+    else:
+        url = yandex_route_url(points)
+    logger.info("exp_route_built: date=%s points=%s url=%s", chosen_date, len(points), url)
     lines = [f"🗺 *Маршрут на {fmt_date(chosen_date)}:*\n"]
     for name in point_names:
         lines.append(name)
     lines.append(f"\n📍 Точек: {len(points)}")
+    if len(points) > 1:
+        lines.append("Маршрут построен через все точки по порядку списка.")
 
     await log_action(q.from_user.id, session.login, session.role, "route_built",
                      f"date={chosen_date}, points={len(points)}", "success")
@@ -392,28 +434,165 @@ async def cb_exp_confirm_delivery(update: Update, context: ContextTypes.DEFAULT_
 # ---------- Доставлен (только информирование, оплата — в «Получить оплату») ----------
 
 async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение доставки без оплаты. Статус → completed. Оплата опционально через раздел «Получить оплату»."""
+    """Подтверждение доставки: создаёт операции delivery и списывает остатки."""
     q = update.callback_query
-    await q.answer()
+    await q.answer("Обрабатываю подтверждение доставки...")
     session, token = await _get_auth(update)
     if not session:
         return
     order_no = int(q.data.replace("exp_delivered_", ""))
+    in_progress_key = f"exp_delivered_in_progress_{order_no}"
+    if context.user_data.get(in_progress_key):
+        await q.edit_message_text(
+            f"⏳ Заказ №{order_no} уже обрабатывается. Подождите несколько секунд.",
+            reply_markup=back_button(),
+        )
+        return
+    context.user_data[in_progress_key] = True
 
     try:
-        # Обновить статус заказа на completed (доставлен, оплата опционально)
-        await api.update_order(token, order_no, {"status_code": "completed"})
-        await log_action(q.from_user.id, session.login, session.role, "order_delivered",
-                         f"order={order_no}", "success")
         await q.edit_message_text(
-            f"✅ *Заказ №{order_no} доставлен!*\n\n"
-            "Заказ отмечен как выполненный.\n"
-            "Если клиент оплатил, используйте раздел «💰 Получить оплату» для приёма оплаты.",
+            f"⏳ Подтверждаю доставку по заказу №{order_no}.\n"
+            "Создаю операции списания со склада экспедитора...",
+            reply_markup=back_button(),
+        )
+        order = await api.get_order(token, order_no)
+        status_code = (order.get("status_code") or "").strip().lower()
+        if status_code != "delivery":
+            await q.edit_message_text(
+                f"ℹ️ Заказ №{order_no} уже не в статусе «Доставка».\nТекущий статус: {status_code or 'неизвестно'}.",
+                reply_markup=back_button(),
+            )
+            return
+
+        existing_ops = await api.get_operations(token, type_code="delivery", created_by=session.login)
+        existing_for_order = [
+            op for op in (existing_ops or [])
+            if int(op.get("order_id") or 0) == order_no
+            and (op.get("status") or "").strip().lower() not in ("cancelled", "canceled")
+        ]
+        if existing_for_order:
+            await q.edit_message_text(
+                f"ℹ️ По заказу №{order_no} уже есть операции «Доставка клиенту».\n"
+                "Повторное списание остатков заблокировано.",
+                reply_markup=back_button(),
+            )
+            return
+
+        warehouse_from = (order.get("warehouse_from_expeditor") or order.get("warehouse_from") or "").strip()
+        if not warehouse_from:
+            warehouses = await api.get_warehouses(token)
+            for w in (warehouses or []):
+                if (w.get("expeditor_login") or "").strip() == session.login:
+                    warehouse_from = (w.get("code") or "").strip()
+                    break
+        if not warehouse_from:
+            raise SDSApiError(400, "Не найден склад экспедитора для списания товара.")
+
+        stock_resp = await api.get_warehouse_stock(token, warehouse=warehouse_from)
+        if isinstance(stock_resp, dict):
+            stock_rows = stock_resp.get("data") or []
+        elif isinstance(stock_resp, list):
+            stock_rows = stock_resp
+        else:
+            stock_rows = []
+
+        stock_by_product: dict[str, list[dict]] = {}
+        for row in (stock_rows or []):
+            pc = (row.get("product_code") or "").strip()
+            bc = (row.get("batch_code") or "").strip()
+            if not pc or not bc:
+                continue
+            avail = int(row.get("total_qty") or 0)
+            if avail <= 0:
+                continue
+            stock_by_product.setdefault(pc, []).append({
+                "batch_code": bc,
+                "available": avail,
+                "expiry_date": row.get("expiry_date") or "",
+            })
+        for pc in stock_by_product:
+            stock_by_product[pc].sort(key=lambda x: str(x.get("expiry_date") or ""))
+
+        items = order.get("items") or []
+        if not items:
+            raise SDSApiError(400, "В заказе нет позиций для доставки.")
+
+        allocations: list[dict] = []
+        shortages: list[str] = []
+        for it in items:
+            product_code = (it.get("product_code") or "").strip()
+            required_qty = int(it.get("quantity") or 0)
+            price = float(it.get("price") or 0)
+            product_name = (it.get("product_name") or product_code or "товар").strip()
+            if not product_code or required_qty <= 0:
+                continue
+
+            rows = stock_by_product.get(product_code, [])
+            remaining = required_qty
+            for r in rows:
+                if remaining <= 0:
+                    break
+                take = min(remaining, int(r["available"]))
+                if take <= 0:
+                    continue
+                allocations.append({
+                    "product_code": product_code,
+                    "batch_code": r["batch_code"],
+                    "quantity": take,
+                    "amount": take * price,
+                })
+                r["available"] -= take
+                remaining -= take
+
+            if remaining > 0:
+                available_total = required_qty - remaining
+                shortages.append(f"• {product_name}: требуется {required_qty}, доступно {available_total}")
+
+        if shortages:
+            await q.edit_message_text(
+                "❌ Недостаточно остатков на складе экспедитора:\n" + "\n".join(shortages),
+                reply_markup=back_button(),
+            )
+            return
+
+        created = 0
+        customer_id = int(order.get("customer_id") or 0)
+        payment_type_code = (order.get("payment_type_code") or "cash_sum").strip()
+        for a in allocations:
+            await api.create_delivery_operation(
+                token,
+                warehouse_from=warehouse_from,
+                product_code=a["product_code"],
+                batch_code=a["batch_code"],
+                quantity=int(a["quantity"]),
+                customer_id=customer_id,
+                amount=float(a["amount"]),
+                payment_type_code=payment_type_code,
+                expeditor_login=session.login,
+                order_id=order_no,
+                comment="Подтверждение доставки из Telegram",
+            )
+            created += 1
+
+        await api.update_order(token, order_no, {"status_code": "completed"})
+        await log_action(
+            q.from_user.id,
+            session.login,
+            session.role,
+            "order_delivered",
+            f"order={order_no}, delivery_ops={created}",
+            "success",
+        )
+        await q.edit_message_text(
+            f"✅ Заказ №{order_no} доставлен.\n\n"
+            f"Создано операций «Доставка клиенту»: {created}.\n"
+            f"Списание выполнено со склада: {warehouse_from}.\n"
+            "Статус заказа обновлён на «Завершён».",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("💰 Получить оплату", callback_data="exp_payment")],
-                [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")],
             ]),
-            parse_mode="Markdown",
         )
     except SDSApiError as e:
         if e.status == 401:
@@ -423,6 +602,8 @@ async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await log_action(q.from_user.id, session.login, session.role, "order_delivered",
                          f"order={order_no}", "error", e.detail)
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+    finally:
+        context.user_data.pop(in_progress_key, None)
 
 
 # ---------- Получить оплату ----------
@@ -433,12 +614,15 @@ async def cb_exp_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session, token = await _get_auth(update)
     if not session:
         return
+    today = date.today().isoformat()
+    today_end = (date.today() + timedelta(days=1)).isoformat()
 
     try:
         data = await api.get_orders(
             token,
-            status_code="delivery",
             login_expeditor=session.login,
+            scheduled_delivery_from=today,
+            scheduled_delivery_to=today_end,
             limit=50,
         )
     except SDSApiError as e:
@@ -450,17 +634,22 @@ async def cb_exp_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     all_orders = data if isinstance(data, list) else (data.get("orders") or data.get("data") or [])
-    pay_orders = [o for o in all_orders if o.get("status_code") == "delivery"]
+    pay_orders = [
+        o for o in all_orders
+        if o.get("status_code") in ("delivery", "completed")
+    ]
+    paid_order_ids = await _get_paid_order_ids(token, session.login)
+    pay_orders = [o for o in pay_orders if int(o.get("order_no") or 0) not in paid_order_ids]
 
     if not pay_orders:
         await q.edit_message_text(
-            "💰 *Получить оплату*\n\nНет заказов, ожидающих оплаты.",
+            f"💰 *Получить оплату* ({fmt_date(today)})\n\nНет заказов, ожидающих оплаты (без уже оплаченных).",
             reply_markup=back_button(),
             parse_mode="Markdown",
         )
         return
 
-    lines = ["💰 *Заказы для получения оплаты:*\n"]
+    lines = [f"💰 *Заказы для получения оплаты ({fmt_date(today)}):*\n"]
     buttons = []
     for o in pay_orders:
         order_no = o.get("order_no")
@@ -522,7 +711,14 @@ async def cb_exp_pay_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
     payment_type_code = o.get("payment_type_code") or "cash"
 
     try:
-        await api.update_order(token, order_no, {"status_code": "completed"})
+        paid_order_ids = await _get_paid_order_ids(token, session.login)
+        if order_no in paid_order_ids:
+            await q.edit_message_text(
+                f"⚠️ По заказу №{order_no} оплата уже была зафиксирована ранее.\n"
+                f"Повторное получение оплаты запрещено.",
+                reply_markup=back_button("exp_payment"),
+            )
+            return
         if customer_id and amount > 0:
             try:
                 await api.create_payment_receipt(
@@ -534,7 +730,8 @@ async def cb_exp_pay_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await log_action(q.from_user.id, session.login, session.role, "payment_received",
                          f"order={order_no}, amount={amount}", "success")
         await q.edit_message_text(
-            f"✅ Заказ №{order_no} завершён!\nОплата получена: {fmt_money(amount)}",
+            f"✅ Оплата зафиксирована по заказу №{order_no}.\nСумма: {fmt_money(amount)}\n"
+            f"Статус заказа не изменён.",
             reply_markup=back_button(),
             parse_mode="Markdown",
         )
@@ -590,7 +787,14 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
     customer_id = o.get("customer_id") or 0
     payment_type_code = o.get("payment_type_code") or "cash"
     try:
-        await api.update_order(session.jwt_token, order_no, {"status_code": "completed"})
+        paid_order_ids = await _get_paid_order_ids(session.jwt_token, session.login)
+        if order_no in paid_order_ids:
+            context.user_data.pop("pay_other_order", None)
+            await update.message.reply_text(
+                f"⚠️ По заказу №{order_no} оплата уже была зафиксирована ранее.\n"
+                f"Повторное получение оплаты запрещено."
+            )
+            return
         if customer_id and amount > 0:
             try:
                 await api.create_payment_receipt(
@@ -603,7 +807,9 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
                          f"order={order_no}, amount={amount}", "success")
         context.user_data.pop("pay_other_order", None)
         await update.message.reply_text(
-            f"✅ Заказ №{order_no} завершён!\nОплата получена: {fmt_money(amount)}"
+            f"✅ Оплата зафиксирована по заказу №{order_no}.\n"
+            f"Сумма: {fmt_money(amount)}\n"
+            f"Статус заказа не изменён."
         )
         from .handlers_auth import show_main_menu
         await show_main_menu(update, context, session)
@@ -615,10 +821,10 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"❌ Ошибка: {e.detail}")
 
 
-# ---------- Полученная оплата (просмотр операций cash_handover_from_expeditor) ----------
+# ---------- Полученная оплата (просмотр операций payment_receipt_from_customer) ----------
 
 async def cb_exp_received_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Список операций передачи наличных от экспедитора кассиру."""
+    """Список операций получения оплаты от клиента экспедитором."""
     q = update.callback_query
     await q.answer()
     session, token = await _get_auth(update)
@@ -626,10 +832,10 @@ async def cb_exp_received_payments(update: Update, context: ContextTypes.DEFAULT
         return
 
     try:
-        # Получить операции cash_handover_from_expeditor для текущего экспедитора
+        # Получить операции "получение оплаты от клиента" для текущего экспедитора
         operations = await api.get_operations(
             token,
-            type_code="cash_handover_from_expeditor",
+            type_code="payment_receipt_from_customer",
             created_by=session.login,
         )
     except SDSApiError as e:
@@ -640,16 +846,22 @@ async def cb_exp_received_payments(update: Update, context: ContextTypes.DEFAULT
         await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
         return
 
-    if not operations or len(operations) == 0:
+    # Не показываем отменённые операции в блоке "Полученная оплата"
+    visible_operations = [
+        op for op in (operations or [])
+        if (op.get("status") or "").strip().lower() not in ("cancelled", "canceled")
+    ]
+
+    if not visible_operations:
         await q.edit_message_text(
-            "💵 *Полученная оплата*\n\nНет записей о переданных деньгах.",
+            "💵 *Полученная оплата*\n\nНет операций получения оплаты от клиентов.",
             reply_markup=back_button(),
             parse_mode="Markdown",
         )
         return
 
     lines = ["💵 *Полученная оплата от клиентов:*\n"]
-    for op in operations:
+    for op in visible_operations:
         op_num = op.get("operation_number", "—")
         amount = op.get("amount", 0)
         status = op.get("status", "")
@@ -664,6 +876,101 @@ async def cb_exp_received_payments(update: Update, context: ContextTypes.DEFAULT
         "\n".join(lines),
         reply_markup=back_button(),
         parse_mode="Markdown",
+    )
+
+
+async def cb_exp_my_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Остатки на складе, закреплённом за текущим экспедитором."""
+    q = update.callback_query
+    await q.answer()
+    session, token = await _get_auth(update)
+    if not session:
+        return
+
+    try:
+        warehouses = await api.get_warehouses(token)
+    except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
+        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        return
+
+    exp_wh = None
+    for w in (warehouses or []):
+        if (w.get("expeditor_login") or "").strip() == session.login:
+            exp_wh = w
+            break
+
+    if not exp_wh:
+        await q.edit_message_text(
+            "📊 *Мои остатки*\n\nЗа вами не закреплён склад.",
+            reply_markup=back_button(),
+            parse_mode="Markdown",
+        )
+        return
+
+    wh_code = exp_wh.get("code", "")
+    wh_name = exp_wh.get("name") or wh_code or "—"
+
+    try:
+        stock_resp = await api.get_warehouse_stock(token, warehouse=wh_code)
+    except SDSApiError as e:
+        if e.status == 401:
+            await delete_session(q.from_user.id)
+            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            return
+        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        return
+
+    rows = []
+    if isinstance(stock_resp, dict):
+        if stock_resp.get("success") is True:
+            rows = stock_resp.get("data") or []
+        elif isinstance(stock_resp.get("data"), list):
+            rows = stock_resp.get("data") or []
+    elif isinstance(stock_resp, list):
+        rows = stock_resp
+
+    if not rows:
+        await q.edit_message_text(
+            f"📊 *Мои остатки*\n\nСклад: {wh_name}\nОстатков нет.",
+            reply_markup=back_button(),
+            parse_mode="Markdown",
+        )
+        return
+
+    # Сортировка и агрегаты
+    rows = sorted(
+        rows,
+        key=lambda r: (
+            str(r.get("product_code") or ""),
+            str(r.get("batch_code") or ""),
+        ),
+    )
+    total_qty = sum(int(r.get("total_qty") or 0) for r in rows)
+    total_cost = sum(float(r.get("total_cost") or 0) for r in rows)
+
+    lines = [f"📊 Мои остатки\nСклад: {wh_name}\n"]
+    max_lines = 30
+    for i, r in enumerate(rows[:max_lines], 1):
+        product = (r.get("product_name") or r.get("product_code") or "—").strip()
+        qty = int(r.get("total_qty") or 0)
+        expiry = r.get("expiry_date") or "—"
+        if expiry and expiry != "—":
+            expiry = fmt_date(str(expiry)[:10])
+        lines.append(f"{i}. {product} | {qty} шт | срок: {expiry}")
+
+    if len(rows) > max_lines:
+        lines.append(f"\n… и ещё {len(rows) - max_lines} поз.")
+
+    lines.append(f"\nИтого: {total_qty} шт")
+    lines.append(f"Сумма: {fmt_money(total_cost)}")
+
+    await q.edit_message_text(
+        "\n".join(lines),
+        reply_markup=back_button(),
     )
 
 
@@ -682,6 +989,7 @@ def register_expeditor_handlers(app):
     app.add_handler(CallbackQueryHandler(cb_exp_delivered, pattern=r"^exp_delivered_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_route, pattern=r"^exp_route_\d{4}-\d{2}-\d{2}$"))
     app.add_handler(CallbackQueryHandler(cb_exp_payment, pattern="^exp_payment$"))
+    app.add_handler(CallbackQueryHandler(cb_exp_my_stock, pattern="^exp_my_stock$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_order, pattern=r"^exp_pay_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_full, pattern=r"^exp_payfull_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_other, pattern=r"^exp_payother_\d+$"))

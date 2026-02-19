@@ -207,6 +207,17 @@ class SDSApi:
         """GET /api/v1/dictionary/territories"""
         return await self._request("GET", "/api/v1/dictionary/territories", token=token)
 
+    async def get_warehouses(self, token: str) -> list:
+        """GET /api/v1/dictionary/warehouses"""
+        return await self._request("GET", "/api/v1/dictionary/warehouses", token=token)
+
+    async def get_warehouse_stock(self, token: str, warehouse: str, **params) -> dict:
+        """GET /api/v1/warehouse/stock"""
+        query = {"warehouse": warehouse}
+        if params:
+            query.update(params)
+        return await self._request("GET", "/api/v1/warehouse/stock", token=token, params=query)
+
     # ---------- Operations ----------
 
     async def get_operations(self, token: str, **params) -> list:
@@ -234,6 +245,41 @@ class SDSApi:
         return await self._request(
             "POST",
             "/api/v1/operations/payment_receipt_from_customer/create",
+            token=token,
+            json=payload,
+        )
+
+    async def create_delivery_operation(
+        self,
+        token: str,
+        *,
+        warehouse_from: str,
+        product_code: str,
+        batch_code: str,
+        quantity: int,
+        customer_id: int,
+        amount: float,
+        payment_type_code: str,
+        expeditor_login: str,
+        order_id: int,
+        comment: str | None = None,
+    ) -> dict:
+        """POST /api/v1/operations/delivery/create."""
+        payload = {
+            "warehouse_from": warehouse_from,
+            "product_code": product_code,
+            "batch_code": batch_code,
+            "quantity": quantity,
+            "customer_id": customer_id,
+            "amount": amount,
+            "payment_type_code": payment_type_code,
+            "expeditor_login": expeditor_login,
+            "order_id": order_id,
+            "comment": comment,
+        }
+        return await self._request(
+            "POST",
+            "/api/v1/operations/delivery/create",
             token=token,
             json=payload,
         )

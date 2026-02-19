@@ -13,7 +13,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 SDS_API_URL = os.getenv("SDS_API_URL", "http://127.0.0.1:8000").strip()
 
 # Таймаут запросов к API (сек)
-API_TIMEOUT = int(os.getenv("API_TIMEOUT", "10"))
+API_TIMEOUT = int(os.getenv("API_TIMEOUT", "30"))
 
 # Кэш справочников (сек)
 CACHE_TTL = int(os.getenv("CACHE_TTL", "3600"))  # 1 час

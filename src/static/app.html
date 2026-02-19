@@ -164,6 +164,24 @@
         });
       };
 
+      function parseBackendDate(value) {
+        if (!value) return null;
+        try {
+          var raw = String(value).trim();
+          if (!raw) return null;
+          var normalized = raw.replace(' ', 'T');
+          var hasTimezone = /([zZ]|[+\-]\d{2}:\d{2})$/.test(normalized);
+          if (!hasTimezone && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(normalized)) {
+            normalized += 'Z';
+          }
+          var d = new Date(normalized);
+          if (isNaN(d.getTime())) return null;
+          return d;
+        } catch (e) {
+          return null;
+        }
+      }
+
       var currentUser = { login: '', fio: '', role: '' };
       var isAdmin = function () { return (currentUser.role || '').toLowerCase() === 'admin'; };
       var menuByCode = {};
@@ -326,7 +344,8 @@
       function formatDateOnly(isoStr) {
         if (!isoStr) return '';
         try {
-          var d = new Date(isoStr);
+          var d = parseBackendDate(isoStr);
+          if (!d) return isoStr;
           return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
         } catch (e) { return isoStr; }
       }
@@ -1525,7 +1544,8 @@
         function formatDateTashkent(isoStr) {
           if (!isoStr) return '';
           try {
-            var d = new Date(isoStr);
+            var d = parseBackendDate(isoStr);
+            if (!d) return isoStr;
             return d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
           } catch (e) { return isoStr; }
         }
@@ -1535,7 +1555,8 @@
           var sc = (statusCode || '').toString().toLowerCase().replace(/\s/g, '');
           if (sc === 'completed' || sc === 'cancelled' || sc === 'canceled' || sc === 'отменен' || sc === 'завершен' || sc === 'closed' || sc === '4' || (sc.length && sc.charAt(0) === '4') || sc.indexOf('отменен') !== -1) return text;
           try {
-            var d = new Date(isoStr);
+            var d = parseBackendDate(isoStr);
+            if (!d) return text;
             var today = new Date();
             today.setHours(0, 0, 0, 0);
             d.setHours(0, 0, 0, 0);
@@ -1809,14 +1830,16 @@
           function formatDateTashkent(isoStr) {
             if (!isoStr) return '—';
             try {
-              var d = new Date(isoStr);
+              var d = parseBackendDate(isoStr);
+              if (!d) return isoStr;
               return d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
             } catch (e) { return isoStr; }
           }
           function isoToDatetimeLocal(isoStr) {
             if (!isoStr) return '';
             try {
-              var d = new Date(isoStr);
+              var d = parseBackendDate(isoStr);
+              if (!d) return '';
               var y = d.getFullYear(); var m = String(d.getMonth() + 1).padStart(2, '0'); var day = String(d.getDate()).padStart(2, '0');
               var h = String(d.getHours()).padStart(2, '0'); var min = String(d.getMinutes()).padStart(2, '0');
               return y + '-' + m + '-' + day + 'T' + h + ':' + min;
@@ -2023,20 +2046,22 @@
         var errDiv = document.getElementById('sectionOrderItemsErr');
         var searchRow = document.getElementById('orderItemsSearchRow');
         var exportBtn = document.getElementById('orderItemsExport');
-        function formatDateTashkent(isoStr) {
-          if (!isoStr) return '';
-          try {
-            var d = new Date(isoStr);
-            return d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-          } catch (e) { return isoStr; }
-        }
+          function formatDateTashkent(isoStr) {
+            if (!isoStr) return '';
+            try {
+              var d = parseBackendDate(isoStr);
+              if (!d) return isoStr;
+              return d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            } catch (e) { return isoStr; }
+          }
         function formatScheduledDeliveryOi(isoStr, statusCode) {
           var text = formatDateTashkent(isoStr);
           if (!text) return '';
           var sc = (statusCode || '').toString().toLowerCase().replace(/\s/g, '');
           if (sc === 'completed' || sc === 'cancelled' || sc === 'canceled' || sc === 'отменен' || sc === 'завершен' || sc === 'closed' || sc === '4' || (sc.length && sc.charAt(0) === '4') || sc.indexOf('отменен') !== -1) return text;
           try {
-            var d = new Date(isoStr);
+            var d = parseBackendDate(isoStr);
+            if (!d) return text;
             var today = new Date();
             today.setHours(0, 0, 0, 0);
             d.setHours(0, 0, 0, 0);
@@ -2663,11 +2688,61 @@
           formHtml += '<div class="form-group"><label>Склад от <span style="color:#c00">*</span></label><select id="allocWhFrom" required>' + whOpts + '</select></div>';
           formHtml += '<div class="form-group"><label>Экспедитор <span style="color:#c00">*</span></label><select id="allocExpeditor" required>' + expOpts + '</select></div>';
           formHtml += '<div class="form-group"><label>Склад в <span style="color:#c00">*</span></label><select id="allocWhTo" required disabled style="background-color:#eee; color:#555;">' + whOpts + '</select></div>';
-          formHtml += '<div style="margin-top:20px"><h3 style="margin-bottom:12px">Товары</h3><div style="overflow-x:auto"><table id="allocItemsTable" style="width:100%"><thead><tr><th>Товар</th><th>Партия</th><th>Срок годности</th><th>Дней осталось</th><th>Доступно</th><th>Количество</th><th>Вес</th><th>Цена</th><th>Сумма</th><th></th></tr></thead><tbody id="allocItemsBody"><tr class="alloc-row"><td><select class="alloc-product" required><option value=\"\">— Выберите товар —</option></select></td><td><select class="alloc-batch" required><option value=\"\">— нет данных —</option></select></td><td class="alloc-expiry">—</td><td class="alloc-days" style="text-align:center">—</td><td class="alloc-available" style="text-align:right">0</td><td><input type="number" class="alloc-qty" min="1" required></td><td class="alloc-weight" style="text-align:right">—</td><td class="alloc-price" style="text-align:right">—</td><td class="alloc-sum" style="text-align:right">—</td><td><button type="button" class="btn btn-secondary btn-small alloc-remove" style="display:none">Удалить</button></td></tr></tbody><tfoot><tr style="background:#f8f9fa;font-weight:600"><td colspan="6" style="text-align:right;padding:8px">Итого:</td><td id="allocTotalWeight" style="text-align:right;padding:8px">0</td><td></td><td id="allocTotalQty" style="text-align:right;padding:8px">0</td><td></td><td id="allocTotalSum" style="text-align:right;padding:8px">0</td><td></td></tr></tfoot></table></div><button type="button" class="btn btn-secondary" id="allocAddRow" style="margin-top:8px">+ Добавить товар</button></div>';
+          formHtml += '<div class="form-group"><label>Дата поставки <span style="color:#c00">*</span></label><input type="text" id="allocDeliveryDate" placeholder="дд.мм.гггг" autocomplete="off"></div>';
+          formHtml += '<p style="margin:8px 0 0 0"><button type="button" class="btn btn-secondary" id="allocPullByDate">Подтянуть товары по дате поставки</button></p>';
+          formHtml += '<div style="margin-top:20px"><h3 style="margin-bottom:12px">Товары</h3><div style="overflow-x:auto"><table id="allocItemsTable" style="width:100%"><thead><tr><th>Товар</th><th>Партия</th><th>Срок годности</th><th>Дней осталось</th><th>Доступно</th><th>Количество</th><th>Вес</th><th>Цена</th><th>Сумма</th><th></th></tr></thead><tbody id="allocItemsBody"><tr class="alloc-row"><td><select class="alloc-product" required><option value=\"\">— Выберите товар —</option></select></td><td><select class="alloc-batch" required><option value=\"\">— нет данных —</option></select></td><td class="alloc-expiry">—</td><td class="alloc-days" style="text-align:center">—</td><td class="alloc-available" style="text-align:right">0</td><td><input type="number" class="alloc-qty" min="1" required></td><td class="alloc-weight" style="text-align:right">—</td><td class="alloc-price" style="text-align:right">—</td><td class="alloc-sum" style="text-align:right">—</td><td><button type="button" class="btn btn-secondary btn-small alloc-remove" style="display:none">Удалить</button></td></tr></tbody><tfoot><tr style="background:#f8f9fa;font-weight:600"><td colspan="5" style="text-align:right;padding:8px">\u0418\u0442\u043e\u0433\u043e:</td><td id="allocTotalQty" style="text-align:right;padding:8px">0</td><td id="allocTotalWeight" style="text-align:right;padding:8px">0 \u043a\u0433</td><td></td><td id="allocTotalSum" style="text-align:right;padding:8px">0,00</td><td></td></tr></tfoot></table></div><button type="button" class="btn btn-secondary" id="allocAddRow" style="margin-top:8px">+ Добавить товар</button></div>';
           formHtml += '<div class="form-group" style="margin-top:20px"><label>Комментарий</label><input type="text" id="allocComment" placeholder="необяз."></div>';
           formHtml += '<p style="margin-top:16px"><button type="button" class="btn btn-primary" id="allocSave">Сохранить операции</button> <button type="button" class="btn btn-secondary" id="allocCancel">Отмена</button></p></div>';
           content.innerHTML = formHtml;
+          var allocDeliveryDateEl = document.getElementById('allocDeliveryDate');
+          if (allocDeliveryDateEl && window.flatpickr) {
+            window.flatpickr(allocDeliveryDateEl, { locale: 'ru', dateFormat: 'd.m.Y', allowInput: true });
+          }
           var stockCache = null;
+          var lastAllocDeliveryDateValue = allocDeliveryDateEl ? (allocDeliveryDateEl.value || '') : '';
+
+          function hasAllocationRowsData() {
+            var rows = document.querySelectorAll('.alloc-row');
+            var hasData = false;
+            rows.forEach(function (row) {
+              var prodSel = row.querySelector('.alloc-product');
+              var batchSel = row.querySelector('.alloc-batch');
+              var qtyInp = row.querySelector('.alloc-qty');
+              var qty = parseInt((qtyInp && qtyInp.value) || '0', 10) || 0;
+              if ((prodSel && prodSel.value) || (batchSel && batchSel.value) || qty > 0) hasData = true;
+            });
+            return hasData;
+          }
+
+          function clearAllocationRows() {
+            var tbody = document.getElementById('allocItemsBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+          }
+
+          function addAllocationRow(prefill) {
+            var tbody = document.getElementById('allocItemsBody');
+            if (!tbody) return null;
+            var row = document.createElement('tr');
+            row.className = 'alloc-row';
+            var prodOptsNow = buildProductOptionsFromStock();
+            row.innerHTML = '<td><select class="alloc-product" required>' + prodOptsNow + '</select></td><td><select class="alloc-batch" required><option value="">— нет данных —</option></select></td><td class="alloc-expiry">—</td><td class="alloc-days" style="text-align:center">—</td><td class="alloc-available" style="text-align:right">0</td><td><input type="number" class="alloc-qty" min="1" required></td><td class="alloc-weight" style="text-align:right">—</td><td class="alloc-price" style="text-align:right">—</td><td class="alloc-sum" style="text-align:right">—</td><td><button type="button" class="btn btn-secondary btn-small alloc-remove">Удалить</button></td>';
+            tbody.appendChild(row);
+            attachAllocRowHandlers(row);
+            if (prefill && prefill.product_code) {
+              var prodSel = row.querySelector('.alloc-product');
+              if (prodSel) prodSel.value = prefill.product_code;
+              updateRowFromStock(row);
+              var batchSel = row.querySelector('.alloc-batch');
+              if (batchSel && prefill.batch_code) batchSel.value = prefill.batch_code;
+              var qtyInp = row.querySelector('.alloc-qty');
+              if (qtyInp && prefill.quantity != null) qtyInp.value = String(prefill.quantity);
+              updateRowFromStock(row);
+            } else {
+              updateRowFromStock(row);
+            }
+            return row;
+          }
           function loadStock(whCode) {
             if (!whCode) { stockCache = null; return Promise.resolve(); }
             return api('/api/v1/warehouse/stock?warehouse=' + encodeURIComponent(whCode)).then(function (resp) {
@@ -2701,6 +2776,7 @@
             if (!productSel || !batchSel) return;
             var whFrom = document.getElementById('allocWhFrom').value;
             var productCode = productSel.value || '';
+            var prevBatchCode = (batchSel && batchSel.value) ? String(batchSel.value) : '';
             var rows = (stockCache || []).filter(function (s) { return s.product_code === productCode && (!whFrom || s.warehouse_code === whFrom); });
             rows.sort(function (a, b) {
               var ea = a.expiry_date || ''; var eb = b.expiry_date || '';
@@ -2715,7 +2791,19 @@
               opts += '<option value="' + escAttr(r.batch_code || '') + '" data-batch-id="' + escAttr(r.batch_id || '') + '" data-expiry="' + escAttr(r.expiry_date || '') + '" data-available="' + (r.total_qty != null ? r.total_qty : 0) + '" data-days="' + days + '" data-color="' + escAttr(color) + '" data-icon="' + escAttr(icon) + '">' + escAttr((r.batch_code || '') + (r.expiry_date ? ' — ' + formatDateOnly(r.expiry_date) : '')) + '</option>';
             });
             batchSel.innerHTML = opts;
-            if (rows.length) batchSel.selectedIndex = 1;
+            if (rows.length) {
+              var restored = false;
+              if (prevBatchCode) {
+                for (var i = 0; i < batchSel.options.length; i += 1) {
+                  if (batchSel.options[i] && batchSel.options[i].value === prevBatchCode) {
+                    batchSel.selectedIndex = i;
+                    restored = true;
+                    break;
+                  }
+                }
+              }
+              if (!restored) batchSel.selectedIndex = 1;
+            }
             updateBatchInfo();
             function updateBatchInfo() {
               var opt = batchSel.options[batchSel.selectedIndex] || null;
@@ -2783,16 +2871,184 @@
             var qEl = document.getElementById('allocTotalQty');
             var sEl = document.getElementById('allocTotalSum');
             var wEl = document.getElementById('allocTotalWeight');
-            if (qEl) qEl.textContent = totalQty;
-            if (sEl) sEl.textContent = totalSum ? totalSum.toFixed(2) : '0';
+            if (qEl) qEl.textContent = totalQty.toLocaleString('ru-RU');
+            if (sEl) sEl.textContent = totalSum.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             if (wEl) {
               if (totalWeightG > 0) {
                 var totalWeightKg = (totalWeightG / 1000).toFixed(2);
                 wEl.textContent = totalWeightKg + ' кг';
               } else {
-                wEl.textContent = '0';
+                wEl.textContent = '0 кг';
               }
             }
+          }
+
+          function pullAllocationByDate(options) {
+            options = options || {};
+            var errEl = document.getElementById('opFormErr');
+            var msgEl = document.getElementById('opFormMsg');
+            if (errEl) errEl.textContent = '';
+            if (msgEl) { msgEl.style.display = 'none'; msgEl.textContent = ''; }
+
+            var whFrom = document.getElementById('allocWhFrom').value;
+            var expeditor = document.getElementById('allocExpeditor').value;
+            var deliveryDate = (document.getElementById('allocDeliveryDate').value || '').trim();
+            if (!whFrom) { if (errEl) errEl.textContent = 'Выберите склад от.'; return; }
+            if (!expeditor) { if (errEl) errEl.textContent = 'Выберите экспедитора.'; return; }
+            if (!deliveryDate) { if (errEl) errEl.textContent = 'Выберите дату поставки.'; return; }
+
+            if (!options.skipConfirm && hasAllocationRowsData()) {
+              var text = options.dateChangeMode
+                ? 'Изменить дату поставки? Текущие позиции будут заменены.'
+                : 'Заменить существующие позиции новыми?';
+              if (!confirm(text)) return;
+            }
+
+            var pullBtn = document.getElementById('allocPullByDate');
+            if (pullBtn) { pullBtn.disabled = true; pullBtn.textContent = 'Подтягиваем...'; }
+
+            function bindMatchedOrderLinks() {
+              if (!msgEl) return;
+              msgEl.querySelectorAll('[data-alloc-order-id]').forEach(function (a) {
+                a.onclick = function (ev) {
+                  ev.preventDefault();
+                  var orderId = parseInt(this.getAttribute('data-alloc-order-id') || '0', 10) || 0;
+                  if (!orderId) return;
+                  api('/api/v1/orders/' + orderId).then(function (order) {
+                    var statusLabel = order.status_name || order.status_code || '—';
+                    var paymentLabel = order.payment_type_name || order.payment_type_code || '—';
+                    var amountValue = (order.total_amount != null && !isNaN(Number(order.total_amount)))
+                      ? Number(order.total_amount).toLocaleString('ru-RU')
+                      : (order.total_amount != null ? order.total_amount : '—');
+                    var lastUpdated = '—';
+                    if (order.last_updated_at) {
+                      try {
+                        var dLast = new Date(order.last_updated_at);
+                        lastUpdated = isNaN(dLast.getTime())
+                          ? String(order.last_updated_at)
+                          : dLast.toLocaleString('ru-RU', {
+                              day: '2-digit', month: '2-digit', year: 'numeric',
+                              hour: '2-digit', minute: '2-digit'
+                            });
+                      } catch (_) {
+                        lastUpdated = String(order.last_updated_at);
+                      }
+                    }
+                    var itemsHtml = '';
+                    var orderItems = Array.isArray(order.items) ? order.items : [];
+                    if (orderItems.length) {
+                      var rowsHtml = orderItems.map(function (it) {
+                        var qty = Number(it.quantity || 0);
+                        var priceNum = (it.price != null && !isNaN(Number(it.price))) ? Number(it.price) : null;
+                        var sumText = priceNum != null ? (qty * priceNum).toLocaleString('ru-RU') : '—';
+                        return '<tr>'
+                          + '<td>' + escAttr(it.product_name || it.product_code || '—') + '</td>'
+                          + '<td style="text-align:right">' + escAttr(qty) + '</td>'
+                          + '<td style="text-align:right">' + escAttr(priceNum != null ? priceNum.toLocaleString('ru-RU') : '—') + '</td>'
+                          + '<td style="text-align:right">' + escAttr(sumText) + '</td>'
+                          + '</tr>';
+                      }).join('');
+                      itemsHtml = '<div class="form-group"><label>Позиции заказа</label><div style="overflow-x:auto"><table style="width:100%"><thead><tr><th>Товар</th><th style="text-align:right">Кол-во</th><th style="text-align:right">Цена</th><th style="text-align:right">Сумма</th></tr></thead><tbody>'
+                        + rowsHtml
+                        + '</tbody></table></div></div>';
+                    }
+                    var bodyHtml = ''
+                      + '<div class="form-group"><label>Номер заказа</label><div class="form-readonly">№ ' + escAttr(order.order_no || order.id || orderId) + '</div></div>'
+                      + '<div class="form-group"><label>Клиент</label><div class="form-readonly">' + escAttr(order.customer_name || '—') + '</div></div>'
+                      + '<div class="form-group"><label>Статус</label><div class="form-readonly">' + escAttr(statusLabel) + '</div></div>'
+                      + '<div class="form-group"><label>Тип оплаты</label><div class="form-readonly">' + escAttr(paymentLabel) + '</div></div>'
+                      + '<div class="form-group"><label>Сумма</label><div class="form-readonly">' + escAttr(amountValue) + '</div></div>'
+                      + '<div class="form-group"><label>Дата поставки</label><div class="form-readonly">' + escAttr(order.scheduled_delivery_at ? formatDateOnly(order.scheduled_delivery_at) : '—') + '</div></div>'
+                      + '<div class="form-group"><label>Последнее изменение</label><div class="form-readonly">' + escAttr(lastUpdated) + '</div></div>'
+                      + itemsHtml;
+                    showModal('Заказ № ' + orderId, bodyHtml, function () { return Promise.resolve(); }, { closeOnly: true });
+                  }).catch(function (e) {
+                    var detail = e && e.data && e.data.detail;
+                    var msg = typeof detail === 'string'
+                      ? detail
+                      : (detail ? JSON.stringify(detail) : 'Не удалось загрузить заказ.');
+                    showModal(
+                      'Ошибка загрузки заказа',
+                      '<p style="margin:0 0 8px 0">' + escAttr(msg) + '</p><p style="margin:0;color:#666">Заказ: № ' + escAttr(orderId) + '</p>',
+                      function () { return Promise.resolve(); },
+                      { closeOnly: true }
+                    );
+                  });
+                };
+              });
+            }
+
+            api(
+              '/api/v1/operations/allocation/suggest-by-delivery-date'
+              + '?warehouse_from=' + encodeURIComponent(whFrom)
+              + '&expeditor_login=' + encodeURIComponent(expeditor)
+              + '&delivery_date=' + encodeURIComponent(deliveryDate)
+            ).then(function (resp) {
+              if (!resp || resp.success !== true) {
+                if (errEl) errEl.textContent = 'Ошибка автоподтягивания товаров.';
+                return;
+              }
+              if (resp.no_orders) {
+                clearAllocationRows();
+                addAllocationRow(null);
+                updateTotals();
+                if (msgEl) {
+                  msgEl.textContent = resp.message || ('На выбранную дату нет активных заказов для доставки экспедитором ' + expeditor + '.');
+                  msgEl.style.display = 'block';
+                }
+                return;
+              }
+
+              var renderPrefill = function () {
+                var prefillRows = [];
+                (resp.items || []).forEach(function (item) {
+                  (item.allocations || []).forEach(function (a) {
+                    var qty = parseInt(a.allocated_qty || '0', 10) || 0;
+                    if (qty <= 0) return;
+                    prefillRows.push({
+                      product_code: a.product_code,
+                      batch_code: a.batch_code,
+                      quantity: qty
+                    });
+                  });
+                });
+                clearAllocationRows();
+                if (prefillRows.length) {
+                  prefillRows.forEach(function (r) { addAllocationRow(r); });
+                } else {
+                  addAllocationRow(null);
+                }
+                updateTotals();
+
+                if (resp.warnings && resp.warnings.length) {
+                  if (errEl) errEl.textContent = resp.warnings.join(' | ');
+                } else if (msgEl) {
+                  var orderInfoText = '';
+                  if (resp.matched_orders_count != null) {
+                    var orderIds = Array.isArray(resp.matched_order_ids) ? resp.matched_order_ids : [];
+                    var orderIdsHtml = orderIds.length
+                      ? orderIds.map(function (id) {
+                          return '<a href="#" data-alloc-order-id="' + escAttr(id) + '" style="margin-right:6px">\u2116' + escAttr(id) + '</a>';
+                        }).join('')
+                      : '—';
+                    orderInfoText = ' <span>Подтянуто из заказов: ' + resp.matched_orders_count + ' (' + orderIdsHtml + ')</span>.';
+                  }
+                  msgEl.innerHTML = 'Товары успешно подтянуты по дате поставки.' + orderInfoText;
+                  msgEl.style.display = 'block';
+                  bindMatchedOrderLinks();
+                }
+              };
+              loadStock(whFrom).then(renderPrefill).catch(renderPrefill);
+            }).catch(function (e) {
+              var detail = e && e.data && e.data.detail;
+              if (typeof detail === 'string') { if (errEl) errEl.textContent = detail; return; }
+              if (detail && detail.errors) {
+                var errs = []; for (var k in detail.errors) errs.push(k + ': ' + detail.errors[k]);
+                if (errEl) errEl.textContent = errs.join('; ');
+              } else if (errEl) errEl.textContent = 'Ошибка автоподтягивания товаров.';
+            }).finally(function () {
+              if (pullBtn) { pullBtn.disabled = false; pullBtn.textContent = 'Подтянуть товары по дате поставки'; }
+            });
           }
           function attachAllocRowHandlers(row) {
             var prodSel = row.querySelector('.alloc-product');
@@ -2844,16 +3100,29 @@
               }
             };
           }
+          var allocPullBtn = document.getElementById('allocPullByDate');
+          if (allocPullBtn) {
+            allocPullBtn.onclick = function () { pullAllocationByDate({ skipConfirm: false, dateChangeMode: false }); };
+          }
+          if (allocDeliveryDateEl) {
+            allocDeliveryDateEl.onchange = function () {
+              var newVal = (this.value || '').trim();
+              if (!newVal) { lastAllocDeliveryDateValue = ''; return; }
+              if (hasAllocationRowsData()) {
+                var ok = confirm('Изменить дату поставки? Текущие позиции будут заменены.');
+                if (!ok) {
+                  this.value = lastAllocDeliveryDateValue;
+                  return;
+                }
+              }
+              lastAllocDeliveryDateValue = newVal;
+              pullAllocationByDate({ skipConfirm: true, dateChangeMode: true });
+            };
+          }
           var firstRow = document.querySelector('.alloc-row');
           if (firstRow) attachAllocRowHandlers(firstRow);
           document.getElementById('allocAddRow').onclick = function () {
-            var tbody = document.getElementById('allocItemsBody');
-            var row = document.createElement('tr');
-            row.className = 'alloc-row';
-            var prodOptsNow = buildProductOptionsFromStock();
-            row.innerHTML = '<td><select class="alloc-product" required>' + prodOptsNow + '</select></td><td><select class="alloc-batch" required><option value="">— нет данных —</option></select></td><td class="alloc-expiry">—</td><td class="alloc-days" style="text-align:center">—</td><td class="alloc-available" style="text-align:right">0</td><td><input type="number" class="alloc-qty" min="1" required></td><td class="alloc-weight" style="text-align:right">—</td><td class="alloc-price" style="text-align:right">—</td><td class="alloc-sum" style="text-align:right">—</td><td><button type="button" class="btn btn-secondary btn-small alloc-remove">Удалить</button></td>';
-            tbody.appendChild(row);
-            attachAllocRowHandlers(row);
+            addAllocationRow(null);
           };
           document.getElementById('allocCancel').onclick = function () { loadSectionOperations(false); };
           document.getElementById('allocSave').onclick = function () {
@@ -3578,13 +3847,14 @@
           }
           function showOrderSearchModal() {
             api('/api/v1/orders/statuses').catch(function() { return []; }).then(function(statuses) {
-              function formatDateTashkent(isoStr) {
-                if (!isoStr) return '';
-                try {
-                  var d = new Date(isoStr);
-                  return d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-                } catch (e) { return isoStr; }
-              }
+        function formatDateTashkent(isoStr) {
+          if (!isoStr) return '';
+          try {
+            var d = parseBackendDate(isoStr);
+            if (!d) return isoStr;
+            return d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+          } catch (e) { return isoStr; }
+        }
               var modalId = 'orderSearchModal_' + Date.now();
               var statusOptsHtml = '<option value="">— Все —</option>';
               if (statuses && statuses.length) {
@@ -3967,7 +4237,7 @@
                     resultsEl.querySelectorAll('[data-op-select-order]').forEach(function (btn) {
                       btn.onclick = function () {
                         var ordId = this.getAttribute('data-op-select-order');
-                        var disp = this.getAttribute('data-op-order-display') || ('№ ' + ordId);
+                        var disp = this.getAttribute('data-op-order-display') || ('\u2116 ' + ordId);
                         if (orderIdInput) orderIdInput.value = ordId;
                         if (orderDisplay) orderDisplay.value = disp;
                         var amt = this.getAttribute('data-op-order-amount');
@@ -4457,7 +4727,8 @@
             var deliveryDate = '—';
             if (r.scheduled_delivery_at) {
               try {
-                var d = new Date(r.scheduled_delivery_at);
+                var d = parseBackendDate(r.scheduled_delivery_at);
+                if (!d) throw new Error('Invalid date');
                 deliveryDate = d.toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
               } catch (e) { deliveryDate = r.scheduled_delivery_at; }
             }

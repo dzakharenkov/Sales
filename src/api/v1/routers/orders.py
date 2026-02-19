@@ -615,8 +615,22 @@ async def get_order(
         wh_row = wh_result.scalar_one_or_none()
         if wh_row is not None:
             warehouse_from_expeditor = wh_row
-    items_result = await session.execute(select(Item).where(Item.order_id == order.order_no))
-    items = items_result.scalars().all()
+    status_name = None
+    if order.status_code:
+        st_result = await session.execute(select(Status.name).where(Status.code == order.status_code))
+        status_name = st_result.scalar_one_or_none()
+
+    payment_type_name = None
+    if order.payment_type_code:
+        pt_result = await session.execute(select(PaymentType.name).where(PaymentType.code == order.payment_type_code))
+        payment_type_name = pt_result.scalar_one_or_none()
+
+    items_result = await session.execute(
+        select(Item, Product)
+        .outerjoin(Product, Product.code == Item.product_code)
+        .where(Item.order_id == order.order_no)
+    )
+    item_rows = items_result.all()
     return {
         "id": order.order_no,
         "order_no": order.order_no,
@@ -624,8 +638,10 @@ async def get_order(
         "customer_name": (cust.name_client or cust.firm_name or "") if cust else None,
         "order_date": order.order_date.isoformat() if order.order_date else None,
         "status_code": order.status_code,
+        "status_name": status_name,
         "total_amount": float(order.total_amount) if order.total_amount else None,
         "payment_type_code": order.payment_type_code,
+        "payment_type_name": payment_type_name,
         "created_by": order.created_by,
         "login_agent": cust.login_agent if cust else None,
         "login_expeditor": cust.login_expeditor if cust else None,
@@ -641,10 +657,11 @@ async def get_order(
             {
                 "id": str(i.id),
                 "product_code": i.product_code,
+                "product_name": p.name if p else None,
                 "quantity": i.quantity,
                 "price": float(i.price) if i.price else None,
             }
-            for i in items
+            for i, p in item_rows
         ],
     }
 
