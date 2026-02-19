@@ -96,7 +96,18 @@ Validated:
 
 ## 🔗 Git Commits
 
-(To be filled after commit in this task execution block.)
+```text
+commit 8e5b04c
+Author: Codex
+Date:   2026-02-19
+
+    [TASK-016] Harden CORS policy and add security headers
+
+    - Add CORS_ALLOWED_ORIGINS config parsing
+    - Restrict CORS methods and headers
+    - Add SecurityHeadersMiddleware
+    - Add CORS/security header tests
+```
 
 ---
 
