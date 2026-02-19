@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db_session
 from src.database.models import Customer, User, Operation, CustomerVisit
 from src.core.deps import get_current_user, require_admin
+from src.core.exceptions import ForbiddenError, NotFoundError
 from src.core.pagination import PaginatedResponse, PaginationParams
 from src.core.sql import escape_like
 
@@ -379,7 +380,7 @@ async def create_customer(
 ):
     """Добавить клиента. Admin или Agent."""
     if user.role not in ("admin", "agent"):
-        raise HTTPException(status_code=403, detail="Только admin или agent могут создавать клиентов")
+        raise ForbiddenError("Только admin или agent могут создавать клиентов")
     await _validate_city_territory_refs(session, body.city_id, body.territory_id)
     c = Customer(
         name_client=body.name_client,
@@ -421,7 +422,7 @@ async def list_customer_visits(
     """Список визитов клиента."""
     r = await session.execute(select(Customer).where(Customer.id == customer_id))
     if r.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Клиент не найден")
+        raise NotFoundError("Клиент", customer_id)
     r2 = await session.execute(
         select(CustomerVisit, User.fio)
         .outerjoin(User, CustomerVisit.responsible_login == User.login)
@@ -497,7 +498,7 @@ async def create_customer_visit(
     """Создать визит для клиента."""
     r = await session.execute(select(Customer).where(Customer.id == customer_id))
     if r.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Клиент не найден")
+        raise NotFoundError("Клиент", customer_id)
     try:
         visit_date = date.fromisoformat(body.visit_date[:10])
     except (ValueError, TypeError):
@@ -537,7 +538,7 @@ async def get_customer(
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     c = result.scalar_one_or_none()
     if not c:
-        raise HTTPException(status_code=404, detail="Клиент не найден")
+        raise NotFoundError("Клиент", customer_id)
     return _customer_to_dict(c)
 
 
@@ -550,7 +551,7 @@ async def get_customer_balance(
     """Баланс клиента: сумма неоплаченных доставок (что должен). ТЗ."""
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Клиент не найден")
+        raise NotFoundError("Клиент", customer_id)
     r = await session.execute(
         text('''
             SELECT COALESCE(SUM(amount), 0) FROM "Sales".operations
@@ -574,7 +575,7 @@ async def update_customer(
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     c = result.scalar_one_or_none()
     if not c:
-        raise HTTPException(status_code=404, detail="Клиент не найден")
+        raise NotFoundError("Клиент", customer_id)
     dump = body.model_dump(exclude_unset=True)
     if (user.role or "").lower() != "admin":
         is_own_client = (
@@ -608,7 +609,7 @@ async def delete_customer(
     result = await session.execute(select(Customer).where(Customer.id == customer_id))
     c = result.scalar_one_or_none()
     if not c:
-        raise HTTPException(status_code=404, detail="Клиент не найден")
+        raise NotFoundError("Клиент", customer_id)
     await session.delete(c)
     await session.commit()
     return {"id": customer_id, "message": "deleted"}

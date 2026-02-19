@@ -4,10 +4,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from src.core.env import validate_runtime_secrets
 from src.core.config import settings
@@ -15,6 +18,13 @@ from src.core.logging_setup import setup_logging
 from src.core.middleware import request_logging_middleware
 from src.core.rate_limit import InMemoryRateLimiter, RateLimitMiddleware
 from src.core.sentry_setup import init_sentry
+from src.core.exception_handlers import (
+    database_error_handler,
+    generic_error_handler,
+    http_exception_handler,
+    integrity_error_handler,
+    validation_exception_handler,
+)
 from src.database.connection import (
     check_data_integrity,
     cleanup,
@@ -65,6 +75,12 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(FastAPIHTTPException, http_exception_handler)
+app.add_exception_handler(IntegrityError, integrity_error_handler)
+app.add_exception_handler(OperationalError, database_error_handler)
+app.add_exception_handler(Exception, generic_error_handler)
 
 app.add_middleware(
     RateLimitMiddleware,
