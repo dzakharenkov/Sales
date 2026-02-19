@@ -118,7 +118,18 @@ python -m pytest tests/ \
 
 ## 🔗 Git Commits
 
-(To be filled after commit in this task execution block.)
+```text
+commit ba95e9e
+Author: Codex
+Date:   2026-02-19
+
+    [TASK-014] Build pytest unit and integration test suite
+
+    - Add pytest fixtures and isolated test env config
+    - Add unit tests for security and schema validation
+    - Add integration tests for auth/customers/orders/RBAC
+    - Update tests README and task status
+```
 
 ---
 
