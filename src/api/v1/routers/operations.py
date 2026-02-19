@@ -19,6 +19,7 @@ from src.database.models import Operation, Customer, Product, Order, OperationCo
 from src.core.deps import get_current_user, require_admin
 from src.core.pagination import PaginatedResponse, PaginationParams
 from src.database.models import User
+from src.api.v1.services.operation_service import OperationService
 import json
 import logging
 
@@ -352,139 +353,18 @@ async def list_operations(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Список операций с фильтрами."""
-    q = select(Operation).order_by(Operation.operation_date.desc().nulls_last(), Operation.created_at.desc().nulls_last())
-    if type_code and type_code.strip():
-        q = q.where(Operation.type_code == type_code.strip())
-    if customer_id is not None:
-        q = q.where(Operation.customer_id == customer_id)
-    if product_code and product_code.strip():
-        q = q.where(Operation.product_code == product_code.strip())
-    if status and status.strip():
-        q = q.where(Operation.status == status.strip())
-    if from_date:
-        q = q.where(func.date(Operation.operation_date) >= from_date)
-    if to_date:
-        q = q.where(func.date(Operation.operation_date) <= to_date)
-    if created_by and created_by.strip():
-        q = q.where(Operation.created_by == created_by.strip())
-    count_q = q.with_only_columns(func.count()).order_by(None)
-    total = int((await session.execute(count_q)).scalar() or 0)
-    result = await session.execute(q.offset(pagination.offset).limit(pagination.limit))
-    rows = result.scalars().all()
-    type_codes = {r.type_code for r in rows if r.type_code}
-    types_name_map = {}
-    if type_codes:
-        t_result = await session.execute(text('SELECT code, name FROM "Sales".operation_types'))
-        for row in t_result.fetchall():
-            if row[0] in type_codes:
-                types_name_map[row[0]] = row[1] or row[0]
-    customer_ids = {r.customer_id for r in rows if r.customer_id is not None}
-    customer_names = {}
-    if customer_ids:
-        c_result = await session.execute(select(Customer.id, Customer.name_client, Customer.firm_name).where(Customer.id.in_(customer_ids)))
-        for r in c_result.all():
-            customer_names[r[0]] = (r[1] or r[2] or "")
-    STATUS_RU = {"pending": "В ожидании", "completed": "Выполнено", "cancelled": "Отменено", "canceled": "Отменено"}
-    out = []
-    for o in rows:
-        st = (o.status or "").strip().lower()
-        out.append({
-            "id": str(o.id),
-            "operation_number": o.operation_number,
-            "operation_date": o.operation_date.isoformat() if o.operation_date else None,
-            "type_code": o.type_code,
-            "type_name": types_name_map.get(o.type_code) if o.type_code else None,
-            "status": o.status,
-            "status_name_ru": STATUS_RU.get(st, o.status or ""),
-            "warehouse_from": o.warehouse_from,
-            "warehouse_to": o.warehouse_to,
-            "customer_id": o.customer_id,
-            "customer_name": customer_names.get(o.customer_id),
-            "product_code": o.product_code,
-            "quantity": o.quantity,
-            "amount": float(o.amount) if o.amount else None,
-            "comment": o.comment,
-            "order_id": o.order_id,
-            "created_by": o.created_by,
-        })
-    return PaginatedResponse.create(data=out, total=total, pagination=pagination)
-
-
-class OperationCreate(BaseModel):
-    type_code: str
-    operation_date: datetime | date | None = None  # если не указано — now()
-    warehouse_from: str | None = None
-    warehouse_to: str | None = None
-    product_code: str | None = None
-    quantity: int | None = None
-    amount: float | None = None
-    payment_type_code: str | None = None
-    customer_id: int | None = None
-    order_id: int | None = None
-    comment: str | None = None
-    status: str | None = None
-    expeditor_login: str | None = None
-    cashier_login: str | None = None
-    storekeeper_login: str | None = None
-
-    @field_validator("customer_id", mode="before")
-    @classmethod
-    def customer_id_empty_to_none(cls, v):  # noqa: ANN001
-        if v == "" or v is None:
-            return None
-        if isinstance(v, int):
-            return v
-        try:
-            return int(v)
-        except (TypeError, ValueError):
-            return None
-
-    @field_validator("order_id", mode="before")
-    @classmethod
-    def order_id_empty_to_none(cls, v):  # noqa: ANN001
-        if v == "" or v is None:
-            return None
-        if v == 0:
-            return None
-        if isinstance(v, int):
-            return v
-        try:
-            n = int(v)
-            return None if n == 0 else n
-        except (TypeError, ValueError):
-            return None
-
-
-class OperationUpdate(BaseModel):
-    operation_date: datetime | date | None = None
-    type_code: str | None = None
-    warehouse_from: str | None = None
-    warehouse_to: str | None = None
-    product_code: str | None = None
-    quantity: int | None = None
-    amount: float | None = None
-    payment_type_code: str | None = None
-    customer_id: int | None = None
-    order_id: int | None = None
-    comment: str | None = None
-    status: str | None = None
-    completed_date: datetime | None = None
-    expeditor_login: str | None = None
-    cashier_login: str | None = None
-    storekeeper_login: str | None = None
-
-    @field_validator("order_id")
-    @classmethod
-    def order_id_zero_to_none(cls, v: int | None) -> int | None:
-        return None if v == 0 else v
-
-
-OPERATIONS_EXPORT_HEADERS_RU = [
-    "№ операции", "Дата", "Тип", "Статус", "Склад от", "Склад в", "Товар", "Кол-во", "Сумма", "Клиент", "Заказ №", "Кто создал", "Комментарий",
-]
-
-
+    """?????? ???????? ? ?????????."""
+    data, total = await OperationService(session).list_operations(
+        pagination,
+        type_code=type_code,
+        customer_id=customer_id,
+        product_code=product_code,
+        status=status,
+        from_date=from_date,
+        to_date=to_date,
+        created_by=created_by,
+    )
+    return PaginatedResponse.create(data=data, total=total, pagination=pagination)
 @router.get("/operations/export", response_model=None)
 async def export_operations_excel(
     session: AsyncSession = Depends(get_db_session),
@@ -591,6 +471,55 @@ async def get_operation(
         "cashier_login": op.cashier_login,
         "storekeeper_login": op.storekeeper_login,
     }
+
+
+class OperationUpdate(BaseModel):
+    operation_date: datetime | None = None
+    completed_date: datetime | None = None
+    type_code: str | None = None
+    warehouse_from: str | None = None
+    warehouse_to: str | None = None
+    product_code: str | None = None
+    quantity: int | None = None
+    amount: float | None = None
+    payment_type_code: str | None = None
+    customer_id: int | None = None
+    order_id: int | None = None
+    comment: str | None = None
+    status: str | None = None
+    expeditor_login: str | None = None
+    cashier_login: str | None = None
+    storekeeper_login: str | None = None
+
+
+class OperationCreate(BaseModel):
+    type_code: str
+    operation_date: datetime | None = None
+    warehouse_from: str | None = None
+    warehouse_to: str | None = None
+    product_code: str | None = None
+    quantity: int | None = None
+    amount: float | None = None
+    payment_type_code: str | None = None
+    customer_id: int | None = None
+    order_id: int | None = None
+    comment: str | None = None
+    status: str | None = "pending"
+    expeditor_login: str | None = None
+    cashier_login: str | None = None
+    storekeeper_login: str | None = None
+
+    @field_validator("operation_date", mode="before")
+    @classmethod
+    def _default_operation_date(cls, value: datetime | None) -> datetime:
+        return value or datetime.now(timezone.utc)
+
+    @field_validator("quantity")
+    @classmethod
+    def _validate_quantity(cls, value: int | None) -> int | None:
+        if value is not None and value < 0:
+            raise ValueError("quantity must be >= 0")
+        return value
 
 
 @router.patch("/operations/{operation_id}")

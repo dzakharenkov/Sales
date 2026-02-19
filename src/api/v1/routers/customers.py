@@ -19,6 +19,7 @@ from src.core.deps import get_current_user, require_admin
 from src.core.exceptions import ForbiddenError, NotFoundError
 from src.core.pagination import PaginatedResponse, PaginationParams
 from src.core.sql import escape_like
+from src.api.v1.services.customer_service import CustomerService
 
 router = APIRouter()
 
@@ -105,124 +106,37 @@ class CustomerUpdate(BaseModel):
 
 @router.get("/customers", response_model=PaginatedResponse[EntityModel])
 async def list_customers(
-    customer_id: int | None = Query(None, description="ИД клиента (точное совпадение)"),
+    customer_id: int | None = Query(None, description="?? ??????? (?????? ??????????)"),
     search: str | None = Query(
         None,
-        description="Расширенный поиск по названию клиента И по ИНН (частичное совпадение, OR)",
+        description="??????????? ????? ?? ???????? ??????? ? ??? (????????? ??????????, OR)",
     ),
-    name_client: str | None = Query(None, description="Поиск по названию клиента (частичное совпадение)"),
-    firm_name: str | None = Query(None, description="Поиск по названию фирмы"),
+    name_client: str | None = Query(None, description="????? ?? ???????? ??????? (????????? ??????????)"),
+    firm_name: str | None = Query(None, description="????? ?? ???????? ?????"),
     city: str | None = Query(None),
-    login_agent: str | None = Query(None, description="Фильтр по агенту (логин)"),
-    login_expeditor: str | None = Query(None, description="Фильтр по экспедитору (логин)"),
-    phone: str | None = Query(None, description="Поиск по телефону (частичное совпадение)"),
-    tax_id: str | None = Query(None, description="Поиск по ИНН (частичное совпадение)"),
+    login_agent: str | None = Query(None, description="?????? ?? ?????? (?????)"),
+    login_expeditor: str | None = Query(None, description="?????? ?? ??????????? (?????)"),
+    phone: str | None = Query(None, description="????? ?? ???????? (????????? ??????????)"),
+    tax_id: str | None = Query(None, description="????? ?? ??? (????????? ??????????)"),
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Список клиентов с поиском по ключевым полям. Без параметров не возвращает записи (нужен хотя бы один фильтр или пустой поиск — тогда первые limit по id)."""
-    base_from_sql = '''
-        FROM "Sales".customers c
-        LEFT JOIN "Sales".cities ct ON c.city_id = ct.id
-        LEFT JOIN "Sales".territories t ON c.territory_id = t.id
-    '''
-    conditions = []
-    params = {}
-    if customer_id is not None:
-        conditions.append("c.id = :customer_id")
-        params["customer_id"] = customer_id
-    # Расширенный поиск: одно поле search — по name_client, tax_id (ИНН), account_no (р/с)
-    if search and search.strip():
-        conditions.append(
-            "(name_client ILIKE :search ESCAPE '\\' OR tax_id ILIKE :search ESCAPE '\\' OR account_no ILIKE :search ESCAPE '\\')"
-        )
-        params["search"] = "%" + escape_like(search.strip()) + "%"
-    if name_client and name_client.strip():
-        conditions.append(" name_client ILIKE :name_client ESCAPE '\\' ")
-        params["name_client"] = "%" + escape_like(name_client.strip()) + "%"
-    if firm_name and firm_name.strip():
-        conditions.append(" firm_name ILIKE :firm_name ESCAPE '\\' ")
-        params["firm_name"] = "%" + escape_like(firm_name.strip()) + "%"
-    if city and city.strip():
-        conditions.append(" ct.name ILIKE :city ESCAPE '\\' ")
-        params["city"] = "%" + escape_like(city.strip()) + "%"
-    if login_agent and login_agent.strip():
-        conditions.append(" login_agent = :login_agent ")
-        params["login_agent"] = login_agent.strip()
-    if login_expeditor and login_expeditor.strip():
-        conditions.append(" login_expeditor = :login_expeditor ")
-        params["login_expeditor"] = login_expeditor.strip()
-    if phone and phone.strip():
-        conditions.append(" phone ILIKE :phone ESCAPE '\\' ")
-        params["phone"] = "%" + escape_like(phone.strip()) + "%"
-    if tax_id and tax_id.strip():
-        conditions.append(" tax_id ILIKE :tax_id ESCAPE '\\' ")
-        params["tax_id"] = "%" + escape_like(tax_id.strip()) + "%"
-    where_sql = (" WHERE " + " AND ".join(conditions)) if conditions else ""
-
-    count_sql = f"SELECT COUNT(*) {base_from_sql} {where_sql}"
-    total = int((await session.execute(text(count_sql), params)).scalar() or 0)
-
-    sql = f'''SELECT c.id, c.name_client, c.firm_name, c.category_client, c.address,
-             c.city_id, ct.name AS city_name,
-             c.territory_id, t.name AS territory_name,
-             c.landmark, c.phone, c.contact_person, c.tax_id, c.status, c.login_agent, c.login_expeditor, c.latitude, c.longitude, c.pinfl, c.contract_no, c.account_no, c.bank, c.mfo, c.oked, c.vat_code,
-             EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) AS has_photo
-             {base_from_sql}
-             {where_sql}
-             ORDER BY c.id LIMIT :lim OFFSET :off'''
-    params["lim"] = pagination.limit
-    params["off"] = pagination.offset
-    result = await session.execute(text(sql), params)
-    rows = result.fetchall()
-    out = []
-    for r in rows:
-        out.append({
-            "id": r[0],
-            "name_client": r[1],
-            "firm_name": r[2],
-            "category_client": r[3],
-            "address": r[4],
-            "city_id": r[5],
-            "city": r[6],
-            "territory_id": r[7],
-            "territory": r[8],
-            "landmark": r[9],
-            "phone": r[10],
-            "contact_person": r[11],
-            "tax_id": r[12],
-            "status": r[13],
-            "login_agent": r[14],
-            "login_expeditor": r[15],
-            "latitude": float(r[16]) if r[16] is not None else None,
-            "longitude": float(r[17]) if r[17] is not None else None,
-            "PINFL": r[18],
-            "contract_no": r[19],
-            "account_no": r[20],
-            "bank": r[21],
-            "MFO": r[22],
-            "OKED": r[23],
-            "VAT_code": r[24],
-            "has_photo": bool(r[25]) if len(r) > 25 else False,
-        })
-    return PaginatedResponse.create(data=out, total=total, pagination=pagination)
-
-
-EXPORT_COLUMNS = [
-    "id", "name_client", "firm_name", "category_client", "address", "city", "territory", "landmark",
-    "phone", "contact_person", "tax_id", "status", "login_agent", "login_expeditor",
-    "latitude", "longitude", "PINFL", "contract_no", "account_no", "bank", "MFO", "OKED", "VAT_code", "has_photo",
-]
-
-# Заголовки в Excel — как в таблице (русские названия)
-EXPORT_HEADERS_RU = [
-    "ИД клиента", "Название клиента", "Название фирмы", "Категория клиента", "Адрес", "Город", "Территория", "Ориентир",
-    "Телефон", "Контактное лицо", "ИНН", "Статус", "login агента", "login экспедитора",
-    "Широта", "Долгота", "ПИНФЛ", "Договор №", "Р/С", "Банк", "МФО", "ОКЭД", "Регистрационный код плательщика НДС", "Фото",
-]
-
-
+    """?????? ???????? ? ??????? ?? ???????? ?????."""
+    service = CustomerService(session)
+    data, total = await service.list_customers(
+        pagination,
+        customer_id=customer_id,
+        search=search,
+        name_client=name_client,
+        firm_name=firm_name,
+        city=city,
+        login_agent=login_agent,
+        login_expeditor=login_expeditor,
+        phone=phone,
+        tax_id=tax_id,
+    )
+    return PaginatedResponse.create(data=data, total=total, pagination=pagination)
 @router.get("/customers/export", response_model=None)
 async def export_customers_excel(
     session: AsyncSession = Depends(get_db_session),
@@ -378,40 +292,8 @@ async def create_customer(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Добавить клиента. Admin или Agent."""
-    if user.role not in ("admin", "agent"):
-        raise ForbiddenError("Только admin или agent могут создавать клиентов")
-    await _validate_city_territory_refs(session, body.city_id, body.territory_id)
-    c = Customer(
-        name_client=body.name_client,
-        firm_name=body.firm_name,
-        category_client=body.category_client,
-        address=body.address,
-        city_id=body.city_id,
-        territory_id=body.territory_id,
-        landmark=body.landmark,
-        phone=body.phone,
-        contact_person=body.contact_person,
-        tax_id=body.tax_id,
-        status=body.status or "Активный",
-        login_agent=body.login_agent,
-        login_expeditor=body.login_expeditor,
-        latitude=body.latitude,
-        longitude=body.longitude,
-        PINFL=body.PINFL,
-        contract_no=body.contract_no,
-        account_no=body.account_no,
-        bank=body.bank,
-        MFO=body.MFO,
-        OKED=body.OKED,
-        VAT_code=body.VAT_code,
-    )
-    session.add(c)
-    await session.commit()
-    await session.refresh(c)
-    return _customer_to_dict(c)
-
-
+    """???????? ???????. Admin ??? Agent."""
+    return await CustomerService(session).create_customer(body.model_dump(), user.role)
 @router.get("/customers/{customer_id}/visits", response_model=EntityModel | list[EntityModel])
 async def list_customer_visits(
     customer_id: int,
@@ -419,30 +301,8 @@ async def list_customer_visits(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Список визитов клиента."""
-    r = await session.execute(select(Customer).where(Customer.id == customer_id))
-    if r.scalar_one_or_none() is None:
-        raise NotFoundError("Клиент", customer_id)
-    r2 = await session.execute(
-        select(CustomerVisit, User.fio)
-        .outerjoin(User, CustomerVisit.responsible_login == User.login)
-        .where(CustomerVisit.customer_id == customer_id)
-        .order_by(CustomerVisit.visit_date.desc(), CustomerVisit.visit_time.desc().nullslast())
-        .limit(limit)
-    )
-    rows = r2.all()
-    out = []
-    for v, resp_fio in rows:
-        out.append({
-            "id": v.id,
-            "visit_date": v.visit_date.isoformat() if v.visit_date else None,
-            "visit_time": v.visit_time.strftime("%H:%M") if v.visit_time else None,
-            "status": v.status,
-            "responsible_login": v.responsible_login,
-            "responsible_name": resp_fio or v.responsible_login or "",
-            "comment": v.comment,
-        })
-    return out
+    """?????? ??????? ???????."""
+    return await CustomerService(session).list_customer_visits(customer_id=customer_id, limit=limit)
 
 
 class VisitCreateBody(BaseModel):
@@ -451,43 +311,6 @@ class VisitCreateBody(BaseModel):
     status: str = "planned"
     responsible_login: str | None = None
     comment: str | None = None
-
-
-async def _validate_city_territory_refs(
-    session: AsyncSession,
-    city_id: int | None,
-    territory_id: int | None,
-) -> None:
-    if city_id is not None:
-        city_result = await session.execute(
-            text('SELECT id FROM "Sales".cities WHERE id = :id AND COALESCE(is_active, TRUE) = TRUE'),
-            {"id": city_id},
-        )
-        if city_result.first() is None:
-            raise HTTPException(status_code=400, detail="city_id is invalid")
-
-    if territory_id is not None:
-        territory_result = await session.execute(
-            text(
-                """
-                SELECT id, city_id
-                FROM "Sales".territories
-                WHERE id = :id AND COALESCE(is_active, TRUE) = TRUE
-                """
-            ),
-            {"id": territory_id},
-        )
-        territory_row = territory_result.first()
-        if territory_row is None:
-            raise HTTPException(status_code=400, detail="territory_id is invalid")
-        territory_city_id = territory_row[1]
-        if city_id is not None and territory_city_id is not None and int(territory_city_id) != int(city_id):
-            raise HTTPException(
-                status_code=400,
-                detail="territory_id does not belong to city_id",
-            )
-
-
 @router.post("/customers/{customer_id}/visits", response_model=EntityModel | list[EntityModel])
 async def create_customer_visit(
     customer_id: int,
@@ -495,75 +318,28 @@ async def create_customer_visit(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Создать визит для клиента."""
-    r = await session.execute(select(Customer).where(Customer.id == customer_id))
-    if r.scalar_one_or_none() is None:
-        raise NotFoundError("Клиент", customer_id)
-    try:
-        visit_date = date.fromisoformat(body.visit_date[:10])
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Некорректная дата визита")
-    visit_time = None
-    if body.visit_time and body.visit_time.strip():
-        s = body.visit_time.strip()[:8]
-        parts = s.split(":")
-        if len(parts) >= 2:
-            try:
-                h, m = int(parts[0]), int(parts[1])
-                visit_time = time(h, m, int(parts[2]) if len(parts) > 2 else 0)
-            except (ValueError, TypeError, IndexError):
-                pass
-    v = CustomerVisit(
+    """??????? ????? ??? ???????."""
+    return await CustomerService(session).create_customer_visit(
         customer_id=customer_id,
-        visit_date=visit_date,
-        visit_time=visit_time,
-        status=body.status or "planned",
-        responsible_login=body.responsible_login or None,
-        comment=body.comment or None,
+        payload=body.model_dump(),
         created_by=user.login,
     )
-    session.add(v)
-    await session.commit()
-    await session.refresh(v)
-    return {"id": v.id, "visit_date": body.visit_date, "status": v.status, "message": "created"}
-
-
 @router.get("/customers/{customer_id}", response_model=EntityModel | list[EntityModel])
 async def get_customer(
     customer_id: int,
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Получить клиента по id."""
-    result = await session.execute(select(Customer).where(Customer.id == customer_id))
-    c = result.scalar_one_or_none()
-    if not c:
-        raise NotFoundError("Клиент", customer_id)
-    return _customer_to_dict(c)
-
-
+    """???????? ??????? ?? id."""
+    return await CustomerService(session).get_customer_dict(customer_id)
 @router.get("/customers/{customer_id}/balance", response_model=EntityModel | list[EntityModel])
 async def get_customer_balance(
     customer_id: int,
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Баланс клиента: сумма неоплаченных доставок (что должен). ТЗ."""
-    result = await session.execute(select(Customer).where(Customer.id == customer_id))
-    if result.scalar_one_or_none() is None:
-        raise NotFoundError("Клиент", customer_id)
-    r = await session.execute(
-        text('''
-            SELECT COALESCE(SUM(amount), 0) FROM "Sales".operations
-            WHERE customer_id = :cid AND type_code = 'delivery' AND status = 'pending'
-        '''),
-        {"cid": customer_id},
-    )
-    row = r.fetchone()
-    balance = float(row[0]) if row and row[0] is not None else 0
-    return {"success": True, "customer_id": customer_id, "balance": balance, "currency": "сум"}
-
-
+    """?????? ???????: ????? ???????????? ????????."""
+    return await CustomerService(session).get_customer_balance(customer_id)
 @router.patch("/customers/{customer_id}")
 async def update_customer(
     customer_id: int,
@@ -571,45 +347,18 @@ async def update_customer(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Изменить клиента. Admin — все поля; агент — все поля своих клиентов (login_agent=user); иначе только login_agent, login_expeditor."""
-    result = await session.execute(select(Customer).where(Customer.id == customer_id))
-    c = result.scalar_one_or_none()
-    if not c:
-        raise NotFoundError("Клиент", customer_id)
-    dump = body.model_dump(exclude_unset=True)
-    if (user.role or "").lower() != "admin":
-        is_own_client = (
-            (user.role or "").lower() == "agent"
-            and c.login_agent
-            and str(c.login_agent).strip().lower() == str(user.login or "").strip().lower()
-        )
-        if not is_own_client:
-            allowed = {"login_agent", "login_expeditor"}
-            dump = {k: v for k, v in dump.items() if k in allowed}
-    for key, value in dump.items():
-        setattr(c, key, value)
-    if "city_id" in dump or "territory_id" in dump:
-        await _validate_city_territory_refs(
-            session,
-            dump.get("city_id", c.city_id),
-            dump.get("territory_id", c.territory_id),
-        )
-    await session.commit()
-    await session.refresh(c)
-    return _customer_to_dict(c)
-
-
+    """???????? ???????."""
+    return await CustomerService(session).update_customer(
+        customer_id=customer_id,
+        payload=body.model_dump(exclude_unset=True),
+        user_role=user.role,
+        user_login=user.login,
+    )
 @router.delete("/customers/{customer_id}")
 async def delete_customer(
     customer_id: int,
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Удалить клиента. Только admin."""
-    result = await session.execute(select(Customer).where(Customer.id == customer_id))
-    c = result.scalar_one_or_none()
-    if not c:
-        raise NotFoundError("Клиент", customer_id)
-    await session.delete(c)
-    await session.commit()
-    return {"id": customer_id, "message": "deleted"}
+    """??????? ???????. ?????? admin."""
+    return await CustomerService(session).delete_customer(customer_id)

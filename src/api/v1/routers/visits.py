@@ -14,9 +14,11 @@ from openpyxl import Workbook
 from src.database.connection import get_db_session
 from src.database.models import CustomerVisit, Customer, User
 from src.core.deps import get_current_user
+from src.core.notifications import notify_new_visit, schedule_notification
 from src.core.pagination import PaginatedResponse, PaginationParams
 from src.core.sql import escape_like
 from src.database.models import User as UserModel
+from src.api.v1.services.visit_service import VisitService
 
 router = APIRouter()
 
@@ -47,40 +49,10 @@ async def create_visit(
     session: AsyncSession = Depends(get_db_session),
     user: UserModel = Depends(get_current_user),
 ):
-    """Создать новый визит."""
-    # Проверить что клиент существует
-    r = await session.execute(select(Customer).where(Customer.id == body.customer_id))
-    customer = r.scalar_one_or_none()
-    if not customer:
-        raise HTTPException(status_code=404, detail="Клиент не найден")
-
-    # Создать визит
-    visit = CustomerVisit(
-        customer_id=body.customer_id,
-        visit_date=date.fromisoformat(body.visit_date[:10]),
-        visit_time=None,
-        status=body.status or "planned",
-        responsible_login=body.responsible_login or user.login,
-        comment=body.comment,
-        created_by=user.login,
-        updated_by=user.login,
-    )
-
-    # Обработать время визита
-    if body.visit_time and body.visit_time.strip():
-        parts = body.visit_time.strip()[:5].split(":")
-        if len(parts) == 2:
-            try:
-                visit.visit_time = time(int(parts[0]), int(parts[1]))
-            except (ValueError, TypeError):
-                pass
-
-    session.add(visit)
-    await session.commit()
-    await session.refresh(visit)
-    return {"id": visit.id, "message": "created"}
-
-
+    """??????? ????? ?????."""
+    response, notification = await VisitService(session).create_visit(body.model_dump(), user.login)
+    schedule_notification(notify_new_visit(**notification))
+    return response
 @router.get("/visits/search", response_model=PaginatedResponse[EntityModel])
 async def search_visits(
     customer_id: int | None = Query(None),

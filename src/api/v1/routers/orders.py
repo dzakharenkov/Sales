@@ -15,9 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db_session
 from src.database.models import Order, Item, Customer, Product, Status, PaymentType, User as UserModel, Warehouse
 from src.core.deps import get_current_user, require_admin
+from src.core.notifications import (
+    notify_new_order,
+    notify_order_status_changed,
+    schedule_notification,
+)
 from src.core.pagination import PaginatedResponse, PaginationParams
 from src.core.sql import escape_like
 from src.database.models import User
+from src.api.v1.services.order_service import OrderService
 
 router = APIRouter()
 
@@ -551,125 +557,30 @@ async def create_order(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Создать заказ. Позиции сохраняются в таблицу Sales.items (POST /orders/{id}/items)."""
+    """??????? ?????."""
     try:
-        status_code = body.status_code or "open"
-        scheduled_delivery_at = _parse_optional_datetime(body.scheduled_delivery_at)
-        if await _is_delivery_status(session, status_code) and scheduled_delivery_at is None:
-            raise HTTPException(
-                status_code=422,
-                detail="Для статуса «Доставка» заполните «Назначенная дата поставки».",
-            )
-
-        next_no = await session.execute(select(func.coalesce(func.max(Order.order_no), 0) + 1))
-        order_no = next_no.scalar() or 1
-        order = Order(
-            order_no=order_no,
-            customer_id=body.customer_id,
-            status_code=status_code,
-            payment_type_code=body.payment_type_code,
-            created_by=user.login,
-            scheduled_delivery_at=scheduled_delivery_at,
-        )
-        session.add(order)
-        await session.commit()
-        await session.refresh(order)
-        return {"id": order.order_no, "order_no": order.order_no, "status_code": order.status_code, "message": "created"}
+        response, notification = await OrderService(session).create_order(body.model_dump(), user.login)
+        if notification:
+            schedule_notification(notify_new_order(**notification))
+        return response
     except HTTPException:
         raise
     except Exception as e:
         msg = str(e)
-        # Сообщение «колонка отсутствует» только если в ошибке явно указано, что колонки нет
         if "payment_type_code" in msg and "does not exist" in msg:
             raise HTTPException(
                 status_code=500,
-                detail="В таблице orders отсутствует колонка payment_type_code. Выполните в БД: ALTER TABLE \"Sales\".orders ADD COLUMN payment_type_code VARCHAR REFERENCES \"Sales\".payment_type(code);",
+                detail='? ??????? orders ??????????? ??????? payment_type_code. ????????? ? ??: ALTER TABLE "Sales".orders ADD COLUMN payment_type_code VARCHAR REFERENCES "Sales".payment_type(code);',
             )
-        raise HTTPException(status_code=500, detail="Ошибка при создании заказа: " + msg)
-
-
+        raise HTTPException(status_code=500, detail="?????? ??? ???????? ??????: " + msg)
 @router.get("/orders/{order_id}", response_model=EntityModel | list[EntityModel])
 async def get_order(
     order_id: int,
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Заказ по номеру (order_no), позиции, клиент, агент, экспедитор, тип оплаты."""
-    result = await session.execute(select(Order).where(Order.order_no == order_id))
-    order = result.scalar_one_or_none()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    cust_result = await session.execute(select(Customer).where(Customer.id == order.customer_id)) if order.customer_id else None
-    cust = cust_result.scalar_one_or_none() if cust_result else None
-    agent_fio = expeditor_fio = None
-    if cust:
-        if cust.login_agent:
-            u = await session.execute(select(UserModel).where(UserModel.login == cust.login_agent))
-            agent_user = u.scalar_one_or_none()
-            agent_fio = agent_user.fio if agent_user else None
-        if cust.login_expeditor:
-            u2 = await session.execute(select(UserModel).where(UserModel.login == cust.login_expeditor))
-            exp_user = u2.scalar_one_or_none()
-            expeditor_fio = exp_user.fio if exp_user else None
-    warehouse_from_expeditor = None
-    if cust and cust.login_expeditor:
-        wh_result = await session.execute(
-            select(Warehouse.code).where(Warehouse.expeditor_login == cust.login_expeditor).limit(1)
-        )
-        wh_row = wh_result.scalar_one_or_none()
-        if wh_row is not None:
-            warehouse_from_expeditor = wh_row
-    status_name = None
-    if order.status_code:
-        st_result = await session.execute(select(Status.name).where(Status.code == order.status_code))
-        status_name = st_result.scalar_one_or_none()
-
-    payment_type_name = None
-    if order.payment_type_code:
-        pt_result = await session.execute(select(PaymentType.name).where(PaymentType.code == order.payment_type_code))
-        payment_type_name = pt_result.scalar_one_or_none()
-
-    items_result = await session.execute(
-        select(Item, Product)
-        .outerjoin(Product, Product.code == Item.product_code)
-        .where(Item.order_id == order.order_no)
-    )
-    item_rows = items_result.all()
-    return {
-        "id": order.order_no,
-        "order_no": order.order_no,
-        "customer_id": order.customer_id,
-        "customer_name": (cust.name_client or cust.firm_name or "") if cust else None,
-        "order_date": order.order_date.isoformat() if order.order_date else None,
-        "status_code": order.status_code,
-        "status_name": status_name,
-        "total_amount": float(order.total_amount) if order.total_amount else None,
-        "payment_type_code": order.payment_type_code,
-        "payment_type_name": payment_type_name,
-        "created_by": order.created_by,
-        "login_agent": cust.login_agent if cust else None,
-        "login_expeditor": cust.login_expeditor if cust else None,
-        "warehouse_from_expeditor": warehouse_from_expeditor,
-        "agent_fio": agent_fio,
-        "expeditor_fio": expeditor_fio,
-        "scheduled_delivery_at": order.scheduled_delivery_at.isoformat() if order.scheduled_delivery_at else None,
-        "status_delivery_at": order.status_delivery_at.isoformat() if order.status_delivery_at else None,
-        "closed_at": order.closed_at.isoformat() if order.closed_at else None,
-        "last_updated_at": order.last_updated_at.isoformat() if order.last_updated_at else None,
-        "last_updated_by": order.last_updated_by,
-        "items": [
-            {
-                "id": str(i.id),
-                "product_code": i.product_code,
-                "product_name": p.name if p else None,
-                "quantity": i.quantity,
-                "price": float(i.price) if i.price else None,
-            }
-            for i, p in item_rows
-        ],
-    }
-
-
+    """????? ?? ?????? (order_no)."""
+    return await OrderService(session).get_order(order_id)
 @router.patch("/orders/{order_id}")
 async def update_order(
     order_id: int,
@@ -677,49 +588,15 @@ async def update_order(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Изменить заказ по номеру (клиент, статус, тип оплаты, сумма, назначенная дата поставки)."""
-    result = await session.execute(select(Order).where(Order.order_no == order_id))
-    order = result.scalar_one_or_none()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    target_status_code = body.status_code if body.status_code is not None else order.status_code
-    parsed_scheduled_input = _parse_optional_datetime(body.scheduled_delivery_at) if body.scheduled_delivery_at is not None else None
-    target_scheduled_delivery = parsed_scheduled_input if body.scheduled_delivery_at is not None else order.scheduled_delivery_at
-    if await _is_delivery_status(session, target_status_code) and target_scheduled_delivery is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Для статуса «Доставка» заполните «Назначенная дата поставки».",
-        )
-
-    now = _now_utc()
-    if body.customer_id is not None:
-        order.customer_id = body.customer_id
-    if body.status_code is not None:
-        order.status_code = body.status_code
-        # Определяем по названию/коду статуса, проставлять ли даты (работает для любых кодов: 1, 2, 3, 4, delivered, отмена и т.д.)
-        st_result = await session.execute(select(Status).where(Status.code == body.status_code))
-        st_row = st_result.scalar_one_or_none()
-        name_lower = ((st_row.name or "") + " " + (str(body.status_code) or "")).strip().lower()
-        code_str = str(body.status_code).strip().lower() if body.status_code is not None else ""
-        is_delivery_status = code_str in ("2", "delivery", "доставка") or any(k in name_lower for k in ("достав", "deliver", "delivery", "shipping"))
-        if order.status_delivery_at is None and is_delivery_status:
-            order.status_delivery_at = now
-        if order.closed_at is None and any(k in name_lower for k in ("отмен", "cancel", "closed", "доставлен", "delivered", "dismiss")):
-            order.closed_at = now
-    if body.total_amount is not None:
-        order.total_amount = body.total_amount
-    if body.payment_type_code is not None:
-        order.payment_type_code = body.payment_type_code
-    if body.scheduled_delivery_at is not None:
-        order.scheduled_delivery_at = parsed_scheduled_input
-    order.last_updated_at = now
-    order.last_updated_by = user.login
-    await session.commit()
-    await session.refresh(order)
-    return {"id": order.order_no, "message": "updated"}
-
-
+    """???????? ????? ?? ??????."""
+    response, notification = await OrderService(session).update_order(
+        order_id=order_id,
+        payload=body.model_dump(exclude_unset=True),
+        updated_by=user.login,
+    )
+    if notification:
+        schedule_notification(notify_order_status_changed(**notification))
+    return response
 @router.post("/orders/{order_id}/items", response_model=EntityModel | list[EntityModel])
 async def add_order_item(
     order_id: int,
