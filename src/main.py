@@ -17,6 +17,9 @@ from src.database.connection import (
     check_data_integrity,
     cleanup,
 )
+from src.core.sentry_setup import init_sentry
+
+init_sentry("sales-api")
 
 # Уровень логирования: задаётся через LOG_LEVEL (INFO, WARNING, ERROR).
 # Для разработки: set LOG_LEVEL=WARNING — в консоль пойдут только предупреждения и ошибки.

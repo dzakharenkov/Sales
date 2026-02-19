@@ -1896,7 +1896,12 @@
             if (errEl) errEl.textContent = '';
             if (msgEl) { msgEl.style.display = 'none'; msgEl.textContent = ''; }
             var customer_id = document.getElementById('orderCreateCustomer').value;
-            var status_code = document.getElementById('orderCreateStatus').value || 'open';
+            var statusEl = document.getElementById('orderCreateStatus');
+            var status_code = statusEl.value || 'open';
+            var statusLabel = '';
+            if (statusEl && statusEl.selectedIndex >= 0) statusLabel = String(statusEl.options[statusEl.selectedIndex].textContent || '').toLowerCase();
+            var statusCodeLower = String(status_code || '').toLowerCase();
+            var isDeliveryStatus = ['2', 'delivery', 'доставка'].indexOf(statusCodeLower) >= 0 || /достав|deliver|shipping/.test((statusLabel + ' ' + statusCodeLower).toLowerCase());
             var payment_type_code = document.getElementById('orderCreatePaymentType').value || null;
             if (!customer_id) { if (errEl) errEl.textContent = 'Выберите клиента.'; return; }
             var rows = tbody.querySelectorAll('tr');
@@ -1923,12 +1928,21 @@
             var login_agent = document.getElementById('orderCreateAgent').value || null;
             var login_expeditor = document.getElementById('orderCreateExpeditor').value || null;
             var schedInput = document.getElementById('orderScheduledDelivery');
+            var schedRaw = schedInput && schedInput.value ? schedInput.value.trim() : '';
+            if (isDeliveryStatus && !schedRaw) {
+              if (errEl) errEl.textContent = 'Для статуса «Доставка» укажите «Назначенная дата поставки».';
+              return;
+            }
             var scheduled_delivery_at = null;
-            if (schedInput && schedInput.value) {
+            if (schedRaw) {
               try {
-                var v = schedInput.value.trim().replace(' ', 'T');
+                var v = schedRaw.replace(' ', 'T');
                 if (v && v.length >= 16) scheduled_delivery_at = new Date(v + (v.length === 16 ? ':00' : '')).toISOString();
               } catch (e) {}
+            }
+            if (isDeliveryStatus && !scheduled_delivery_at) {
+              if (errEl) errEl.textContent = 'Некорректная дата поставки. Выберите дату из календаря.';
+              return;
             }
             saveBtn.disabled = true;
             saveBtn.textContent = 'Сохранение...';

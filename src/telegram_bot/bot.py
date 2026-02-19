@@ -12,12 +12,15 @@ load_dotenv()
 
 from telegram.ext import Application
 
+from src.core.sentry_setup import init_sentry
 from .config import BOT_TOKEN
 from .session import init_pool, close_pool
 from .sds_api import api
 from .handlers_auth import register_auth_handlers
 from .handlers_expeditor import register_expeditor_handlers
 from .handlers_agent import register_agent_handlers
+
+init_sentry("sales-telegram-bot")
 
 logger = logging.getLogger(__name__)
 

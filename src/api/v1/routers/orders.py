@@ -37,6 +37,19 @@ def _parse_optional_datetime(s: str | None):
         return None
 
 
+async def _is_delivery_status(session: AsyncSession, status_code: str | None) -> bool:
+    """Check if status means 'delivery' by code or status name."""
+    if status_code is None:
+        return False
+    code_str = str(status_code).strip().lower()
+    st_result = await session.execute(select(Status).where(Status.code == status_code))
+    st_row = st_result.scalar_one_or_none()
+    name_lower = ((st_row.name or "") + " " + code_str).strip().lower() if st_row else code_str
+    return code_str in ("2", "delivery", "доставка") or any(
+        k in name_lower for k in ("достав", "deliver", "delivery", "shipping")
+    )
+
+
 class OrderCreate(BaseModel):
     customer_id: int | None = None
     status_code: str | None = "open"
@@ -536,15 +549,23 @@ async def create_order(
 ):
     """Создать заказ. Позиции сохраняются в таблицу Sales.items (POST /orders/{id}/items)."""
     try:
+        status_code = body.status_code or "open"
+        scheduled_delivery_at = _parse_optional_datetime(body.scheduled_delivery_at)
+        if await _is_delivery_status(session, status_code) and scheduled_delivery_at is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Для статуса «Доставка» заполните «Назначенная дата поставки».",
+            )
+
         next_no = await session.execute(select(func.coalesce(func.max(Order.order_no), 0) + 1))
         order_no = next_no.scalar() or 1
         order = Order(
             order_no=order_no,
             customer_id=body.customer_id,
-            status_code=body.status_code or "open",
+            status_code=status_code,
             payment_type_code=body.payment_type_code,
             created_by=user.login,
-            scheduled_delivery_at=_parse_optional_datetime(body.scheduled_delivery_at),
+            scheduled_delivery_at=scheduled_delivery_at,
         )
         session.add(order)
         await session.commit()
@@ -640,6 +661,16 @@ async def update_order(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    target_status_code = body.status_code if body.status_code is not None else order.status_code
+    parsed_scheduled_input = _parse_optional_datetime(body.scheduled_delivery_at) if body.scheduled_delivery_at is not None else None
+    target_scheduled_delivery = parsed_scheduled_input if body.scheduled_delivery_at is not None else order.scheduled_delivery_at
+    if await _is_delivery_status(session, target_status_code) and target_scheduled_delivery is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Для статуса «Доставка» заполните «Назначенная дата поставки».",
+        )
+
     now = _now_utc()
     if body.customer_id is not None:
         order.customer_id = body.customer_id
@@ -660,7 +691,7 @@ async def update_order(
     if body.payment_type_code is not None:
         order.payment_type_code = body.payment_type_code
     if body.scheduled_delivery_at is not None:
-        order.scheduled_delivery_at = _parse_optional_datetime(body.scheduled_delivery_at)
+        order.scheduled_delivery_at = parsed_scheduled_input
     order.last_updated_at = now
     order.last_updated_by = user.login
     await session.commit()
