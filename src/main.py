@@ -13,7 +13,14 @@ from fastapi.staticfiles import StaticFiles
 from src.core.env import validate_runtime_secrets
 from src.core.rate_limit import InMemoryRateLimiter, RateLimitMiddleware
 from src.core.sentry_setup import init_sentry
-from src.database.connection import check_data_integrity, cleanup, get_schema_info, test_connection
+from src.database.connection import (
+    check_data_integrity,
+    cleanup,
+    get_schema_info,
+    log_pool_status,
+    test_connection,
+    verify_postgres_max_connections,
+)
 
 init_sentry("sales-api")
 
@@ -32,6 +39,8 @@ async def lifespan(app: FastAPI):
     if not ok:
         logger.critical("Cannot start without database connection")
         raise RuntimeError("Database connection failed")
+    log_pool_status()
+    await verify_postgres_max_connections()
     await get_schema_info()
     await check_data_integrity()
     logger.info("Application startup complete")

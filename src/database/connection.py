@@ -6,9 +6,11 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+from fastapi import HTTPException
 from sqlalchemy import text
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 from src.core.env import get_required_env
 
@@ -26,12 +28,22 @@ def _normalize_database_url(raw_url: str) -> str:
 
 DATABASE_URL = _normalize_database_url(get_required_env("DATABASE_URL"))
 
+DB_POOL_SIZE = 10
+DB_MAX_OVERFLOW = 20
+DB_POOL_TIMEOUT = 30
+DB_POOL_RECYCLE = 1800
+DB_RESERVED_CONNECTIONS = 10
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=os.getenv("API_DEBUG", "false").lower() == "true",
     future=True,
     pool_pre_ping=True,
-    poolclass=NullPool,
+    poolclass=AsyncAdaptedQueuePool,
+    pool_size=DB_POOL_SIZE,
+    max_overflow=DB_MAX_OVERFLOW,
+    pool_timeout=DB_POOL_TIMEOUT,
+    pool_recycle=DB_POOL_RECYCLE,
 )
 
 async_session = async_sessionmaker(
@@ -45,15 +57,22 @@ async_session = async_sessionmaker(
 
 async def get_db_session():
     """Yield DB session for API endpoints."""
-    async with async_session() as session:
-        try:
-            yield session
-        except Exception as exc:
-            await session.rollback()
-            logger.error("Database session error: %s", exc)
-            raise
-        finally:
-            await session.close()
+    try:
+        async with async_session() as session:
+            try:
+                yield session
+            except Exception as exc:
+                await session.rollback()
+                logger.error("Database session error: %s", exc)
+                raise
+            finally:
+                await session.close()
+    except SQLAlchemyTimeoutError as exc:
+        logger.error("Database pool timeout: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Database temporarily unavailable. Please try again.",
+        ) from exc
 
 
 @asynccontextmanager
@@ -134,3 +153,41 @@ async def check_data_integrity() -> None:
 async def cleanup() -> None:
     """Close DB resources on shutdown."""
     await engine.dispose()
+
+
+def log_pool_status() -> None:
+    """Log current SQLAlchemy async pool state."""
+    logger.info(
+        "DB pool: size=%s, checked_out=%s, overflow=%s",
+        engine.pool.size(),
+        engine.pool.checkedout(),
+        engine.pool.overflow(),
+    )
+
+
+async def verify_postgres_max_connections() -> int | None:
+    """Return PostgreSQL max_connections and log capacity health."""
+    try:
+        async with engine.begin() as conn:
+            max_connections = await conn.scalar(text("SHOW max_connections"))
+            max_connections_int = int(max_connections) if max_connections is not None else None
+            if max_connections_int is None:
+                return None
+            required = DB_POOL_SIZE + DB_MAX_OVERFLOW
+            if max_connections_int - DB_RESERVED_CONNECTIONS < required:
+                logger.warning(
+                    "PostgreSQL max_connections=%s may be too low for pool requirement=%s (reserve=%s).",
+                    max_connections_int,
+                    required,
+                    DB_RESERVED_CONNECTIONS,
+                )
+            else:
+                logger.info(
+                    "PostgreSQL max_connections=%s is sufficient for pool requirement=%s.",
+                    max_connections_int,
+                    required,
+                )
+            return max_connections_int
+    except Exception as exc:
+        logger.warning("Could not verify PostgreSQL max_connections: %s", exc)
+        return None
