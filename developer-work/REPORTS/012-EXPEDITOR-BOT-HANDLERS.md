@@ -84,7 +84,18 @@ python -m pytest -q
 
 ## 🔗 Git Commits
 
-(To be filled after commit in this task execution block.)
+```text
+commit b075897
+Author: Codex
+Date:   2026-02-19
+
+    [TASK-012] Complete expeditor Telegram bot handlers
+
+    - Expand expeditor role menu with operation and visits actions
+    - Add expeditor create-operation entry callback and registration
+    - Keep existing route, delivery, payment and stock flows intact
+    - Mark task spec completed and generate developer report
+```
 
 ---
 
