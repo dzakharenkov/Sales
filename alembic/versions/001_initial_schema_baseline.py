@@ -20,10 +20,10 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     root = Path(__file__).resolve().parents[2]
     baseline_sql = (root / "sales_sql.sql").read_text(encoding="utf-8")
-    op.execute('CREATE SCHEMA IF NOT EXISTS "Sales";')
-    op.execute(baseline_sql)
+    bind = op.get_bind()
+    bind.exec_driver_sql('CREATE SCHEMA IF NOT EXISTS "Sales";')
+    bind.exec_driver_sql(baseline_sql)
 
 
 def downgrade() -> None:
     op.execute('DROP SCHEMA IF EXISTS "Sales" CASCADE;')
-
