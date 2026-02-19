@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+import aiofiles
 from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
@@ -30,7 +31,8 @@ LEGACY_UPLOAD_DIR = PROJECT_ROOT / "uploads" / "customer_photos"
 SITE_URL = (settings.site_url or "").rstrip("/")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
@@ -97,6 +99,24 @@ def _resolve_save_path(customer_id: int, ext: str) -> tuple[Path, str]:
     return path, name
 
 
+async def _save_photo(file: UploadFile, destination: Path) -> int:
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Неверный тип файла. Разрешены: JPEG, PNG, WEBP")
+
+    ext = (Path(file.filename or "").suffix or "").lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise HTTPException(status_code=400, detail="Неверное расширение файла")
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="Файл слишком большой. Максимум: 10MB")
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    async with aiofiles.open(destination, "wb") as output:
+        await output.write(content)
+    return len(content)
+
+
 def _auto_description(customer_id: int, filename: str) -> str:
     """Описание автоматом из имени: Клиент 33, 11.02.2026 14:30:45 (ТЗ)."""
     # filename: 33_11022026_143045.jpg
@@ -119,28 +139,24 @@ async def upload_photo(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Загрузить фото клиента. Имя: КОД_ДДММГГГГ_ЧЧММСС.ext в photo/"""
+    """????????? ???? ???????. ???: ???_????????_??????.ext ? photo/."""
     logger.info("upload_photo: customer_id=%s, filename=%s, user=%s", customer_id, file.filename, getattr(user, "login", ""))
+    full_path: Path | None = None
     try:
         result = await session.execute(select(Customer).where(Customer.id == customer_id))
         if not result.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="Customer not found")
         if not file.filename:
             raise HTTPException(status_code=400, detail="No filename")
+
         ext = (file.filename.rsplit(".", 1)[-1] or "").lower()
         if ext not in ALLOWED_EXTENSIONS:
-            raise HTTPException(status_code=400, detail=f"Допустимы: {', '.join(ALLOWED_EXTENSIONS)}")
-        content = await file.read()
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="Максимум 10 MB")
+            raise HTTPException(status_code=400, detail=f"?????????: {', '.join(ALLOWED_EXTENSIONS)}")
+
         full_path, filename = _resolve_save_path(customer_id, ext)
         logger.info("upload_photo: saving to %s", full_path)
-        try:
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-            full_path.write_bytes(content)
-        except OSError as err:
-            logger.exception("upload_photo: OSError writing file")
-            raise HTTPException(status_code=500, detail=f"Не удалось сохранить файл: {str(err)}")
+        file_size = await _save_photo(file, full_path)
+
         row = (await session.execute(text("SELECT md5(random()::text) AS t"))).fetchone()
         download_token = row[0] if row else str(uuid.uuid4()).replace("-", "")
         now = datetime.now()
@@ -149,7 +165,7 @@ async def upload_photo(
             customer_id=customer_id,
             photo_path=filename,
             original_filename=_safe_filename(file.filename),
-            file_size=len(content),
+            file_size=file_size,
             mime_type=file.content_type or f"image/{ext}",
             description=desc or None,
             download_token=download_token,
@@ -162,8 +178,18 @@ async def upload_photo(
         await session.refresh(photo)
         return _photo_to_dict(photo)
     except HTTPException:
+        if full_path and full_path.exists():
+            try:
+                full_path.unlink()
+            except OSError:
+                logger.warning("upload_photo: failed to cleanup file %s", full_path)
         raise
     except Exception as e:
+        if full_path and full_path.exists():
+            try:
+                full_path.unlink()
+            except OSError:
+                logger.warning("upload_photo: failed to cleanup file %s", full_path)
         logger.exception("upload_photo: %s", e)
         raise HTTPException(status_code=500, detail=str(e)[:200])
 

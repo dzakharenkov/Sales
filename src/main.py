@@ -47,6 +47,9 @@ setup_logging(
 async def lifespan(app: FastAPI):
     """App lifecycle: validate env, check DB, cleanup on shutdown."""
     validate_runtime_secrets()
+    upload_dir = Path(settings.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("Photo upload directory: {}", upload_dir.resolve())
     logger.info(
         "Starting SDS Application host={} port={} env={}",
         settings.api_host,
