@@ -87,7 +87,7 @@ python -m pytest tests/test_env_validation.py -q
 
 ## ?? Git Commits
 
-(To be filled after commit in this task execution block.)
+commit 6dbd4870f08b6db9f8a6f66ac58e6b0e8fb90fa5\nAuthor: Developer\nDate: 2026-02-19\n\n    [TASK-002] Add API rate limiting middleware\n\n    - Implement in-memory per-IP limiter and middleware\n    - Add login-specific 10/10min policy\n    - Add authenticated API 200/min policy\n    - Add 429 + Retry-After + X-RateLimit headers\n    - Add deterministic rate-limit tests\n\n    Acceptance criteria: ALL MET ?
 
 ---
 
