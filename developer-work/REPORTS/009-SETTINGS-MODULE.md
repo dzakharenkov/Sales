@@ -102,7 +102,7 @@ rg -n "os\.getenv\(|os\.environ\.get\(" src
 
 ## 🔗 Git Commits
 
-(To be filled after commit in this task execution block.)
+```text`ncommit 0a4106c`nAuthor: Codex <codex@openai.com>`nDate:   2026-02-19`n`n    [TASK-009] Centralize runtime configuration with pydantic-settings`n```
 
 ---
 
@@ -144,3 +144,4 @@ Reviewer Comments:
 [To be filled by reviewer]
 
 Report Generated: 2026-02-19 UTC
+
