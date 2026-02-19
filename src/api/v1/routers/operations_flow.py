@@ -5,7 +5,7 @@ cash_receipt, return_from_customer, cash_return) с валидациями и т
 """
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db_session
 from src.database.models import Operation, Batch, Customer, Product, Order, User
 from src.core.deps import get_current_user
+from src.core.exceptions import DatabaseError, ValidationError
 
 router = APIRouter()
 
@@ -240,6 +241,150 @@ async def get_or_create_batch(
 async def generate_op_number(session: AsyncSession) -> str:
     r = await session.execute(text('SELECT "Sales".generate_operation_number()'))
     return (r.scalar() or "OP-000000") or "OP-000000"
+
+
+class OperationFlowStep(BaseModel):
+    type_code: str
+    warehouse_from: str
+    warehouse_to: str | None = None
+    product_code: str
+    quantity: int = Field(..., ge=1, le=QUANTITY_MAX)
+    customer_id: int | None = None
+    order_id: int | None = None
+    comment: str | None = None
+
+
+class OperationFlowRequest(BaseModel):
+    steps: list[OperationFlowStep]
+
+
+def _lock_sort_key(step: OperationFlowStep) -> tuple[str, str]:
+    return (step.warehouse_from.strip(), step.product_code.strip())
+
+
+async def execute_operation_flow_atomic(
+    session: AsyncSession,
+    steps: list[OperationFlowStep],
+    created_by: str,
+) -> list[dict[str, str]]:
+    if not steps:
+        raise ValidationError("Не переданы шаги операции", field="steps")
+
+    created: list[dict[str, str]] = []
+    sorted_steps = sorted(steps, key=_lock_sort_key)
+
+    try:
+        async with session.begin():
+            for step in sorted_steps:
+                lock_result = await session.execute(
+                    text(
+                        '''
+                        SELECT id, quantity, reserved_qty
+                        FROM "Sales".warehouse_stock
+                        WHERE warehouse_code = :warehouse_code
+                          AND product_code = :product_code
+                        FOR UPDATE
+                        '''
+                    ),
+                    {
+                        "warehouse_code": step.warehouse_from.strip(),
+                        "product_code": step.product_code.strip(),
+                    },
+                )
+                stock_row = lock_result.mappings().first()
+                if not stock_row:
+                    raise ValidationError(
+                        f"Товар {step.product_code} не найден на складе {step.warehouse_from}",
+                        field="warehouse_stock",
+                    )
+
+                quantity = int(stock_row.get("quantity") or 0)
+                reserved_qty = int(stock_row.get("reserved_qty") or 0)
+                available_qty = quantity - reserved_qty
+                if available_qty < int(step.quantity):
+                    raise ValidationError(
+                        (
+                            f"Недостаточно товара {step.product_code}: "
+                            f"доступно {available_qty}, требуется {step.quantity}"
+                        ),
+                        field="quantity",
+                    )
+
+                operation_id = uuid4()
+                operation_number = await generate_op_number(session)
+                await session.execute(
+                    text(
+                        '''
+                        INSERT INTO "Sales".operations
+                        (
+                            id, operation_number, type_code, warehouse_from, warehouse_to,
+                            product_code, quantity, status, customer_id, order_id, created_by,
+                            operation_date, created_at, comment
+                        )
+                        VALUES
+                        (
+                            :id, :operation_number, :type_code, :warehouse_from, :warehouse_to,
+                            :product_code, :quantity, :status, :customer_id, :order_id, :created_by,
+                            NOW(), NOW(), :comment
+                        )
+                        '''
+                    ),
+                    {
+                        "id": operation_id,
+                        "operation_number": operation_number,
+                        "type_code": step.type_code.strip(),
+                        "warehouse_from": step.warehouse_from.strip(),
+                        "warehouse_to": step.warehouse_to.strip() if step.warehouse_to else None,
+                        "product_code": step.product_code.strip(),
+                        "quantity": int(step.quantity),
+                        "status": "pending",
+                        "customer_id": step.customer_id,
+                        "order_id": step.order_id,
+                        "created_by": created_by,
+                        "comment": step.comment,
+                    },
+                )
+
+                await session.execute(
+                    text(
+                        '''
+                        UPDATE "Sales".warehouse_stock
+                        SET reserved_qty = COALESCE(reserved_qty, 0) + :quantity
+                        WHERE id = :stock_id
+                        '''
+                    ),
+                    {
+                        "stock_id": stock_row["id"],
+                        "quantity": int(step.quantity),
+                    },
+                )
+
+                created.append(
+                    {
+                        "operation_id": str(operation_id),
+                        "operation_number": operation_number,
+                    }
+                )
+    except ValidationError:
+        raise
+    except Exception as exc:
+        raise DatabaseError("Операция не сохранена. Повторите попытку позже.") from exc
+
+    return created
+
+
+@router.post("/operations/flow", status_code=201, response_model=EntityModel | list[EntityModel])
+async def create_operation_flow(
+    body: OperationFlowRequest,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    created = await execute_operation_flow_atomic(session=session, steps=body.steps, created_by=user.login)
+    return {
+        "success": True,
+        "message": "Операция создана успешно",
+        "operations": created,
+    }
 
 
 # ─── POST /operations/warehouse_receipt (ТЗ-ALG-001) ───────────────────────
