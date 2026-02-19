@@ -107,7 +107,7 @@ python -m compileall alembic
 
 ## ?? Git Commits
 
-(To be filled after commit in this task execution block.)
+commit f3f3506f36f16b1bc89ea5a2ed33aa801d987478\nAuthor: Developer\nDate: 2026-02-19\n\n    [TASK-005] Configure Alembic and convert SQL migrations\n\n    - Initialize Alembic async config for schema "Sales"\n    - Add baseline migration + 7 converted SQL migrations\n    - Add upgrade/downgrade chain with reversible steps\n    - Document migration commands in tasks overview\n\n    Acceptance criteria: ALL MET ?
 
 ---
 
