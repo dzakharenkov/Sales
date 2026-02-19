@@ -3,8 +3,6 @@
 Эндпоинт /auth/me — кто сейчас вошёл (по токену).
 Эндпоинт /config — публичная конфигурация для фронта (ключи карт и т.п.).
 """
-import os
-
 from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -13,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.connection import get_db_session
 from src.database.models import User
+from src.core.config import settings
 from src.core.security import verify_password, create_access_token
 from src.core.deps import get_current_user
 
@@ -72,5 +71,5 @@ async def me(user: User = Depends(get_current_user)):
 async def get_config(_: User = Depends(get_current_user)):
     """Конфигурация для фронта (ключи и т.п.). Только для авторизованных."""
     return {
-        "yandexMapsApiKey": os.environ.get("YANDEX_MAPS_API_KEY", ""),
+        "yandexMapsApiKey": settings.yandex_maps_api_key,
     }

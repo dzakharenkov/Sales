@@ -3,7 +3,6 @@ PostgreSQL async connection module. Configuration is loaded only from environmen
 """
 
 import logging
-import os
 from contextlib import asynccontextmanager
 
 from fastapi import HTTPException
@@ -12,7 +11,7 @@ from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 
-from src.core.env import get_required_env
+from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ def _normalize_database_url(raw_url: str) -> str:
     return raw_url
 
 
-DATABASE_URL = _normalize_database_url(get_required_env("DATABASE_URL"))
+DATABASE_URL = _normalize_database_url(settings.database_url)
 
 DB_POOL_SIZE = 10
 DB_MAX_OVERFLOW = 20
@@ -36,7 +35,7 @@ DB_RESERVED_CONNECTIONS = 10
 
 engine = create_async_engine(
     DATABASE_URL,
-    echo=os.getenv("API_DEBUG", "false").lower() == "true",
+    echo=settings.api_debug,
     future=True,
     pool_pre_ping=True,
     poolclass=AsyncAdaptedQueuePool,

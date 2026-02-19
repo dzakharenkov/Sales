@@ -1,0 +1,58 @@
+"""Centralized application settings loaded from environment."""
+
+from __future__ import annotations
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Typed runtime settings for API and Telegram bot."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    database_url: str = Field(..., min_length=1, validation_alias="DATABASE_URL")
+
+    jwt_secret_key: str = Field(..., min_length=32, validation_alias="JWT_SECRET_KEY")
+    jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
+    jwt_expire_minutes: int = Field(default=60, validation_alias="JWT_EXPIRATION_MINUTES")
+
+    telegram_bot_token: str = Field(..., min_length=1, validation_alias="TELEGRAM_BOT_TOKEN")
+    sds_api_url: str = Field(default="http://127.0.0.1:8000", validation_alias="SDS_API_URL")
+    api_timeout: int = Field(default=30, validation_alias="API_TIMEOUT")
+
+    api_host: str = Field(default="0.0.0.0", validation_alias="API_HOST")
+    api_port: int = Field(default=8000, validation_alias="API_PORT")
+    api_debug: bool = Field(default=False, validation_alias="API_DEBUG")
+
+    upload_dir: str = Field(default="photo", validation_alias="UPLOAD_DIR")
+    site_url: str = Field(default="http://localhost:8000", validation_alias="SITE_URL")
+
+    yandex_maps_api_key: str = Field(default="", validation_alias="YANDEX_MAPS_API_KEY")
+
+    sentry_enabled: bool = Field(default=True, validation_alias="SENTRY_ENABLED")
+    sentry_dsn: str = Field(default="", validation_alias="SENTRY_DSN")
+    sentry_traces_sample_rate: float = Field(default=1.0, validation_alias="SENTRY_TRACES_SAMPLE_RATE")
+    sentry_environment: str = Field(default="production", validation_alias="SENTRY_ENVIRONMENT")
+    sentry_release: str | None = Field(default=None, validation_alias="SENTRY_RELEASE")
+    sentry_ignore_telegram_conflict: bool = Field(
+        default=True,
+        validation_alias="SENTRY_IGNORE_TELEGRAM_CONFLICT",
+    )
+
+    log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
+    log_file: str = Field(default="logs/app.log", validation_alias="LOG_FILE")
+    bot_log_file: str = Field(default="logs/telegram_bot.log", validation_alias="BOT_LOG_FILE")
+
+    cache_ttl: int = Field(default=3600, validation_alias="CACHE_TTL")
+    max_login_attempts: int = Field(default=5, validation_alias="MAX_LOGIN_ATTEMPTS")
+    login_block_minutes: int = Field(default=10, validation_alias="LOGIN_BLOCK_MINUTES")
+    timezone: str = Field(default="Asia/Tashkent", validation_alias="TIMEZONE")
+
+
+settings = Settings()

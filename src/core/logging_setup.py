@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from pathlib import Path
 
 from loguru import logger
+from src.core.config import settings
 
 _LOGGING_CONFIGURED = False
 
@@ -33,8 +33,8 @@ def setup_logging(
     if _LOGGING_CONFIGURED:
         return
 
-    effective_level = (log_level or os.getenv("LOG_LEVEL", "INFO")).upper()
-    effective_log_file = log_file or os.getenv("LOG_FILE", "logs/app.log")
+    effective_level = (log_level or settings.log_level).upper()
+    effective_log_file = log_file or settings.log_file
     log_path = Path(effective_log_file)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -1,6 +1,5 @@
 """Sale & Distribution System (SDS) application entrypoint."""
 
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from src.core.env import validate_runtime_secrets
+from src.core.config import settings
 from src.core.logging_setup import setup_logging
 from src.core.middleware import request_logging_middleware
 from src.core.rate_limit import InMemoryRateLimiter, RateLimitMiddleware
@@ -27,8 +27,8 @@ from src.database.connection import (
 init_sentry("sales-api")
 setup_logging(
     service_name="sales-api",
-    log_level=os.getenv("LOG_LEVEL", "INFO"),
-    log_file=os.getenv("LOG_FILE", "logs/app.log"),
+    log_level=settings.log_level,
+    log_file=settings.log_file,
 )
 
 
@@ -36,7 +36,12 @@ setup_logging(
 async def lifespan(app: FastAPI):
     """App lifecycle: validate env, check DB, cleanup on shutdown."""
     validate_runtime_secrets()
-    logger.info("Starting SDS Application...")
+    logger.info(
+        "Starting SDS Application host={} port={} env={}",
+        settings.api_host,
+        settings.api_port,
+        settings.sentry_environment,
+    )
     ok = await test_connection()
     if not ok:
         logger.critical("Cannot start without database connection")

@@ -10,6 +10,7 @@ from loguru import logger
 from telegram.error import Conflict
 from telegram.ext import Application
 
+from src.core.config import settings
 from src.core.env import get_required_env, validate_required_env_vars
 from src.core.logging_setup import setup_logging
 from src.core.sentry_setup import init_sentry
@@ -24,8 +25,8 @@ load_dotenv()
 init_sentry("sales-telegram-bot")
 setup_logging(
     service_name="sales-telegram-bot",
-    log_level=os.getenv("LOG_LEVEL", "INFO"),
-    log_file=os.getenv("BOT_LOG_FILE", "logs/telegram_bot.log"),
+    log_level=settings.log_level,
+    log_file=settings.bot_log_file,
 )
 
 _LOCK_FH = None

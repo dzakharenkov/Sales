@@ -2,7 +2,6 @@
 Фотографии клиентов и визитов (customer_photo). Загрузка в папку photo/, именование: КОД_ДДММГГГГ_ЧЧММСС.ext
 """
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 import re
@@ -19,15 +18,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.connection import get_db_session
 from src.database.models import CustomerPhoto, Customer, User
+from src.core.config import settings
 from src.core.deps import get_current_user
 
 router = APIRouter()
 
 # ТЗ: /var/www/sales.zakharenkov.ru/html/photo — НЕ uploads!
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", str(PROJECT_ROOT / "photo")))
+UPLOAD_DIR = Path(settings.upload_dir or str(PROJECT_ROOT / "photo"))
 LEGACY_UPLOAD_DIR = PROJECT_ROOT / "uploads" / "customer_photos"
-SITE_URL = (os.environ.get("SITE_URL") or "").rstrip("/")
+SITE_URL = (settings.site_url or "").rstrip("/")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}

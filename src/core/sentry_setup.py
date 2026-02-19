@@ -1,12 +1,10 @@
-import os
-
 import sentry_sdk
 
-_TRUE_VALUES = {"1", "true", "yes", "on"}
+from src.core.config import settings
 
 
 def _is_sentry_enabled() -> bool:
-    return os.getenv("SENTRY_ENABLED", "true").strip().lower() in _TRUE_VALUES
+    return bool(settings.sentry_enabled)
 
 
 def _is_telegram_getupdates_conflict(event: dict) -> bool:
@@ -27,7 +25,7 @@ def _is_telegram_getupdates_conflict(event: dict) -> bool:
 
 
 def _before_send(event: dict, hint: dict):
-    ignore_conflict = os.getenv("SENTRY_IGNORE_TELEGRAM_CONFLICT", "true").strip().lower() in _TRUE_VALUES
+    ignore_conflict = bool(settings.sentry_ignore_telegram_conflict)
     if ignore_conflict and _is_telegram_getupdates_conflict(event):
         return None
     return event
@@ -38,18 +36,18 @@ def init_sentry(service_name: str) -> None:
     if not _is_sentry_enabled():
         return
 
-    dsn = os.getenv("SENTRY_DSN", "").strip()
+    dsn = settings.sentry_dsn.strip()
     if not dsn:
         return
 
-    traces_sample_rate = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "1.0"))
+    traces_sample_rate = float(settings.sentry_traces_sample_rate)
 
     sentry_sdk.init(
         dsn=dsn,
         send_default_pii=True,
         traces_sample_rate=traces_sample_rate,
-        environment=os.getenv("SENTRY_ENVIRONMENT", os.getenv("ENVIRONMENT", "production")),
-        release=os.getenv("SENTRY_RELEASE"),
+        environment=settings.sentry_environment,
+        release=settings.sentry_release,
         server_name=service_name,
         before_send=_before_send,
     )

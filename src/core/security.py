@@ -1,15 +1,14 @@
 """Password hashing and JWT helpers for authentication."""
 
-import os
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
 from jose import JWTError, jwt
 
-from src.core.env import get_required_env
+from src.core.config import settings
 
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "60"))
+JWT_ALGORITHM = settings.jwt_algorithm
+JWT_EXPIRE_MINUTES = settings.jwt_expire_minutes
 
 # bcrypt accepts max 72 bytes
 BCRYPT_MAX_BYTES = 72
@@ -38,12 +37,12 @@ def create_access_token(login: str, role: str) -> str:
     """Create JWT access token."""
     expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)
     payload = {"sub": login, "role": role, "exp": expire}
-    return jwt.encode(payload, get_required_env("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=JWT_ALGORITHM)
 
 
 def decode_access_token(token: str) -> dict | None:
     """Decode JWT token. Return None on failure."""
     try:
-        return jwt.decode(token, get_required_env("JWT_SECRET_KEY"), algorithms=[JWT_ALGORITHM])
+        return jwt.decode(token, settings.jwt_secret_key, algorithms=[JWT_ALGORITHM])
     except JWTError:
         return None
