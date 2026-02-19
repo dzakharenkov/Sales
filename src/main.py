@@ -16,6 +16,7 @@ from src.core.env import validate_runtime_secrets
 from src.core.config import settings
 from src.core.logging_setup import setup_logging
 from src.core.middleware import request_logging_middleware
+from src.core.middleware import SecurityHeadersMiddleware
 from src.core.rate_limit import InMemoryRateLimiter, RateLimitMiddleware
 from src.core.sentry_setup import init_sentry
 from src.core.exception_handlers import (
@@ -90,11 +91,12 @@ app.add_middleware(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
+app.add_middleware(SecurityHeadersMiddleware)
 app.middleware("http")(request_logging_middleware)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"

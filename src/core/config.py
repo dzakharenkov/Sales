@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0", validation_alias="API_HOST")
     api_port: int = Field(default=8000, validation_alias="API_PORT")
     api_debug: bool = Field(default=False, validation_alias="API_DEBUG")
+    cors_allowed_origins: str = Field(
+        default="https://sales.zakharenkov.ru,http://localhost:8000,http://127.0.0.1:8000",
+        validation_alias="CORS_ALLOWED_ORIGINS",
+    )
 
     upload_dir: str = Field(default="photo", validation_alias="UPLOAD_DIR")
     site_url: str = Field(default="http://localhost:8000", validation_alias="SITE_URL")
@@ -53,6 +57,11 @@ class Settings(BaseSettings):
     max_login_attempts: int = Field(default=5, validation_alias="MAX_LOGIN_ATTEMPTS")
     login_block_minutes: int = Field(default=10, validation_alias="LOGIN_BLOCK_MINUTES")
     timezone: str = Field(default="Asia/Tashkent", validation_alias="TIMEZONE")
+
+    @property
+    def cors_origins(self) -> list[str]:
+        values = [origin.strip() for origin in self.cors_allowed_origins.split(",")]
+        return [origin for origin in values if origin]
 
 
 settings = Settings()

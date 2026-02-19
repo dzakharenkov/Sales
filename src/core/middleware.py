@@ -7,7 +7,9 @@ import uuid
 
 from fastapi import Request
 from loguru import logger
+from starlette.middleware.base import BaseHTTPMiddleware
 
+from src.core.config import settings
 from src.core.security import decode_access_token
 
 
@@ -66,3 +68,14 @@ async def request_logging_middleware(request: Request, call_next):
         logger.info(log_message, *log_args)
     return response
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if not settings.api_debug:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
