@@ -91,7 +91,7 @@ python -m pytest tests/test_rate_limit.py tests/test_env_validation.py -q
 
 ## ?? Git Commits
 
-(To be filled after commit in this task execution block.)
+commit 56380a509e497f839fa3e5b2b891dd3dd92eb9f6\nAuthor: Developer\nDate: 2026-02-19\n\n    [TASK-003] Harden SQL search filters and audit raw queries\n\n    - Add LIKE escaping helper and apply to customers/orders/visits\n    - Ensure ILIKE uses ESCAPE semantics for wildcard literals\n    - Add static guard test for text(f...) patterns in audited routers\n    - Document full router audit scope\n\n    Acceptance criteria: ALL MET ?
 
 ---
 
