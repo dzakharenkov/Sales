@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db_session
 from src.database.models import Customer, User, Operation, CustomerVisit
 from src.core.deps import get_current_user, require_admin
+from src.core.sql import escape_like
 
 router = APIRouter()
 
@@ -133,17 +134,19 @@ async def list_customers(
         params["customer_id"] = customer_id
     # Расширенный поиск: одно поле search — по name_client, tax_id (ИНН), account_no (р/с)
     if search and search.strip():
-        conditions.append("(name_client ILIKE :search OR tax_id ILIKE :search OR account_no ILIKE :search)")
-        params["search"] = "%" + search.strip() + "%"
+        conditions.append(
+            "(name_client ILIKE :search ESCAPE '\\' OR tax_id ILIKE :search ESCAPE '\\' OR account_no ILIKE :search ESCAPE '\\')"
+        )
+        params["search"] = "%" + escape_like(search.strip()) + "%"
     if name_client and name_client.strip():
-        conditions.append(" name_client ILIKE :name_client ")
-        params["name_client"] = "%" + name_client.strip() + "%"
+        conditions.append(" name_client ILIKE :name_client ESCAPE '\\' ")
+        params["name_client"] = "%" + escape_like(name_client.strip()) + "%"
     if firm_name and firm_name.strip():
-        conditions.append(" firm_name ILIKE :firm_name ")
-        params["firm_name"] = "%" + firm_name.strip() + "%"
+        conditions.append(" firm_name ILIKE :firm_name ESCAPE '\\' ")
+        params["firm_name"] = "%" + escape_like(firm_name.strip()) + "%"
     if city and city.strip():
-        conditions.append(" ct.name ILIKE :city ")
-        params["city"] = "%" + city.strip() + "%"
+        conditions.append(" ct.name ILIKE :city ESCAPE '\\' ")
+        params["city"] = "%" + escape_like(city.strip()) + "%"
     if login_agent and login_agent.strip():
         conditions.append(" login_agent = :login_agent ")
         params["login_agent"] = login_agent.strip()
@@ -151,11 +154,11 @@ async def list_customers(
         conditions.append(" login_expeditor = :login_expeditor ")
         params["login_expeditor"] = login_expeditor.strip()
     if phone and phone.strip():
-        conditions.append(" phone ILIKE :phone ")
-        params["phone"] = "%" + phone.strip() + "%"
+        conditions.append(" phone ILIKE :phone ESCAPE '\\' ")
+        params["phone"] = "%" + escape_like(phone.strip()) + "%"
     if tax_id and tax_id.strip():
-        conditions.append(" tax_id ILIKE :tax_id ")
-        params["tax_id"] = "%" + tax_id.strip() + "%"
+        conditions.append(" tax_id ILIKE :tax_id ESCAPE '\\' ")
+        params["tax_id"] = "%" + escape_like(tax_id.strip()) + "%"
     if conditions:
         sql += " WHERE " + " AND ".join(conditions)
     sql += " ORDER BY c.id LIMIT :lim"

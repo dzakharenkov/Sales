@@ -13,6 +13,7 @@ from openpyxl import Workbook
 from src.database.connection import get_db_session
 from src.database.models import CustomerVisit, Customer, User
 from src.core.deps import get_current_user
+from src.core.sql import escape_like
 from src.database.models import User as UserModel
 
 router = APIRouter()
@@ -101,9 +102,9 @@ async def search_visits(
     if customer_id is not None:
         q = q.where(CustomerVisit.customer_id == customer_id)
     if customer_name and customer_name.strip():
-        name = customer_name.strip()
+        name = escape_like(customer_name.strip())
         q = q.where(
-            (Customer.name_client.ilike(f"%{name}%")) | (Customer.firm_name.ilike(f"%{name}%"))
+            (Customer.name_client.ilike(f"%{name}%", escape="\\")) | (Customer.firm_name.ilike(f"%{name}%", escape="\\"))
         )
     if status and status.strip():
         parts = [s.strip() for s in status.split(",") if s.strip()]
@@ -128,9 +129,9 @@ async def search_visits(
         count_q = count_q.where(CustomerVisit.customer_id == customer_id)
     if customer_name and customer_name.strip():
         count_q = count_q.join(Customer, CustomerVisit.customer_id == Customer.id)
-        name = customer_name.strip()
+        name = escape_like(customer_name.strip())
         count_q = count_q.where(
-            (Customer.name_client.ilike(f"%{name}%")) | (Customer.firm_name.ilike(f"%{name}%"))
+            (Customer.name_client.ilike(f"%{name}%", escape="\\")) | (Customer.firm_name.ilike(f"%{name}%", escape="\\"))
         )
     if status and status.strip():
         parts = [s.strip() for s in status.split(",") if s.strip()]
@@ -189,8 +190,10 @@ async def export_visits_excel(
     if customer_id is not None:
         q = q.where(CustomerVisit.customer_id == customer_id)
     if customer_name and customer_name.strip():
-        name = customer_name.strip()
-        q = q.where((Customer.name_client.ilike(f"%{name}%")) | (Customer.firm_name.ilike(f"%{name}%")))
+        name = escape_like(customer_name.strip())
+        q = q.where(
+            (Customer.name_client.ilike(f"%{name}%", escape="\\")) | (Customer.firm_name.ilike(f"%{name}%", escape="\\"))
+        )
     if status and status.strip():
         parts = [s.strip() for s in status.split(",") if s.strip()]
         if parts:

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db_session
 from src.database.models import Order, Item, Customer, Product, Status, PaymentType, User as UserModel, Warehouse
 from src.core.deps import get_current_user, require_admin
+from src.core.sql import escape_like
 from src.database.models import User
 
 router = APIRouter()
@@ -114,10 +115,10 @@ async def list_orders(
     if customer_id is not None:
         q = q.where(Order.customer_id == customer_id)
     if customer_name and customer_name.strip():
-        name = customer_name.strip()
+        name = escape_like(customer_name.strip())
         q = q.where(or_(
-            Customer.name_client.ilike(f"%{name}%"),
-            Customer.firm_name.ilike(f"%{name}%"),
+            Customer.name_client.ilike(f"%{name}%", escape="\\"),
+            Customer.firm_name.ilike(f"%{name}%", escape="\\"),
         ))
     if status_code and status_code.strip():
         q = q.where(Order.status_code == status_code.strip())
@@ -146,10 +147,10 @@ async def list_orders(
     if customer_id is not None:
         sum_q = sum_q.where(Order.customer_id == customer_id)
     if customer_name and customer_name.strip():
-        name = customer_name.strip()
+        name = escape_like(customer_name.strip())
         sum_q = sum_q.where(or_(
-            Customer.name_client.ilike(f"%{name}%"),
-            Customer.firm_name.ilike(f"%{name}%"),
+            Customer.name_client.ilike(f"%{name}%", escape="\\"),
+            Customer.firm_name.ilike(f"%{name}%", escape="\\"),
         ))
     if status_code and status_code.strip():
         sum_q = sum_q.where(Order.status_code == status_code.strip())
@@ -324,11 +325,11 @@ async def list_order_items(
     if customer_id is not None:
         q = q.where(Order.customer_id == customer_id)
     if customer_name and customer_name.strip():
-        name = customer_name.strip()
+        name = escape_like(customer_name.strip())
         q = q.where(
             or_(
-                Customer.name_client.ilike(f"%{name}%"),
-                Customer.firm_name.ilike(f"%{name}%"),
+                Customer.name_client.ilike(f"%{name}%", escape="\\"),
+                Customer.firm_name.ilike(f"%{name}%", escape="\\"),
             )
         )
     if status_code and status_code.strip():
@@ -404,11 +405,11 @@ async def list_order_items(
     if customer_id is not None:
         sum_q = sum_q.where(Order.customer_id == customer_id)
     if customer_name and customer_name.strip():
-        name = customer_name.strip()
+        name = escape_like(customer_name.strip())
         sum_q = sum_q.where(
             or_(
-                Customer.name_client.ilike(f"%{name}%"),
-                Customer.firm_name.ilike(f"%{name}%"),
+                Customer.name_client.ilike(f"%{name}%", escape="\\"),
+                Customer.firm_name.ilike(f"%{name}%", escape="\\"),
             )
         )
     if status_code and status_code.strip():
@@ -466,11 +467,11 @@ async def export_order_items_excel(
     if customer_id is not None:
         q = q.where(Order.customer_id == customer_id)
     if customer_name and customer_name.strip():
-        name = customer_name.strip()
+        name = escape_like(customer_name.strip())
         q = q.where(
             or_(
-                Customer.name_client.ilike(f"%{name}%"),
-                Customer.firm_name.ilike(f"%{name}%"),
+                Customer.name_client.ilike(f"%{name}%", escape="\\"),
+                Customer.firm_name.ilike(f"%{name}%", escape="\\"),
             )
         )
     if status_code and status_code.strip():
