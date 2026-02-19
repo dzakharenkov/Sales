@@ -103,7 +103,7 @@ $env:DATABASE_URL='postgresql+asyncpg://u:p@localhost:5432/db'; $env:JWT_SECRET_
 
 ## ?? Git Commits
 
-(To be filled after commit in this task execution block.)
+commit 9b5ac31b34a9e8e42f801ca9be6c0545d01f97c1\nAuthor: Developer\nDate: 2026-02-19\n\n    [TASK-001] Secrets management and credential hardening\n\n    - Remove hardcoded DB/JWT/Sentry credential fallbacks\n    - Add centralized env validation with clear fail-fast errors\n    - Harden .env.example placeholders\n    - Add env validation tests\n\n    Acceptance criteria: ALL MET ?
 
 ---
 
