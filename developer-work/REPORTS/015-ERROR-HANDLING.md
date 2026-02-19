@@ -98,7 +98,18 @@ python -m pytest tests/test_error_handlers.py -q
 
 ## 🔗 Git Commits
 
-(To be filled after commit in this task execution block.)
+```text
+commit b5f8856
+Author: Codex
+Date:   2026-02-19
+
+    [TASK-015] Implement standardized global error handling
+
+    - Add custom AppError hierarchy
+    - Add global FastAPI exception handlers with sanitized payloads
+    - Register handlers in app entrypoint
+    - Add tests for error response contracts
+```
 
 ---
 
