@@ -1,40 +1,31 @@
-"""
-Sale & Distribution System (SDS). Точка входа. Запуск: uvicorn src.main:app --reload
-"""
+"""Sale & Distribution System (SDS) application entrypoint."""
+
 import logging
 import os
-from pathlib import Path
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.database.connection import (
-    test_connection,
-    get_schema_info,
-    check_data_integrity,
-    cleanup,
-)
+from src.core.env import validate_runtime_secrets
 from src.core.sentry_setup import init_sentry
+from src.database.connection import check_data_integrity, cleanup, get_schema_info, test_connection
 
 init_sentry("sales-api")
 
-# Уровень логирования: задаётся через LOG_LEVEL (INFO, WARNING, ERROR).
-# Для разработки: set LOG_LEVEL=WARNING — в консоль пойдут только предупреждения и ошибки.
 _LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 _level = getattr(logging, _LOG_LEVEL, logging.INFO)
-logging.basicConfig(
-    level=_level,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+logging.basicConfig(level=_level, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Жизненный цикл приложения: старт — проверка БД, стоп — закрытие пула."""
+    """App lifecycle: validate env, check DB, cleanup on shutdown."""
+    validate_runtime_secrets()
     logger.info("Starting SDS Application...")
     ok = await test_connection()
     if not ok:
@@ -51,7 +42,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Sale & Distribution System (SDS)",
-    description="API для управления продажами и дистрибуцией",
+    description="API for sales and distribution management",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -66,49 +57,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Папка с страницами входа и приложения
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 @app.get("/")
 async def root():
-    """Главная — перенаправление на страницу входа."""
     return RedirectResponse(url="/login", status_code=302)
 
 
 @app.get("/login", include_in_schema=False)
 async def login_page():
-    """Страница входа: логин и пароль."""
     return FileResponse(STATIC_DIR / "login.html")
 
 
 @app.get("/app", include_in_schema=False)
 async def app_page():
-    """Страница после входа (проверка по токену в браузере)."""
     return FileResponse(STATIC_DIR / "app.html")
+
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# Фото: /photo/33_11022026_143045.jpg (ТЗ: photo/ в корне проекта)
 from src.api.v1.routers.customer_photos import UPLOAD_DIR
+
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/photo", StaticFiles(directory=str(UPLOAD_DIR)), name="photo")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    """Отдаёт иконку приложения (favicon)."""
     return FileResponse(STATIC_DIR / "favicon.png", media_type="image/png")
 
 
 @app.get("/health")
 async def health():
-    """Проверка состояния сервиса."""
     return {"status": "ok"}
 
 
-# Подключение роутеров API v1
-from src.api.v1.routers import auth, dictionary, customers, users, orders, operations, operations_flow, stock, warehouse, finances, customer_photos, visits, reports, menu
+from src.api.v1.routers import (
+    auth,
+    customer_photos,
+    customers,
+    dictionary,
+    finances,
+    menu,
+    operations,
+    operations_flow,
+    orders,
+    reports,
+    stock,
+    users,
+    visits,
+    warehouse,
+)
 
 app.include_router(auth.router, prefix="/api/v1", tags=["auth"])
 app.include_router(menu.router, prefix="/api/v1", tags=["menu"])

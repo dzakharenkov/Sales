@@ -1,7 +1,7 @@
-﻿"""
-Entry point for SDS Telegram bot.
+"""Entry point for SDS Telegram bot.
 Run: python -m src.telegram_bot.bot
 """
+
 import logging
 import os
 from pathlib import Path
@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from telegram.error import Conflict
 from telegram.ext import Application
 
+from src.core.env import get_required_env, validate_required_env_vars
 from src.core.sentry_setup import init_sentry
 from .config import BOT_TOKEN
 from .handlers_agent import register_agent_handlers
@@ -23,16 +24,17 @@ init_sentry("sales-telegram-bot")
 
 logger = logging.getLogger(__name__)
 
-# DSN for bot sessions/logs storage
-DEFAULT_HOST = os.getenv("DATABASE_HOST", "45.141.76.83")
-DEFAULT_PORT = os.getenv("DATABASE_PORT", "5433")
-DEFAULT_NAME = os.getenv("DATABASE_NAME", "localdb")
-DEFAULT_USER = os.getenv("DATABASE_USER", "postgres")
-DEFAULT_PASSWORD = os.getenv("DATABASE_PASSWORD", "!Tesla11")
-DB_DSN = f"postgresql://{DEFAULT_USER}:{DEFAULT_PASSWORD}@{DEFAULT_HOST}:{DEFAULT_PORT}/{DEFAULT_NAME}"
-
 _LOCK_FH = None
 _LOCK_PATH = Path(".telegram_bot.lock")
+
+
+def _get_bot_db_dsn() -> str:
+    raw_url = get_required_env("DATABASE_URL")
+    if "+asyncpg" in raw_url:
+        return raw_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    if "+psycopg" in raw_url:
+        return raw_url.replace("postgresql+psycopg://", "postgresql://", 1)
+    return raw_url
 
 
 def _acquire_single_instance_lock() -> bool:
@@ -74,7 +76,7 @@ def _release_single_instance_lock() -> None:
 
 
 async def post_init(application: Application):
-    await init_pool(DB_DSN)
+    await init_pool(_get_bot_db_dsn())
     logger.info("Telegram bot initialized, DB pool ready")
 
 
@@ -101,6 +103,7 @@ async def on_bot_error(update, context):
 
 
 def run_bot():
+    validate_required_env_vars(["DATABASE_URL", "TELEGRAM_BOT_TOKEN"])
     if not BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not set! Cannot start bot.")
         return

@@ -2,7 +2,6 @@ import os
 
 import sentry_sdk
 
-_DEFAULT_SENTRY_DSN = "https://2e08f933daa21810fb101576ee51bcb2@o4510907799961600.ingest.us.sentry.io/4510910634196992"
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
@@ -39,7 +38,7 @@ def init_sentry(service_name: str) -> None:
     if not _is_sentry_enabled():
         return
 
-    dsn = os.getenv("SENTRY_DSN", _DEFAULT_SENTRY_DSN).strip()
+    dsn = os.getenv("SENTRY_DSN", "").strip()
     if not dsn:
         return
 

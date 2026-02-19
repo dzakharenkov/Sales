@@ -1,19 +1,17 @@
-"""
-Хеширование паролей (bcrypt) и JWT-токены для авторизации.
-Используем bcrypt напрямую (без passlib) из-за совместимости с новыми версиями.
-"""
+"""Password hashing and JWT helpers for authentication."""
+
 import os
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
 from jose import JWTError, jwt
 
-# JWT
-JWT_SECRET = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
+from src.core.env import get_required_env
+
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "60"))
 
-# bcrypt принимает не более 72 байт
+# bcrypt accepts max 72 bytes
 BCRYPT_MAX_BYTES = 72
 
 
@@ -22,12 +20,12 @@ def _password_bytes(password: str) -> bytes:
 
 
 def hash_password(password: str) -> str:
-    """Хеш пароля для сохранения в БД."""
+    """Hash password for DB storage."""
     return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str | None) -> bool:
-    """Проверка пароля против хеша. Если хеша нет — False."""
+    """Verify plain password against hash."""
     if not hashed:
         return False
     try:
@@ -37,15 +35,15 @@ def verify_password(plain: str, hashed: str | None) -> bool:
 
 
 def create_access_token(login: str, role: str) -> str:
-    """Создать JWT access token."""
+    """Create JWT access token."""
     expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)
     payload = {"sub": login, "role": role, "exp": expire}
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, get_required_env("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
 
 
 def decode_access_token(token: str) -> dict | None:
-    """Декодировать JWT. При ошибке — None."""
+    """Decode JWT token. Return None on failure."""
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return jwt.decode(token, get_required_env("JWT_SECRET_KEY"), algorithms=[JWT_ALGORITHM])
     except JWTError:
         return None

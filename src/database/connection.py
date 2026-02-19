@@ -1,46 +1,31 @@
 """
-Подключение к PostgreSQL (async). Конфигурация из .env или значения по умолчанию.
+PostgreSQL async connection module. Configuration is loaded only from environment.
 """
-import os
+
 import logging
+import os
 from contextlib import asynccontextmanager
 
-from dotenv import load_dotenv
-
-# Загрузка .env из корня проекта (рабочая директория при запуске - корень)
-load_dotenv()
-
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    create_async_engine,
-    async_sessionmaker,
-)
-from sqlalchemy.pool import NullPool
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+from src.core.env import get_required_env
 
 logger = logging.getLogger(__name__)
 
-# Параметры по умолчанию (совпадают с postgres.py)
-DEFAULT_HOST = "45.141.76.83"
-DEFAULT_PORT = "5433"
-DEFAULT_NAME = "localdb"
-DEFAULT_USER = "postgres"
-DEFAULT_PASSWORD = "!Tesla11"
 
-# Для create_async_engine используем asyncpg (async-драйвер PostgreSQL)
-_raw_url = os.getenv(
-    "DATABASE_URL",
-    f"postgresql://{os.getenv('DATABASE_USER', DEFAULT_USER)}:{os.getenv('DATABASE_PASSWORD', DEFAULT_PASSWORD)}@"
-    f"{os.getenv('DATABASE_HOST', DEFAULT_HOST)}:{os.getenv('DATABASE_PORT', DEFAULT_PORT)}/{os.getenv('DATABASE_NAME', DEFAULT_NAME)}",
-)
-# Поддержка формата postgresql+psycopg в .env — приводим к asyncpg
-if "+psycopg" in _raw_url:
-    _raw_url = _raw_url.replace("postgresql+psycopg://", "postgresql://", 1)
-if not _raw_url.startswith("postgresql+asyncpg"):
-    _raw_url = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-DATABASE_URL = _raw_url
+def _normalize_database_url(raw_url: str) -> str:
+    """Normalize URL for SQLAlchemy asyncpg driver."""
+    if "+psycopg" in raw_url:
+        raw_url = raw_url.replace("postgresql+psycopg://", "postgresql://", 1)
+    if not raw_url.startswith("postgresql+asyncpg"):
+        raw_url = raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return raw_url
 
-# NullPool не поддерживает pool_size/max_overflow — убраны
+
+DATABASE_URL = _normalize_database_url(get_required_env("DATABASE_URL"))
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=os.getenv("API_DEBUG", "false").lower() == "true",
@@ -59,13 +44,13 @@ async_session = async_sessionmaker(
 
 
 async def get_db_session():
-    """Генератор сессии для эндпоинтов."""
+    """Yield DB session for API endpoints."""
     async with async_session() as session:
         try:
             yield session
-        except Exception as e:
+        except Exception as exc:
             await session.rollback()
-            logger.error("Database session error: %s", e)
+            logger.error("Database session error: %s", exc)
             raise
         finally:
             await session.close()
@@ -73,42 +58,42 @@ async def get_db_session():
 
 @asynccontextmanager
 async def get_db():
-    """Контекст-менеджер для операций с БД вне эндпоинтов."""
+    """Context manager for non-endpoint DB operations."""
     async with async_session() as session:
         try:
             yield session
-        except Exception as e:
+        except Exception as exc:
             await session.rollback()
-            logger.error("Database error: %s", e)
+            logger.error("Database error: %s", exc)
             raise
         finally:
             await session.close()
 
 
-async def test_connection():
-    """Проверка подключения к БД."""
+async def test_connection() -> bool:
+    """Check DB connectivity."""
     try:
         async with engine.begin() as conn:
             result = await conn.execute(text("SELECT version();"))
             version = result.scalar()
             logger.info("Database connected. PostgreSQL: %s", version)
             return True
-    except Exception as e:
-        logger.error("Database connection failed: %s", e)
+    except Exception as exc:
+        logger.error("Database connection failed: %s", exc)
         return False
 
 
 async def get_schema_info():
-    """Список таблиц в схеме Sales."""
+    """Return list of tables in Sales schema."""
     async with engine.begin() as conn:
         result = await conn.execute(
             text(
                 """
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_schema = 'Sales'
-            ORDER BY table_name;
-            """
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'Sales'
+                ORDER BY table_name;
+                """
             )
         )
         tables = result.fetchall()
@@ -116,8 +101,8 @@ async def get_schema_info():
         return tables
 
 
-async def check_data_integrity():
-    """Проверка целостности данных."""
+async def check_data_integrity() -> None:
+    """Run basic integrity checks."""
     checks = [
         (
             "Orders without customer",
@@ -142,10 +127,10 @@ async def check_data_integrity():
                 result = await conn.execute(text(query))
                 count = result.scalar()
                 logger.info("%s %s: %s", "WARN" if count and count > 0 else "OK", name, count)
-        except Exception as e:
-            logger.warning("Check %s failed: %s", name, e)
+        except Exception as exc:
+            logger.warning("Check %s failed: %s", name, exc)
 
 
-async def cleanup():
-    """Закрытие пула при завершении."""
+async def cleanup() -> None:
+    """Close DB resources on shutdown."""
     await engine.dispose()
