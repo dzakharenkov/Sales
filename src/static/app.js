@@ -321,45 +321,84 @@
 
   function customersSection() {
     let refreshFn;
+
+    const loadCityTerritorySelectors = (citySelectId, territorySelectId, selectedCity, selectedTerritory) => {
+      const citySel = document.getElementById(citySelectId);
+      const terrSel = document.getElementById(territorySelectId);
+      if (!citySel || !terrSel) return;
+
+      const fillTerritories = (cityId) => {
+        const url = cityId
+          ? ('/api/v1/dictionary/cities/' + cityId + '/territories')
+          : '/api/v1/dictionary/territories';
+        api(url).then((territories) => {
+          terrSel.innerHTML = '<option value="">?</option>';
+          (territories || []).forEach((t) => {
+            terrSel.innerHTML += '<option value="' + t.id + '">' + (t.name || t.id) + '</option>';
+          });
+          if (selectedTerritory) terrSel.value = String(selectedTerritory);
+        });
+      };
+
+      api('/api/v1/dictionary/cities').then((cities) => {
+        citySel.innerHTML = '<option value="">?</option>';
+        (cities || []).forEach((c) => {
+          citySel.innerHTML += '<option value="' + c.id + '">' + (c.name || c.id) + '</option>';
+        });
+        if (selectedCity) citySel.value = String(selectedCity);
+        fillTerritories(citySel.value || null);
+        citySel.onchange = () => {
+          terrSel.value = '';
+          fillTerritories(citySel.value || null);
+        };
+      });
+    };
+
     const doAdd = () => {
-      showModal('???????? ???????', `
-        <div class="form-group"><label>???????? / ?????</label><input type="text" id="c_name_client"></div>
-        <div class="form-group"><label>?????</label><input type="text" id="c_city"></div>
-        <div class="form-group"><label>?????</label><input type="text" id="c_address"></div>
-        <div class="form-group"><label>???????</label><input type="text" id="c_phone"></div>
-        <div class="form-group"><label>????? ??????</label><input type="text" id="c_login_agent"></div>
-        <div class="form-group"><label>????? ???????????</label><input type="text" id="c_login_expeditor"></div>
+      showModal('Add customer', `
+        <div class="form-group"><label>Name / Company</label><input type="text" id="c_name_client"></div>
+        <div class="form-group"><label>City</label><select id="c_city_id"></select></div>
+        <div class="form-group"><label>Territory</label><select id="c_territory_id"></select></div>
+        <div class="form-group"><label>Address</label><input type="text" id="c_address"></div>
+        <div class="form-group"><label>Phone</label><input type="text" id="c_phone"></div>
+        <div class="form-group"><label>Agent login</label><input type="text" id="c_login_agent"></div>
+        <div class="form-group"><label>Expeditor login</label><input type="text" id="c_login_expeditor"></div>
       `, () => api('/api/v1/customers', {
         method: 'POST',
         body: JSON.stringify({
           name_client: document.getElementById('c_name_client').value.trim() || null,
-          city: document.getElementById('c_city').value.trim() || null,
+          city_id: parseInt(document.getElementById('c_city_id').value, 10) || null,
+          territory_id: parseInt(document.getElementById('c_territory_id').value, 10) || null,
           address: document.getElementById('c_address').value.trim() || null,
           phone: document.getElementById('c_phone').value.trim() || null,
           login_agent: document.getElementById('c_login_agent').value.trim() || null,
           login_expeditor: document.getElementById('c_login_expeditor').value.trim() || null,
         }),
       }).then(() => refreshFn()));
+      setTimeout(() => loadCityTerritorySelectors('c_city_id', 'c_territory_id', null, null), 0);
     };
 
     const doEdit = (id, row) => {
-      showModal('???????? ???????', `
-        <div class="form-group"><label>????????</label><input type="text" id="ce_name" value="' + (row.name_client || '').replace(/"/g, '&quot;') + '"></div>
-        <div class="form-group"><label>?????</label><input type="text" id="ce_city" value="' + (row.city || '') + '"></div>
-        <div class="form-group"><label>???????</label><input type="text" id="ce_phone" value="' + (row.phone || '') + '"></div>
-        <div class="form-group"><label>??????</label><input type="text" id="ce_status" value="' + (row.status || '') + '"></div>
+      showModal('Edit customer', `
+        <div class="form-group"><label>Name</label><input type="text" id="ce_name" value="' + (row.name_client || '').replace(/"/g, '&quot;') + '"></div>
+        <div class="form-group"><label>City</label><select id="ce_city_id"></select></div>
+        <div class="form-group"><label>Territory</label><select id="ce_territory_id"></select></div>
+        <div class="form-group"><label>Phone</label><input type="text" id="ce_phone" value="' + (row.phone || '') + '"></div>
+        <div class="form-group"><label>Status</label><input type="text" id="ce_status" value="' + (row.status || '') + '"></div>
       `, () => api('/api/v1/customers/' + id, {
         method: 'PATCH',
         body: JSON.stringify({
           name_client: document.getElementById('ce_name').value.trim() || undefined,
-          city: document.getElementById('ce_city').value.trim() || undefined,
+          city_id: parseInt(document.getElementById('ce_city_id').value, 10) || null,
+          territory_id: parseInt(document.getElementById('ce_territory_id').value, 10) || null,
           phone: document.getElementById('ce_phone').value.trim() || undefined,
           status: document.getElementById('ce_status').value.trim() || undefined,
         }),
       }).then(() => refreshFn()));
+      setTimeout(() => loadCityTerritorySelectors('ce_city_id', 'ce_territory_id', row.city_id, row.territory_id), 0);
     };
 
-    refreshFn = section('???????', '???????? ???????', true, () => {
+    refreshFn = section('Customers', 'Add customer', true, () => {
       const st = listPaginationState.customers;
       return api('/api/v1/customers?limit=' + st.limit + '&offset=' + st.offset);
     }, (payload) => {
@@ -371,12 +410,12 @@
 
       let html = '';
       if (!list.length) {
-        html = '<p>??? ????????.</p>';
+        html = '<p>No customers.</p>';
       } else {
-        html = '<table><thead><tr><th>????????</th><th>?????</th><th>???????</th><th>?????</th><th>??????????</th><th>????????</th></tr></thead><tbody>';
+        html = '<table><thead><tr><th>Name</th><th>City</th><th>Territory</th><th>Phone</th><th>Agent</th><th>Expeditor</th><th>Actions</th></tr></thead><tbody>';
         list.forEach((c) => {
-          html += '<tr><td>' + (c.name_client || '') + '</td><td>' + (c.city || '') + '</td><td>' + (c.phone || '') + '</td><td>' + (c.login_agent || '') + '</td><td>' + (c.login_expeditor || '') + '</td><td>';
-          html += '<button type="button" class="btn btn-secondary btn-small" data-edit="' + c.id + '" data-json="' + escape(JSON.stringify(c)) + '">????????</button>';
+          html += '<tr><td>' + (c.name_client || '') + '</td><td>' + (c.city || '') + '</td><td>' + (c.territory || '') + '</td><td>' + (c.phone || '') + '</td><td>' + (c.login_agent || '') + '</td><td>' + (c.login_expeditor || '') + '</td><td>';
+          html += '<button type="button" class="btn btn-secondary btn-small" data-edit="' + c.id + '" data-json="' + escape(JSON.stringify(c)) + '">Edit</button>';
           html += '</td></tr>';
         });
         html += '</tbody></table>';

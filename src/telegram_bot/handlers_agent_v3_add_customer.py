@@ -933,7 +933,7 @@ async def _show_territory_list(update: Update, context: ContextTypes.DEFAULT_TYP
     # Получить список территорий через API
     try:
         logger.info(f"[TERRITORY API] Calling get_territories...")
-        territories = await api.get_territories(session.jwt_token)
+        territories = await api.get_territories(session.jwt_token, city_id=context.user_data.get(f"{PREFIX}city_id"))
         logger.info(f"[TERRITORY API] Got {len(territories)} territories: {territories}")
 
     except SDSApiError as e:
@@ -1017,7 +1017,7 @@ async def select_territory(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     session = await get_session(tg_id)
     if session:
         try:
-            territories = await api.get_territories(session.jwt_token)
+            territories = await api.get_territories(session.jwt_token, city_id=context.user_data.get(f"{PREFIX}city_id"))
             territory = next((t for t in territories if t.get("id") == territory_id), None)
             territory_name = territory.get("name", str(territory_id)) if territory else str(territory_id)
         except Exception as e:

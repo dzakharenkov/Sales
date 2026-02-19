@@ -587,65 +587,130 @@ async def delete_product(
     return {"code": code, "message": "deactivated"}
 
 
-# --- Города (справочник) ---
+# --- Cities (dictionary) ---
 
 @router.get("/cities", response_model=EntityModel | list[EntityModel])
 async def list_cities(
+    active_only: bool = Query(True),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Список городов для выбора в форме клиента."""
     result = await session.execute(
-        text('SELECT id, name, is_active FROM "Sales".cities WHERE is_active = TRUE ORDER BY name')
+        text(
+            '''
+            SELECT id, name,
+                   CASE WHEN EXISTS (
+                       SELECT 1 FROM information_schema.columns
+                       WHERE table_schema = 'Sales' AND table_name = 'cities' AND column_name = 'region'
+                   ) THEN region ELSE NULL END AS region,
+                   COALESCE(is_active, TRUE) AS active
+            FROM "Sales".cities
+            WHERE (:active_only = FALSE OR COALESCE(is_active, TRUE) = TRUE)
+            ORDER BY name
+            '''
+        ),
+        {"active_only": active_only},
     )
     rows = result.fetchall()
-    return [{"id": r[0], "name": r[1], "is_active": r[2]} for r in rows]
+    return [{"id": r[0], "name": r[1], "region": r[2], "active": bool(r[3])} for r in rows]
 
 
 class CityCreate(BaseModel):
     name: str
+    region: str | None = None
 
 
-@router.post("/cities", response_model=EntityModel | list[EntityModel])
+@router.post("/cities", response_model=EntityModel | list[EntityModel], status_code=201)
 async def create_city(
     body: CityCreate,
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Добавить город. Только admin."""
     name = (body.name or "").strip()
     if not name:
-        raise HTTPException(status_code=400, detail="Название города обязательно")
+        raise HTTPException(status_code=400, detail="City name is required")
 
-    result = await session.execute(
-        text('INSERT INTO "Sales".cities (name) VALUES (:name) RETURNING id, name'),
-        {"name": name},
+    has_region = await session.execute(
+        text(
+            '''
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'Sales' AND table_name = 'cities' AND column_name = 'region'
+            LIMIT 1
+            '''
+        )
     )
-    await session.commit()
+    if has_region.first():
+        query = text(
+            '''
+            INSERT INTO "Sales".cities (name, region)
+            VALUES (:name, :region)
+            RETURNING id, name, region, COALESCE(is_active, TRUE)
+            '''
+        )
+        params = {"name": name, "region": body.region}
+    else:
+        query = text(
+            '''
+            INSERT INTO "Sales".cities (name)
+            VALUES (:name)
+            RETURNING id, name, NULL::text, COALESCE(is_active, TRUE)
+            '''
+        )
+        params = {"name": name}
+
+    result = await session.execute(query, params)
     row = result.fetchone()
-    return {"id": row[0], "name": row[1], "message": "created"}
+    await session.commit()
+    return {"id": row[0], "name": row[1], "region": row[2], "active": bool(row[3])}
 
 
-@router.put("/cities/{city_id}")
+@router.put("/cities/{city_id}", response_model=EntityModel | list[EntityModel])
 async def update_city(
     city_id: int,
     body: CityCreate,
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Обновить город. Только admin."""
     name = (body.name or "").strip()
     if not name:
-        raise HTTPException(status_code=400, detail="Название города обязательно")
+        raise HTTPException(status_code=400, detail="City name is required")
 
-    r = await session.execute(
-        text('UPDATE "Sales".cities SET name = :name, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
-        {"id": city_id, "name": name},
+    has_region = await session.execute(
+        text(
+            '''
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'Sales' AND table_name = 'cities' AND column_name = 'region'
+            LIMIT 1
+            '''
+        )
     )
+    if has_region.first():
+        query = text(
+            '''
+            UPDATE "Sales".cities
+            SET name = :name, region = :region, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+            RETURNING id, name, region, COALESCE(is_active, TRUE)
+            '''
+        )
+        params = {"id": city_id, "name": name, "region": body.region}
+    else:
+        query = text(
+            '''
+            UPDATE "Sales".cities
+            SET name = :name, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+            RETURNING id, name, NULL::text, COALESCE(is_active, TRUE)
+            '''
+        )
+        params = {"id": city_id, "name": name}
+
+    result = await session.execute(query, params)
+    row = result.fetchone()
     await session.commit()
-    if r.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Город не найден")
-    return {"id": city_id, "name": name, "message": "updated"}
+    if not row:
+        raise HTTPException(status_code=404, detail="City not found")
+    return {"id": row[0], "name": row[1], "region": row[2], "active": bool(row[3])}
 
 
 @router.delete("/cities/{city_id}")
@@ -654,54 +719,108 @@ async def delete_city(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Удалить город (логическое удаление). Только admin."""
-    r = await session.execute(
-        text('UPDATE "Sales".cities SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
+    result = await session.execute(
+        text(
+            '''
+            UPDATE "Sales".cities
+            SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+            '''
+        ),
         {"id": city_id},
     )
     await session.commit()
-    if r.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Город не найден")
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="City not found")
     return {"id": city_id, "message": "deleted"}
 
 
-# --- Территории (справочник) ---
-
-@router.get("/territories", response_model=EntityModel | list[EntityModel])
-async def list_territories(
+@router.get("/cities/{city_id}/territories", response_model=EntityModel | list[EntityModel])
+async def list_territories_by_city(
+    city_id: int,
+    active_only: bool = Query(True),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Список территорий для выбора в форме клиента."""
+    city = await session.execute(text('SELECT id FROM "Sales".cities WHERE id = :id'), {"id": city_id})
+    if not city.first():
+        raise HTTPException(status_code=404, detail="City not found")
+
     result = await session.execute(
-        text('SELECT id, name, is_active FROM "Sales".territories WHERE is_active = TRUE ORDER BY name')
+        text(
+            '''
+            SELECT id, name, city_id, COALESCE(is_active, TRUE) AS active
+            FROM "Sales".territories
+            WHERE city_id = :city_id
+              AND (:active_only = FALSE OR COALESCE(is_active, TRUE) = TRUE)
+            ORDER BY name
+            '''
+        ),
+        {"city_id": city_id, "active_only": active_only},
     )
     rows = result.fetchall()
-    return [{"id": r[0], "name": r[1], "is_active": r[2]} for r in rows]
+    return [{"id": r[0], "name": r[1], "city_id": r[2], "active": bool(r[3])} for r in rows]
 
 
 class TerritoryCreate(BaseModel):
     name: str
+    city_id: int | None = None
 
 
-@router.post("/territories", response_model=EntityModel | list[EntityModel])
+@router.get("/territories", response_model=EntityModel | list[EntityModel])
+async def list_territories(
+    city_id: int | None = Query(None),
+    active_only: bool = Query(True),
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    result = await session.execute(
+        text(
+            '''
+            SELECT id, name, city_id, COALESCE(is_active, TRUE) AS active
+            FROM "Sales".territories
+            WHERE (:city_id IS NULL OR city_id = :city_id)
+              AND (:active_only = FALSE OR COALESCE(is_active, TRUE) = TRUE)
+            ORDER BY name
+            '''
+        ),
+        {"city_id": city_id, "active_only": active_only},
+    )
+    rows = result.fetchall()
+    return [{"id": r[0], "name": r[1], "city_id": r[2], "active": bool(r[3])} for r in rows]
+
+
+@router.post("/territories", response_model=EntityModel | list[EntityModel], status_code=201)
 async def create_territory(
     body: TerritoryCreate,
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Добавить территорию. Только admin."""
     name = (body.name or "").strip()
     if not name:
-        raise HTTPException(status_code=400, detail="Название территории обязательно")
+        raise HTTPException(status_code=400, detail="Territory name is required")
+
+    if body.city_id is not None:
+        city = await session.execute(
+            text('SELECT id FROM "Sales".cities WHERE id = :id AND COALESCE(is_active, TRUE) = TRUE'),
+            {"id": body.city_id},
+        )
+        if not city.first():
+            raise HTTPException(status_code=400, detail="city_id is invalid")
 
     result = await session.execute(
-        text('INSERT INTO "Sales".territories (name) VALUES (:name) RETURNING id, name'),
-        {"name": name},
+        text(
+            '''
+            INSERT INTO "Sales".territories (name, city_id)
+            VALUES (:name, :city_id)
+            RETURNING id, name, city_id, COALESCE(is_active, TRUE)
+            '''
+        ),
+        {"name": name, "city_id": body.city_id},
     )
-    await session.commit()
     row = result.fetchone()
-    return {"id": row[0], "name": row[1], "message": "created"}
+    await session.commit()
+    return {"id": row[0], "name": row[1], "city_id": row[2], "active": bool(row[3])}
 
 
 @router.put("/territories/{territory_id}")
@@ -711,19 +830,34 @@ async def update_territory(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Обновить территорию. Только admin."""
     name = (body.name or "").strip()
     if not name:
-        raise HTTPException(status_code=400, detail="Название территории обязательно")
+        raise HTTPException(status_code=400, detail="Territory name is required")
 
-    r = await session.execute(
-        text('UPDATE "Sales".territories SET name = :name, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
-        {"id": territory_id, "name": name},
+    if body.city_id is not None:
+        city = await session.execute(
+            text('SELECT id FROM "Sales".cities WHERE id = :id AND COALESCE(is_active, TRUE) = TRUE'),
+            {"id": body.city_id},
+        )
+        if not city.first():
+            raise HTTPException(status_code=400, detail="city_id is invalid")
+
+    result = await session.execute(
+        text(
+            '''
+            UPDATE "Sales".territories
+            SET name = :name, city_id = :city_id, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+            RETURNING id, name, city_id, COALESCE(is_active, TRUE)
+            '''
+        ),
+        {"id": territory_id, "name": name, "city_id": body.city_id},
     )
+    row = result.fetchone()
     await session.commit()
-    if r.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Территория не найдена")
-    return {"id": territory_id, "name": name, "message": "updated"}
+    if not row:
+        raise HTTPException(status_code=404, detail="Territory not found")
+    return {"id": row[0], "name": row[1], "city_id": row[2], "active": bool(row[3])}
 
 
 @router.delete("/territories/{territory_id}")
@@ -732,12 +866,17 @@ async def delete_territory(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Удалить территорию (логическое удаление). Только admin."""
-    r = await session.execute(
-        text('UPDATE "Sales".territories SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
+    result = await session.execute(
+        text(
+            '''
+            UPDATE "Sales".territories
+            SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+            '''
+        ),
         {"id": territory_id},
     )
     await session.commit()
-    if r.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Территория не найдена")
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Territory not found")
     return {"id": territory_id, "message": "deleted"}

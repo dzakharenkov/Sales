@@ -380,6 +380,7 @@ async def create_customer(
     """Добавить клиента. Admin или Agent."""
     if user.role not in ("admin", "agent"):
         raise HTTPException(status_code=403, detail="Только admin или agent могут создавать клиентов")
+    await _validate_city_territory_refs(session, body.city_id, body.territory_id)
     c = Customer(
         name_client=body.name_client,
         firm_name=body.firm_name,
@@ -449,6 +450,41 @@ class VisitCreateBody(BaseModel):
     status: str = "planned"
     responsible_login: str | None = None
     comment: str | None = None
+
+
+async def _validate_city_territory_refs(
+    session: AsyncSession,
+    city_id: int | None,
+    territory_id: int | None,
+) -> None:
+    if city_id is not None:
+        city_result = await session.execute(
+            text('SELECT id FROM "Sales".cities WHERE id = :id AND COALESCE(is_active, TRUE) = TRUE'),
+            {"id": city_id},
+        )
+        if city_result.first() is None:
+            raise HTTPException(status_code=400, detail="city_id is invalid")
+
+    if territory_id is not None:
+        territory_result = await session.execute(
+            text(
+                """
+                SELECT id, city_id
+                FROM "Sales".territories
+                WHERE id = :id AND COALESCE(is_active, TRUE) = TRUE
+                """
+            ),
+            {"id": territory_id},
+        )
+        territory_row = territory_result.first()
+        if territory_row is None:
+            raise HTTPException(status_code=400, detail="territory_id is invalid")
+        territory_city_id = territory_row[1]
+        if city_id is not None and territory_city_id is not None and int(territory_city_id) != int(city_id):
+            raise HTTPException(
+                status_code=400,
+                detail="territory_id does not belong to city_id",
+            )
 
 
 @router.post("/customers/{customer_id}/visits", response_model=EntityModel | list[EntityModel])
@@ -551,6 +587,12 @@ async def update_customer(
             dump = {k: v for k, v in dump.items() if k in allowed}
     for key, value in dump.items():
         setattr(c, key, value)
+    if "city_id" in dump or "territory_id" in dump:
+        await _validate_city_territory_refs(
+            session,
+            dump.get("city_id", c.city_id),
+            dump.get("territory_id", c.territory_id),
+        )
     await session.commit()
     await session.refresh(c)
     return _customer_to_dict(c)

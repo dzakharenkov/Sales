@@ -203,9 +203,10 @@ class SDSApi:
         """GET /api/v1/dictionary/cities"""
         return await self._request("GET", "/api/v1/dictionary/cities", token=token)
 
-    async def get_territories(self, token: str) -> list:
-        """GET /api/v1/dictionary/territories"""
-        return await self._request("GET", "/api/v1/dictionary/territories", token=token)
+    async def get_territories(self, token: str, city_id: int | None = None) -> list:
+        """GET /api/v1/dictionary/territories (optionally filtered by city)."""
+        params = {"city_id": city_id} if city_id is not None else None
+        return await self._request("GET", "/api/v1/dictionary/territories", token=token, params=params)
 
     async def get_warehouses(self, token: str) -> list:
         """GET /api/v1/dictionary/warehouses"""
