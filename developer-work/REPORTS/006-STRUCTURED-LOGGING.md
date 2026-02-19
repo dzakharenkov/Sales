@@ -1,4 +1,4 @@
-# Task Report: 006 — STRUCTURED-LOGGING
+ï»¿# Task Report: 006 â€” STRUCTURED-LOGGING
 
 **Task ID:** 006
 **Category:** Architecture
@@ -10,7 +10,7 @@
 
 ---
 
-## ? Acceptance Criteria — All Met
+## ? Acceptance Criteria â€” All Met
 
 - [x] Criterion 1: API requests logged with method/path/status/duration/user login
 - [x] Criterion 2: API unhandled errors logged with traceback at ERROR level
@@ -98,9 +98,15 @@ python -m compileall src/core src/telegram_bot/bot.py src/main.py
 
 ---
 
-## ?? Git Commits
+## Git Commits
 
-(To be filled after commit in this task execution block.)
+```text
+commit 2f2e681
+Author: Codex <codex@openai.com>
+Date:   2026-02-19
+
+    [TASK-006] Implement structured logging across API and bot
+```
 
 ---
 
@@ -128,7 +134,7 @@ Enables these tasks:
 ## ?? Next Steps
 
 Task Completed: Ready for code review
-Next Task: 007 — PYDANTIC-RESPONSE-SCHEMAS
+Next Task: 007 â€” PYDANTIC-RESPONSE-SCHEMAS
 Estimated Start: 2026-02-19
 
 ---
@@ -143,3 +149,5 @@ Reviewer Comments:
 [To be filled by reviewer]
 
 Report Generated: 2026-02-19 UTC
+
+
