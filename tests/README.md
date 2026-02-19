@@ -1,59 +1,38 @@
-# Система тестирования интерфейса SDS
+# Test Suite
 
-Автоматизированное тестирование веб-интерфейса «Система управления продажами и дистрибуцией».
+This project uses `pytest` for unit and integration tests.
 
-## Запуск
+## Structure
 
-### Первый запуск — установка зависимостей
+```text
+tests/
+  conftest.py
+  .env.test
+  unit/
+  integration/
+```
+
+## Test database safety
+
+- Integration tests use `tests/.env.test`.
+- `TEST_DATABASE_URL` must point to a database name containing `test`.
+- If the URL is missing, unsafe, or unavailable, integration tests are skipped.
+- Unit tests still run normally.
+
+## Run tests
 
 ```bash
-cd Sales
-pip install playwright
-playwright install chromium
+# All tests
+pytest tests/ -v
+
+# Unit tests
+pytest tests/unit/ -v
+
+# Integration tests
+pytest tests/integration/ -v
+
+# Coverage
+pytest tests/ --cov=src --cov-report=term-missing --cov-report=html
 ```
 
-### Настройка учётных данных
-
-Отредактируйте `test/test_config.py` и укажите логин и пароль для входа:
-
-```python
-LOGIN_USER = "admin"
-LOGIN_PASSWORD = "admin"
-```
-
-### Запуск тестов
-
-**Важно:** перед запуском тестов запустите API-сервер:
-
-```bash
-# В одном терминале
-run_api.bat
-
-# В другом терминале (из корня проекта Sales)
-cd D:\Python\Sales
-python test/test_runner.py
-```
-
-### Просмотр отчёта
-
-- Отчёт создаётся в `test/reports/report_YYYY-MM-DD_HH-MM-SS.html`
-- Откройте файл в браузере
-- Скриншоты встроены в отчёт
-
-## Структура отчёта
-
-- Дата и время выполнения
-- Список всех скриншотов с описанием
-- Результаты проверок (✓ успех, ✗ ошибка)
-- Логи сохраняются в `test/reports/log.txt`
-
-## Структура папок
-
-```
-test/
-├── test_runner.py      # Основной скрипт
-├── test_config.py      # Конфигурация
-├── README.md           # Инструкция
-├── screenshots/        # Скриншоты (создаётся автоматически)
-└── reports/            # HTML-отчёты и log.txt
-```
+Coverage HTML report is generated in `htmlcov/index.html`.
