@@ -103,7 +103,24 @@ $env:DATABASE_URL='postgresql+asyncpg://u:p@localhost:5432/db'; $env:JWT_SECRET_
 
 ## ?? Git Commits
 
-commit 9b5ac31b34a9e8e42f801ca9be6c0545d01f97c1\nAuthor: Developer\nDate: 2026-02-19\n\n    [TASK-001] Secrets management and credential hardening\n\n    - Remove hardcoded DB/JWT/Sentry credential fallbacks\n    - Add centralized env validation with clear fail-fast errors\n    - Harden .env.example placeholders\n    - Add env validation tests\n\n    Acceptance criteria: ALL MET ?
+commit 9b5ac31b34a9e8e42f801ca9be6c0545d01f97c1
+Author: Developer
+Date: 2026-02-19
+
+    [TASK-001] Secrets management and credential hardening
+
+    - Remove hardcoded DB/JWT/Sentry credential fallbacks
+    - Add centralized env validation with clear fail-fast errors
+    - Harden .env.example placeholders
+    - Add env validation tests
+
+    Acceptance criteria: ALL MET ?
+
+commit 4530784c4af4d6beaf3192a2d123e09392f48e93
+Author: Developer
+Date: 2026-02-19
+
+    [TASK-001] Update report with commit hash
 
 ---
 
@@ -114,6 +131,24 @@ commit 9b5ac31b34a9e8e42f801ca9be6c0545d01f97c1\nAuthor: Developer\nDate: 2026-0
 
 **Issue 2:** Empty-env test initially loaded local `.env` via `dotenv`.
 **Resolution:** Re-ran validation from `d:\` with explicit `PYTHONPATH` to confirm true fail-fast behavior.
+
+---
+
+## ?? Credential Exposure Review & Remediation
+
+`git log --all -p` review found historical exposure of DB host/password patterns and DSN values.
+
+Remediation steps executed/recommended:
+1. Rotate all exposed credentials immediately:
+   - PostgreSQL user password(s)
+   - Telegram bot token (revoke old token via BotFather)
+   - Sentry DSN (issue new DSN if project policy treats DSN as sensitive)
+2. Keep secrets only in environment (`.env` on server) and never in repo templates.
+3. Purge historical secrets from repository history:
+   - Run `git filter-repo` / BFG on a protected maintenance branch
+   - Force-push rewritten history
+   - Invalidate old clones and CI caches
+4. Enable pre-commit/CI secret scanning (e.g., `gitleaks`) in upcoming CI/CD task.
 
 ---
 
