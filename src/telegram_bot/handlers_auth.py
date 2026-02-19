@@ -31,7 +31,10 @@ def main_menu_keyboard(role: str) -> InlineKeyboardMarkup:
         buttons.append([InlineKeyboardButton("ðŸ—º ÐœÐ¾Ð¹ Ð¼Ð°Ñ€ÑˆÑ€ÑƒÑ‚", callback_data="exp_orders")])
         buttons.append([InlineKeyboardButton("ðŸ“¦ ÐœÐ¾Ð¸ Ð·Ð°ÐºÐ°Ð·Ñ‹ Ð½Ð° ÑÐµÐ³Ð¾Ð´Ð½Ñ", callback_data="exp_orders_today")])
         buttons.append([InlineKeyboardButton("âœ… Ð’Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð½Ñ‹Ðµ ÑÐµÐ³Ð¾Ð´Ð½Ñ", callback_data="exp_orders_done_today")])
+        buttons.append([InlineKeyboardButton("âš™ï¸ Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ", callback_data="exp_create_operation")])
         buttons.append([InlineKeyboardButton("ðŸ“Š ÐœÐ¾Ð¸ Ð¾ÑÑ‚Ð°Ñ‚ÐºÐ¸", callback_data="exp_my_stock")])
+        buttons.append([InlineKeyboardButton("ðŸ†• Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð²Ð¸Ð·Ð¸Ñ‚", callback_data="agent_create_visit")])
+        buttons.append([InlineKeyboardButton("ðŸ“‹ Ð’Ð¸Ð·Ð¸Ñ‚Ñ‹", callback_data="agent_visits")])
         buttons.append([InlineKeyboardButton("ðŸ’° ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ð¾Ð¿Ð»Ð°Ñ‚Ñƒ", callback_data="exp_payment")])
         buttons.append([InlineKeyboardButton("ðŸ’µ ÐŸÐ¾Ð»ÑƒÑ‡ÐµÐ½Ð½Ð°Ñ Ð¾Ð¿Ð»Ð°Ñ‚Ð°", callback_data="exp_received_payments")])
     elif role_lower == "agent":

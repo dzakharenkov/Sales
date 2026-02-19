@@ -974,6 +974,27 @@ async def cb_exp_my_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cb_exp_create_operation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Entry point for manual expeditor operation flow."""
+    q = update.callback_query
+    await q.answer()
+    session, _ = await _get_auth(update)
+    if not session:
+        return
+    await q.edit_message_text(
+        "⚙️ Создание операции\n\n"
+        "Для экспедитора операции отгрузки формируются во время подтверждения доставки заказа.\n"
+        "Откройте маршрут и выберите заказ для завершения доставки.\n\n"
+        "Используйте кнопки ниже:",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("🗺 Мой маршрут на сегодня", callback_data="exp_orders_today")],
+                [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
+            ]
+        ),
+    )
+
+
 # ---------- Register ----------
 
 def register_expeditor_handlers(app):
@@ -989,6 +1010,7 @@ def register_expeditor_handlers(app):
     app.add_handler(CallbackQueryHandler(cb_exp_delivered, pattern=r"^exp_delivered_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_route, pattern=r"^exp_route_\d{4}-\d{2}-\d{2}$"))
     app.add_handler(CallbackQueryHandler(cb_exp_payment, pattern="^exp_payment$"))
+    app.add_handler(CallbackQueryHandler(cb_exp_create_operation, pattern="^exp_create_operation$"))
     app.add_handler(CallbackQueryHandler(cb_exp_my_stock, pattern="^exp_my_stock$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_order, pattern=r"^exp_pay_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_full, pattern=r"^exp_payfull_\d+$"))
