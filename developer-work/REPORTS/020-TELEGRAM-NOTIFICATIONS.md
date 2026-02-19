@@ -83,7 +83,7 @@ python -m pytest -q
 ## 🔗 Git Commits
 
 ```text
-[to be filled after commit]
+commit 6bb0e51`nAuthor: Developer <dev@company.com>`nDate:   2026-02-20`n`n    020: implement Telegram notifications service and tests
 ```
 
 ---
@@ -125,3 +125,4 @@ Reviewer Comments:
 [To be filled by reviewer]
 
 Report Generated: 2026-02-20 UTC
+
