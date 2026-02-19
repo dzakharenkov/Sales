@@ -4,6 +4,7 @@
 import io
 from datetime import datetime, timezone
 from uuid import UUID
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from openpyxl import Workbook
@@ -77,7 +78,7 @@ class ItemUpdate(BaseModel):
     price: float | None = None
 
 
-@router.get("/orders/statuses")
+@router.get("/orders/statuses", response_model=EntityModel | list[EntityModel])
 async def list_order_statuses(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -88,7 +89,7 @@ async def list_order_statuses(
     return [{"code": r[0], "name": (r[1] or r[0])} for r in rows]
 
 
-@router.get("/orders")
+@router.get("/orders", response_model=EntityModel | list[EntityModel])
 async def list_orders(
     order_no: int | None = Query(None, description="Номер заказа"),
     customer_id: int | None = Query(None, description="ID клиента"),
@@ -233,7 +234,7 @@ ORDERS_ITEMS_EXPORT_HEADERS_RU = [
 ]
 
 
-@router.get("/orders/export")
+@router.get("/orders/export", response_model=None)
 async def export_orders_excel(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
@@ -293,7 +294,7 @@ async def export_orders_excel(
     )
 
 
-@router.get("/orders/items")
+@router.get("/orders/items", response_model=EntityModel | list[EntityModel])
 async def list_order_items(
     customer_id: int | None = Query(None, description="ID клиента"),
     customer_name: str | None = Query(None, description="Поиск по названию клиента или фирмы"),
@@ -441,7 +442,7 @@ async def list_order_items(
     }
 
 
-@router.get("/orders/items/export")
+@router.get("/orders/items/export", response_model=None)
 async def export_order_items_excel(
     customer_id: int | None = Query(None, description="ID клиента"),
     customer_name: str | None = Query(None, description="Поиск по названию клиента или фирмы"),
@@ -542,7 +543,7 @@ async def export_order_items_excel(
     )
 
 
-@router.post("/orders")
+@router.post("/orders", response_model=EntityModel | list[EntityModel])
 async def create_order(
     body: OrderCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -585,7 +586,7 @@ async def create_order(
         raise HTTPException(status_code=500, detail="Ошибка при создании заказа: " + msg)
 
 
-@router.get("/orders/{order_id}")
+@router.get("/orders/{order_id}", response_model=EntityModel | list[EntityModel])
 async def get_order(
     order_id: int,
     session: AsyncSession = Depends(get_db_session),
@@ -717,7 +718,7 @@ async def update_order(
     return {"id": order.order_no, "message": "updated"}
 
 
-@router.post("/orders/{order_id}/items")
+@router.post("/orders/{order_id}/items", response_model=EntityModel | list[EntityModel])
 async def add_order_item(
     order_id: int,
     body: ItemCreate,

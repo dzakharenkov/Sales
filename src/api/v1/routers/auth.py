@@ -5,6 +5,7 @@
 """
 import os
 
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -67,7 +68,7 @@ async def me(user: User = Depends(get_current_user)):
     return UserResponse(login=user.login, fio=user.fio or "", role=user.role or "")
 
 
-@router.get("/config")
+@router.get("/config", response_model=EntityModel | list[EntityModel])
 async def get_config(_: User = Depends(get_current_user)):
     """Конфигурация для фронта (ключи и т.п.). Только для авторизованных."""
     return {

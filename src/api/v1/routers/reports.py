@@ -3,6 +3,7 @@
 """
 import io
 from datetime import date
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from openpyxl import Workbook
@@ -73,7 +74,7 @@ def _iso_to_date(s: str | None) -> date | None:
         return None
 
 
-@router.get("/customers")
+@router.get("/customers", response_model=EntityModel | list[EntityModel])
 async def report_customers(
     status: str | None = Query(None),
     agent_login: str | None = Query(None),
@@ -142,7 +143,7 @@ async def report_customers(
         return {"total": 0, "data": [], "error": str(e)[:200]}
 
 
-@router.get("/customers/export")
+@router.get("/customers/export", response_model=None)
 async def report_customers_export(
     status: str | None = Query(None),
     agent_login: str | None = Query(None),
@@ -192,7 +193,7 @@ async def report_customers_export(
     )
 
 
-@router.get("/agents")
+@router.get("/agents", response_model=EntityModel | list[EntityModel])
 async def report_agents(
     month: str | None = Query(None),
     date_from: str | None = Query(None),
@@ -263,7 +264,7 @@ async def report_agents(
         return {"data": [], "error": str(e)[:200]}
 
 
-@router.get("/agents/export")
+@router.get("/agents/export", response_model=None)
 async def report_agents_export(
     month: str | None = Query(None),
     date_from: str | None = Query(None),
@@ -309,7 +310,7 @@ async def report_agents_export(
     )
 
 
-@router.get("/expeditors")
+@router.get("/expeditors", response_model=EntityModel | list[EntityModel])
 async def report_expeditors(
     month: str | None = Query(None),
     date_from: str | None = Query(None),
@@ -373,7 +374,7 @@ async def report_expeditors(
         return {"data": [], "error": str(e)[:200]}
 
 
-@router.get("/expeditors/export")
+@router.get("/expeditors/export", response_model=None)
 async def report_expeditors_export(
     month: str | None = Query(None),
     date_from: str | None = Query(None),
@@ -416,7 +417,7 @@ async def report_expeditors_export(
     )
 
 
-@router.get("/visits")
+@router.get("/visits", response_model=EntityModel | list[EntityModel])
 async def report_visits(
     from_date: str | None = Query(None),
     to_date: str | None = Query(None),
@@ -465,7 +466,7 @@ async def report_visits(
         return {"summary": {}, "by_date": [], "error": str(e)[:200]}
 
 
-@router.get("/visits/export")
+@router.get("/visits/export", response_model=None)
 async def report_visits_export(
     from_date: str | None = Query(None),
     to_date: str | None = Query(None),
@@ -512,7 +513,7 @@ async def report_visits_export(
     )
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=EntityModel | list[EntityModel])
 async def report_dashboard(
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
@@ -675,7 +676,7 @@ async def report_dashboard(
         return {"total_orders_sum": 0, "by_category": [], "by_territory": [], "error": str(e)[:300]}
 
 
-@router.get("/dashboard/export")
+@router.get("/dashboard/export", response_model=None)
 async def report_dashboard_export(
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
@@ -729,7 +730,7 @@ async def report_dashboard_export(
     )
 
 
-@router.get("/photos")
+@router.get("/photos", response_model=EntityModel | list[EntityModel])
 async def report_photos(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -846,7 +847,7 @@ async def report_photos(
         return {"statistics": {}, "all_photos": [], "by_customer": [], "customers_without_photos": [], "error": str(e)[:200]}
 
 
-@router.get("/photos/export")
+@router.get("/photos/export", response_model=None)
 async def report_photos_export(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),

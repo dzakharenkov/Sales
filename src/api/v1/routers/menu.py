@@ -1,5 +1,6 @@
 """Menu by role: GET /menu, GET/POST /admin/roles/{role}/menu-access."""
 from typing import List
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -12,7 +13,7 @@ router = APIRouter()
 ALLOWED_ROLES = ("admin", "agent", "expeditor", "stockman", "paymaster")
 ALLOWED_ACCESS = ("none", "view", "full")
 
-@router.get("/menu")
+@router.get("/menu", response_model=EntityModel | list[EntityModel])
 async def get_menu(session: AsyncSession = Depends(get_db_session), user: User = Depends(get_current_user)):
     role = (user.role or "").strip().lower() or "agent"
     q = text("""SELECT mi.id, mi.code, mi.label, mi.icon, mi.url, mi.sort_order, rma.access_level
@@ -24,7 +25,7 @@ async def get_menu(session: AsyncSession = Depends(get_db_session), user: User =
     menu = [{"id": r[0], "code": r[1], "label": r[2], "icon": r[3] or "", "url": r[4] or r[1], "sort_order": r[5] or 0, "access_level": r[6] or "view"} for r in rows]
     return {"menu": menu}
 
-@router.get("/admin/roles/{role}/menu-access")
+@router.get("/admin/roles/{role}/menu-access", response_model=EntityModel | list[EntityModel])
 async def get_role_menu_access(role: str, session: AsyncSession = Depends(get_db_session), _: User = Depends(require_admin)):
     role_lower = role.strip().lower()
     if role_lower not in ALLOWED_ROLES:
@@ -44,7 +45,7 @@ class MenuAccessItem(BaseModel):
 class RoleMenuAccessBody(BaseModel):
     menu_access: List[MenuAccessItem]
 
-@router.post("/admin/roles/{role}/menu-access")
+@router.post("/admin/roles/{role}/menu-access", response_model=EntityModel | list[EntityModel])
 async def save_role_menu_access(role: str, body: RoleMenuAccessBody, session: AsyncSession = Depends(get_db_session), _: User = Depends(require_admin)):
     role_lower = role.strip().lower()
     if role_lower not in ALLOWED_ROLES:

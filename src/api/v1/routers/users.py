@@ -4,6 +4,7 @@
 """
 import re
 import logging
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
@@ -126,7 +127,7 @@ class UserSetPassword(BaseModel):
     password: str
 
 
-@router.get("/users")
+@router.get("/users", response_model=EntityModel | list[EntityModel])
 async def list_users(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
@@ -150,7 +151,7 @@ async def list_users(
     ]
 
 
-@router.post("/users")
+@router.post("/users", response_model=EntityModel | list[EntityModel])
 async def create_user(
     body: UserCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -212,7 +213,7 @@ async def update_user(
     return {"login": target.login, "message": "updated"}
 
 
-@router.post("/users/{login}/set-password")
+@router.post("/users/{login}/set-password", response_model=EntityModel | list[EntityModel])
 async def set_password(
     login: str,
     body: UserSetPassword,

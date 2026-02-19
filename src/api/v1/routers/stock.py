@@ -1,6 +1,7 @@
 """
 Остатки по складам (warehouse_stock). Таблица создаётся миграцией 002.
 """
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,7 @@ from src.database.models import User
 router = APIRouter()
 
 
-@router.get("/stock")
+@router.get("/stock", response_model=EntityModel | list[EntityModel])
 async def get_stock(
     warehouse_code: str = Query(..., description="Код склада (например w_main)"),
     session: AsyncSession = Depends(get_db_session),

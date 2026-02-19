@@ -1,6 +1,7 @@
 """
 Справочники: товары (CRUD), типы продукции, склады, типы оплат, валюта.
 """
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -13,7 +14,7 @@ from src.core.deps import get_current_user, require_admin
 router = APIRouter()
 
 
-@router.get("/user-logins")
+@router.get("/user-logins", response_model=EntityModel | list[EntityModel])
 async def list_user_logins(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -26,7 +27,7 @@ async def list_user_logins(
 
 # --- Товары: чтение (доступно авторизованным) ---
 
-@router.get("/products")
+@router.get("/products", response_model=EntityModel | list[EntityModel])
 async def list_products(
     type_id: str | None = Query(None, description="Тип: Yogurt, Tvorog, Tara"),
     session: AsyncSession = Depends(get_db_session),
@@ -63,7 +64,7 @@ async def list_products(
     ]
 
 
-@router.get("/products/next-code")
+@router.get("/products/next-code", response_model=EntityModel | list[EntityModel])
 async def get_next_product_code(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -76,7 +77,7 @@ async def get_next_product_code(
     return {"next_code": str(next_num)}
 
 
-@router.get("/products/types")
+@router.get("/products/types", response_model=EntityModel | list[EntityModel])
 async def list_product_types(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -96,7 +97,7 @@ class ProductTypeUpdate(BaseModel):
     description: str | None = None
 
 
-@router.post("/products/types")
+@router.post("/products/types", response_model=EntityModel | list[EntityModel])
 async def create_product_type(
     body: ProductTypeCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -152,7 +153,7 @@ async def delete_product_type(
     return {"name": name, "message": "deleted"}
 
 
-@router.get("/payment-types")
+@router.get("/payment-types", response_model=EntityModel | list[EntityModel])
 async def list_payment_types(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -174,7 +175,7 @@ class PaymentTypeUpdate(BaseModel):
     description: str | None = None
 
 
-@router.post("/payment-types")
+@router.post("/payment-types", response_model=EntityModel | list[EntityModel])
 async def create_payment_type(
     body: PaymentTypeCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -231,7 +232,7 @@ async def delete_payment_type(
 # --- Валюта ---
 
 
-@router.get("/currencies")
+@router.get("/currencies", response_model=EntityModel | list[EntityModel])
 async def list_currencies(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -266,7 +267,7 @@ class CurrencyUpdate(BaseModel):
     is_default: bool | None = None
 
 
-@router.post("/currencies")
+@router.post("/currencies", response_model=EntityModel | list[EntityModel])
 async def create_currency(
     body: CurrencyCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -340,7 +341,7 @@ async def delete_currency(
     return {"code": code, "message": "deleted"}
 
 
-@router.get("/warehouses")
+@router.get("/warehouses", response_model=EntityModel | list[EntityModel])
 async def list_warehouses(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -403,7 +404,7 @@ async def _check_user_logins(
             )
 
 
-@router.post("/warehouses")
+@router.post("/warehouses", response_model=EntityModel | list[EntityModel])
 async def create_warehouse(
     body: WarehouseCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -498,7 +499,7 @@ class ProductUpdate(BaseModel):
     currency_code: str | None = None
 
 
-@router.post("/products")
+@router.post("/products", response_model=EntityModel | list[EntityModel])
 async def create_product(
     body: ProductCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -588,7 +589,7 @@ async def delete_product(
 
 # --- Города (справочник) ---
 
-@router.get("/cities")
+@router.get("/cities", response_model=EntityModel | list[EntityModel])
 async def list_cities(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -605,7 +606,7 @@ class CityCreate(BaseModel):
     name: str
 
 
-@router.post("/cities")
+@router.post("/cities", response_model=EntityModel | list[EntityModel])
 async def create_city(
     body: CityCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -666,7 +667,7 @@ async def delete_city(
 
 # --- Территории (справочник) ---
 
-@router.get("/territories")
+@router.get("/territories", response_model=EntityModel | list[EntityModel])
 async def list_territories(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -683,7 +684,7 @@ class TerritoryCreate(BaseModel):
     name: str
 
 
-@router.post("/territories")
+@router.post("/territories", response_model=EntityModel | list[EntityModel])
 async def create_territory(
     body: TerritoryCreate,
     session: AsyncSession = Depends(get_db_session),

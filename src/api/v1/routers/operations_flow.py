@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
@@ -243,7 +244,7 @@ async def generate_op_number(session: AsyncSession) -> str:
 
 # ─── POST /operations/warehouse_receipt (ТЗ-ALG-001) ───────────────────────
 
-@router.post("/operations/warehouse_receipt", status_code=201)
+@router.post("/operations/warehouse_receipt", status_code=201, response_model=EntityModel | list[EntityModel])
 async def post_warehouse_receipt(
     dt: WarehouseReceiptDT,
     session: AsyncSession = Depends(get_db_session),
@@ -293,7 +294,7 @@ async def post_warehouse_receipt(
 
 # ─── POST /operations/allocation (ТЗ-ALG-002) ──────────────────────────────
 
-@router.post("/operations/allocation", status_code=201)
+@router.post("/operations/allocation", status_code=201, response_model=EntityModel | list[EntityModel])
 async def post_allocation(
     dt: AllocationDT,
     session: AsyncSession = Depends(get_db_session),
@@ -369,7 +370,7 @@ async def post_allocation(
 
 # ─── POST /operations/delivery (ТЗ-ALG-003) ────────────────────────────────
 
-@router.post("/operations/delivery", status_code=201)
+@router.post("/operations/delivery", status_code=201, response_model=EntityModel | list[EntityModel])
 async def post_delivery(
     dt: DeliveryDT,
     session: AsyncSession = Depends(get_db_session),
@@ -460,7 +461,7 @@ async def post_delivery(
 
 # ─── POST /operations/write_off ──────────────────────────────────────────────
 
-@router.post("/operations/write_off", status_code=201)
+@router.post("/operations/write_off", status_code=201, response_model=EntityModel | list[EntityModel])
 async def post_write_off(
     dt: WriteOffDT,
     session: AsyncSession = Depends(get_db_session),
@@ -535,7 +536,7 @@ async def post_write_off(
 
 # ─── POST /operations/transfer (перемещение между складами) ────────────────
 
-@router.post("/operations/transfer", status_code=201)
+@router.post("/operations/transfer", status_code=201, response_model=EntityModel | list[EntityModel])
 async def post_transfer(
     dt: TransferDT,
     session: AsyncSession = Depends(get_db_session),
@@ -613,7 +614,7 @@ async def post_transfer(
 
 # ─── POST /operations/cash_receipt (ТЗ-ALG-004) ────────────────────────────
 
-@router.post("/operations/cash_receipt", status_code=201)
+@router.post("/operations/cash_receipt", status_code=201, response_model=EntityModel | list[EntityModel])
 async def post_cash_receipt(
     dt: CashReceiptDT,
     session: AsyncSession = Depends(get_db_session),
@@ -684,7 +685,7 @@ async def post_cash_receipt(
 
 # ─── POST /operations/return_from_customer (ТЗ-ALG-005) ────────────────────
 
-@router.post("/operations/return_from_customer", status_code=201)
+@router.post("/operations/return_from_customer", status_code=201, response_model=EntityModel | list[EntityModel])
 async def post_return_from_customer(
     dt: ReturnFromCustomerDT,
     session: AsyncSession = Depends(get_db_session),
@@ -778,7 +779,7 @@ async def post_return_from_customer(
 
 # ─── POST /operations/cash_return (ТЗ-ALG-006) ────────────────────────────
 
-@router.post("/operations/cash_return", status_code=201)
+@router.post("/operations/cash_return", status_code=201, response_model=EntityModel | list[EntityModel])
 async def post_cash_return(
     dt: CashReturnDT,
     session: AsyncSession = Depends(get_db_session),

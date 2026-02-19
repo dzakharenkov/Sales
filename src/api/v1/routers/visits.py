@@ -3,6 +3,7 @@
 """
 import io
 from datetime import date, datetime, time
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -39,7 +40,7 @@ class VisitUpdate(BaseModel):
     comment: str | None = None
 
 
-@router.post("/visits")
+@router.post("/visits", response_model=EntityModel | list[EntityModel])
 async def create_visit(
     body: VisitCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -79,7 +80,7 @@ async def create_visit(
     return {"id": visit.id, "message": "created"}
 
 
-@router.get("/visits/search")
+@router.get("/visits/search", response_model=EntityModel | list[EntityModel])
 async def search_visits(
     customer_id: int | None = Query(None),
     customer_name: str | None = Query(None),
@@ -169,7 +170,7 @@ async def search_visits(
     return {"total": total, "data": data}
 
 
-@router.get("/visits/export")
+@router.get("/visits/export", response_model=None)
 async def export_visits_excel(
     customer_id: int | None = Query(None),
     customer_name: str | None = Query(None),
@@ -240,7 +241,7 @@ async def export_visits_excel(
     )
 
 
-@router.get("/visits/calendar")
+@router.get("/visits/calendar", response_model=EntityModel | list[EntityModel])
 async def visits_calendar(
     year: int = Query(..., ge=2020, le=2030),
     month: int = Query(..., ge=1, le=12),
@@ -283,7 +284,7 @@ async def visits_calendar(
     return {"events": events}
 
 
-@router.get("/visits/{visit_id}")
+@router.get("/visits/{visit_id}", response_model=EntityModel | list[EntityModel])
 async def get_visit(
     visit_id: int,
     session: AsyncSession = Depends(get_db_session),

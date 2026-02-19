@@ -9,6 +9,7 @@ import io
 from datetime import datetime, timezone, date
 from uuid import UUID
 
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -72,7 +73,7 @@ class CashReceiptManualBody(BaseModel):
     comment: str | None = None
 
 
-@router.get("/pending-handovers")
+@router.get("/pending-handovers", response_model=EntityModel | list[EntityModel])
 async def get_pending_handovers(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -103,7 +104,7 @@ async def get_pending_handovers(
         return {"success": False, "error": str(e)[:200], "data": []}
 
 
-@router.post("/accept-handover")
+@router.post("/accept-handover", response_model=EntityModel | list[EntityModel])
 async def accept_handover(
     body: AcceptHandoverBody,
     session: AsyncSession = Depends(get_db_session),
@@ -162,7 +163,7 @@ async def accept_handover(
     }
 
 
-@router.post("/cash-receipt-manual")
+@router.post("/cash-receipt-manual", response_model=EntityModel | list[EntityModel])
 async def create_cash_receipt_manual(
     body: CashReceiptManualBody,
     session: AsyncSession = Depends(get_db_session),
@@ -207,7 +208,7 @@ async def create_cash_receipt_manual(
     }
 
 
-@router.get("/cash-received")
+@router.get("/cash-received", response_model=EntityModel | list[EntityModel])
 async def get_cash_received(
     date_from: str | None = Query(None, description="Дата с (YYYY-MM-DD)"),
     date_to: str | None = Query(None, description="Дата по (YYYY-MM-DD)"),
@@ -254,7 +255,7 @@ async def get_cash_received(
         return {"success": False, "error": str(e)[:200], "data": [], "total_amount": 0}
 
 
-@router.get("/cash-received/export")
+@router.get("/cash-received/export", response_model=None)
 async def export_cash_received_excel(
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
@@ -308,7 +309,7 @@ async def export_cash_received_excel(
     )
 
 
-@router.get("/orders-for-confirmation/export")
+@router.get("/orders-for-confirmation/export", response_model=None)
 async def export_orders_for_confirmation_excel(
     payment_type_code: str | None = Query(None),
     status_code: str | None = Query(None),
@@ -398,7 +399,7 @@ async def export_orders_for_confirmation_excel(
     )
 
 
-@router.get("/orders-for-confirmation")
+@router.get("/orders-for-confirmation", response_model=EntityModel | list[EntityModel])
 async def get_orders_for_cashier_confirmation(
     payment_type_code: str | None = Query(None, description="Фильтр по типу оплаты"),
     status_code: str | None = Query(None, description="Фильтр по статусу заказа"),
@@ -494,7 +495,7 @@ async def get_orders_for_cashier_confirmation(
         return {"success": False, "error": str(e)[:200], "data": []}
 
 
-@router.get("/ledger")
+@router.get("/ledger", response_model=EntityModel | list[EntityModel])
 async def get_financial_ledger(
     date_from: str | None = Query(None, description="Дата с (YYYY-MM-DD)"),
     date_to: str | None = Query(None, description="Дата по (YYYY-MM-DD)"),

@@ -4,6 +4,7 @@ GET /warehouse/stock — остатки по VIEW v_warehouse_stock (ТЗ) + с�
 from datetime import date, datetime, timezone
 import io
 
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
@@ -149,7 +150,7 @@ async def _fetch_stock_with_expiry(
     return data
 
 
-@router.get("/stock")
+@router.get("/stock", response_model=EntityModel | list[EntityModel])
 async def get_warehouse_stock(
     warehouse: str | None = Query(None, description="Код склада (например w_main)"),
     product: str | None = Query(None, description="Код товара"),
@@ -173,7 +174,7 @@ async def get_warehouse_stock(
         return {"success": False, "error": str(e)[:200], "data": []}
 
 
-@router.get("/stock/export")
+@router.get("/stock/export", response_model=None)
 async def export_warehouse_stock_excel(
     warehouse: str | None = Query(None, description="Код склада (например w_main)"),
     product: str | None = Query(None, description="Код товара"),

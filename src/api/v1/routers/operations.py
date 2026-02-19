@@ -4,6 +4,7 @@
 import io
 from datetime import date, datetime, timezone
 from uuid import UUID
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from openpyxl import Workbook
@@ -39,7 +40,7 @@ def _parse_delivery_date_input(raw: str) -> date:
     )
 
 
-@router.get("/operations/allocation/suggest-by-delivery-date")
+@router.get("/operations/allocation/suggest-by-delivery-date", response_model=EntityModel | list[EntityModel])
 async def suggest_allocation_items_by_delivery_date(
     warehouse_from: str = Query(..., description="Код склада от"),
     expeditor_login: str = Query(..., description="Логин экспедитора"),
@@ -237,7 +238,7 @@ async def suggest_allocation_items_by_delivery_date(
     }
 
 
-@router.get("/operation-types")
+@router.get("/operation-types", response_model=EntityModel | list[EntityModel])
 async def list_operation_types(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -277,7 +278,7 @@ class OperationTypeUpdate(BaseModel):
     active: bool | None = None
 
 
-@router.post("/operation-types")
+@router.post("/operation-types", response_model=EntityModel | list[EntityModel])
 async def create_operation_type(
     body: OperationTypeCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -337,7 +338,7 @@ async def delete_operation_type(
     return {"code": code, "message": "deleted"}
 
 
-@router.get("/operations")
+@router.get("/operations", response_model=EntityModel | list[EntityModel])
 async def list_operations(
     type_code: str | None = Query(None),
     customer_id: int | None = Query(None),
@@ -480,7 +481,7 @@ OPERATIONS_EXPORT_HEADERS_RU = [
 ]
 
 
-@router.get("/operations/export")
+@router.get("/operations/export", response_model=None)
 async def export_operations_excel(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
@@ -534,7 +535,7 @@ async def export_operations_excel(
     )
 
 
-@router.get("/operations/{operation_id}")
+@router.get("/operations/{operation_id}", response_model=EntityModel | list[EntityModel])
 async def get_operation(
     operation_id: UUID,
     session: AsyncSession = Depends(get_db_session),
@@ -644,7 +645,7 @@ async def update_operation(
     return {"id": str(op.id), "operation_number": op.operation_number, "message": "updated"}
 
 
-@router.post("/operations")
+@router.post("/operations", response_model=EntityModel | list[EntityModel])
 async def create_operation(
     body: OperationCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -706,7 +707,7 @@ async def create_operation(
 logger = logging.getLogger(__name__)
 
 
-@router.get("/operations/{operation_type}/form-config")
+@router.get("/operations/{operation_type}/form-config", response_model=EntityModel | list[EntityModel])
 async def get_operation_form_config(
     operation_type: str,
     session: AsyncSession = Depends(get_db_session),
@@ -784,7 +785,7 @@ class OperationCreateFromConfig(BaseModel):
     related_operation_id: str | None = None
 
 
-@router.post("/operations/{operation_type}/create")
+@router.post("/operations/{operation_type}/create", response_model=EntityModel | list[EntityModel])
 async def create_operation_from_config(
     operation_type: str,
     body: OperationCreateFromConfig,
@@ -1056,7 +1057,7 @@ class WarehouseReceiptBatchCreate(BaseModel):
     comment: str | None = None
 
 
-@router.post("/operations/warehouse_receipt/create-batch")
+@router.post("/operations/warehouse_receipt/create-batch", response_model=EntityModel | list[EntityModel])
 async def create_warehouse_receipt_batch(
     body: WarehouseReceiptBatchCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -1199,7 +1200,7 @@ class AllocationCreate(BaseModel):
     comment: str | None = None
 
 
-@router.post("/operations/allocation")
+@router.post("/operations/allocation", response_model=EntityModel | list[EntityModel])
 async def create_allocation_operation(
     body: AllocationCreate,
     session: AsyncSession = Depends(get_db_session),

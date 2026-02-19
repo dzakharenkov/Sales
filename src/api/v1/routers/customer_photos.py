@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -110,7 +111,7 @@ def _auto_description(customer_id: int, filename: str) -> str:
     return f"Клиент {customer_id}"
 
 
-@router.post("/customers/{customer_id}/photos")
+@router.post("/customers/{customer_id}/photos", response_model=EntityModel | list[EntityModel])
 async def upload_photo(
     customer_id: int,
     file: UploadFile = File(...),
@@ -167,7 +168,7 @@ async def upload_photo(
         raise HTTPException(status_code=500, detail=str(e)[:200])
 
 
-@router.get("/customers/{customer_id}/photos")
+@router.get("/customers/{customer_id}/photos", response_model=EntityModel | list[EntityModel])
 async def list_customer_photos(
     customer_id: int,
     limit: int = Query(20, le=100),
@@ -203,7 +204,7 @@ async def list_customer_photos(
         return {"total": 0, "limit": limit, "offset": offset, "main_photo_id": None, "data": []}
 
 
-@router.get("/photos/{photo_id}")
+@router.get("/photos/{photo_id}", response_model=EntityModel | list[EntityModel])
 async def get_photo(
     photo_id: int,
     session: AsyncSession = Depends(get_db_session),
@@ -232,7 +233,7 @@ def _resolve_photo_path(photo_path: str) -> Path:
     return path
 
 
-@router.get("/photos/download/{download_token}")
+@router.get("/photos/download/{download_token}", response_model=None)
 async def download_photo(
     download_token: str,
     session: AsyncSession = Depends(get_db_session),
@@ -248,7 +249,7 @@ async def download_photo(
     return FileResponse(path, media_type=photo.mime_type or "image/jpeg", filename=photo.original_filename or f"photo_{photo.id}.jpg")
 
 
-@router.get("/photos/thumbnail/{download_token}")
+@router.get("/photos/thumbnail/{download_token}", response_model=None)
 async def thumbnail_photo(
     download_token: str,
     session: AsyncSession = Depends(get_db_session),
@@ -316,7 +317,7 @@ async def delete_photo(
     await session.commit()
 
 
-@router.post("/customers/{customer_id}/photos/{photo_id}/set-main")
+@router.post("/customers/{customer_id}/photos/{photo_id}/set-main", response_model=EntityModel | list[EntityModel])
 async def set_main_photo(
     customer_id: int,
     photo_id: int,

@@ -5,6 +5,7 @@ import csv
 import io
 from datetime import date, time
 from decimal import Decimal
+from src.api.v1.schemas.common import EntityModel
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from openpyxl import Workbook
@@ -100,7 +101,7 @@ class CustomerUpdate(BaseModel):
     VAT_code: str | None = None
 
 
-@router.get("/customers")
+@router.get("/customers", response_model=EntityModel | list[EntityModel])
 async def list_customers(
     customer_id: int | None = Query(None, description="ИД клиента (точное совпадение)"),
     search: str | None = Query(
@@ -212,7 +213,7 @@ EXPORT_HEADERS_RU = [
 ]
 
 
-@router.get("/customers/export")
+@router.get("/customers/export", response_model=None)
 async def export_customers_excel(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
@@ -262,7 +263,7 @@ def _parse_float(s: str | None):
         return None
 
 
-@router.post("/customers/import")
+@router.post("/customers/import", response_model=EntityModel | list[EntityModel])
 async def import_customers_csv(
     file: UploadFile = File(..., description="CSV файл (разделитель ;), структура как в выгрузке"),
     session: AsyncSession = Depends(get_db_session),
@@ -361,7 +362,7 @@ async def import_customers_csv(
     return {"message": "Импорт выполнен", "created": created, "updated": updated}
 
 
-@router.post("/customers")
+@router.post("/customers", response_model=EntityModel | list[EntityModel])
 async def create_customer(
     body: CustomerCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -400,7 +401,7 @@ async def create_customer(
     return _customer_to_dict(c)
 
 
-@router.get("/customers/{customer_id}/visits")
+@router.get("/customers/{customer_id}/visits", response_model=EntityModel | list[EntityModel])
 async def list_customer_visits(
     customer_id: int,
     limit: int = Query(100, le=500),
@@ -441,7 +442,7 @@ class VisitCreateBody(BaseModel):
     comment: str | None = None
 
 
-@router.post("/customers/{customer_id}/visits")
+@router.post("/customers/{customer_id}/visits", response_model=EntityModel | list[EntityModel])
 async def create_customer_visit(
     customer_id: int,
     body: VisitCreateBody,
@@ -481,7 +482,7 @@ async def create_customer_visit(
     return {"id": v.id, "visit_date": body.visit_date, "status": v.status, "message": "created"}
 
 
-@router.get("/customers/{customer_id}")
+@router.get("/customers/{customer_id}", response_model=EntityModel | list[EntityModel])
 async def get_customer(
     customer_id: int,
     session: AsyncSession = Depends(get_db_session),
@@ -495,7 +496,7 @@ async def get_customer(
     return _customer_to_dict(c)
 
 
-@router.get("/customers/{customer_id}/balance")
+@router.get("/customers/{customer_id}/balance", response_model=EntityModel | list[EntityModel])
 async def get_customer_balance(
     customer_id: int,
     session: AsyncSession = Depends(get_db_session),
