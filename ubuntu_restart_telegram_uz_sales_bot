@@ -14,4 +14,4 @@ echo "Starting Telegram bot..."
 ./ubuntu_telegram_uz_sales_bot
 
 echo "Done! Bot restarted."
-echo "Check logs: tail -f telegram_bot.log"
+echo "Check logs: tail -f telegram_bot_local.log"

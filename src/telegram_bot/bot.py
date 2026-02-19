@@ -2,15 +2,16 @@
 Run: python -m src.telegram_bot.bot
 """
 
-import logging
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from loguru import logger
 from telegram.error import Conflict
 from telegram.ext import Application
 
 from src.core.env import get_required_env, validate_required_env_vars
+from src.core.logging_setup import setup_logging
 from src.core.sentry_setup import init_sentry
 from .config import BOT_TOKEN
 from .handlers_agent import register_agent_handlers
@@ -21,8 +22,11 @@ from .session import close_pool, init_pool
 
 load_dotenv()
 init_sentry("sales-telegram-bot")
-
-logger = logging.getLogger(__name__)
+setup_logging(
+    service_name="sales-telegram-bot",
+    log_level=os.getenv("LOG_LEVEL", "INFO"),
+    log_file=os.getenv("BOT_LOG_FILE", "logs/telegram_bot.log"),
+)
 
 _LOCK_FH = None
 _LOCK_PATH = Path(".telegram_bot.lock")
@@ -89,8 +93,19 @@ async def post_shutdown(application: Application):
 
 async def on_bot_error(update, context):
     err = context.error
+    user_id = None
+    handler_name = "unknown"
+    if update is not None and getattr(update, "effective_user", None):
+        user_id = update.effective_user.id
+    if context is not None and getattr(context, "handler", None):
+        handler_name = context.handler.__class__.__name__
     if isinstance(err, Conflict) or "terminated by other getUpdates request" in str(err):
-        logger.error("Telegram polling conflict (409): another bot instance is running. Stopping this instance.")
+        logger.error(
+            "bot_error type=conflict user_id={} handler={} message={}",
+            user_id,
+            handler_name,
+            "Telegram polling conflict (409)",
+        )
         try:
             context.application.stop_running()
         except Exception:
@@ -99,7 +114,12 @@ async def on_bot_error(update, context):
             except Exception:
                 pass
         return
-    logger.exception("Unhandled bot error", exc_info=err)
+    logger.exception(
+        "bot_error type=unhandled user_id={} handler={} message={}",
+        user_id,
+        handler_name,
+        str(err),
+    )
 
 
 def run_bot():
@@ -107,11 +127,6 @@ def run_bot():
     if not BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not set! Cannot start bot.")
         return
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
 
     if not _acquire_single_instance_lock():
         logger.error("Telegram bot is already running locally (instance lock is active).")

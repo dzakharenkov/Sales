@@ -1,6 +1,5 @@
 """Sale & Distribution System (SDS) application entrypoint."""
 
-import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -9,8 +8,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 
 from src.core.env import validate_runtime_secrets
+from src.core.logging_setup import setup_logging
+from src.core.middleware import request_logging_middleware
 from src.core.rate_limit import InMemoryRateLimiter, RateLimitMiddleware
 from src.core.sentry_setup import init_sentry
 from src.database.connection import (
@@ -23,11 +25,11 @@ from src.database.connection import (
 )
 
 init_sentry("sales-api")
-
-_LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-_level = getattr(logging, _LOG_LEVEL, logging.INFO)
-logging.basicConfig(level=_level, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-logger = logging.getLogger(__name__)
+setup_logging(
+    service_name="sales-api",
+    log_level=os.getenv("LOG_LEVEL", "INFO"),
+    log_file=os.getenv("LOG_FILE", "logs/app.log"),
+)
 
 
 @asynccontextmanager
@@ -72,6 +74,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.middleware("http")(request_logging_middleware)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
