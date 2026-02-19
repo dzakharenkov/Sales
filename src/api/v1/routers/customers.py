@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db_session
 from src.database.models import Customer, User, Operation, CustomerVisit
 from src.core.deps import get_current_user, require_admin
+from src.core.pagination import PaginatedResponse, PaginationParams
 from src.core.sql import escape_like
 
 router = APIRouter()
@@ -101,7 +102,7 @@ class CustomerUpdate(BaseModel):
     VAT_code: str | None = None
 
 
-@router.get("/customers", response_model=EntityModel | list[EntityModel])
+@router.get("/customers", response_model=PaginatedResponse[EntityModel])
 async def list_customers(
     customer_id: int | None = Query(None, description="ИД клиента (точное совпадение)"),
     search: str | None = Query(
@@ -115,19 +116,16 @@ async def list_customers(
     login_expeditor: str | None = Query(None, description="Фильтр по экспедитору (логин)"),
     phone: str | None = Query(None, description="Поиск по телефону (частичное совпадение)"),
     tax_id: str | None = Query(None, description="Поиск по ИНН (частичное совпадение)"),
-    limit: int = Query(500, le=2000, description="Макс. записей в ответе"),
+    pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
     """Список клиентов с поиском по ключевым полям. Без параметров не возвращает записи (нужен хотя бы один фильтр или пустой поиск — тогда первые limit по id)."""
-    sql = '''SELECT c.id, c.name_client, c.firm_name, c.category_client, c.address,
-             c.city_id, ct.name AS city_name,
-             c.territory_id, t.name AS territory_name,
-             c.landmark, c.phone, c.contact_person, c.tax_id, c.status, c.login_agent, c.login_expeditor, c.latitude, c.longitude, c.pinfl, c.contract_no, c.account_no, c.bank, c.mfo, c.oked, c.vat_code,
-             EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) AS has_photo
-             FROM "Sales".customers c
-             LEFT JOIN "Sales".cities ct ON c.city_id = ct.id
-             LEFT JOIN "Sales".territories t ON c.territory_id = t.id'''
+    base_from_sql = '''
+        FROM "Sales".customers c
+        LEFT JOIN "Sales".cities ct ON c.city_id = ct.id
+        LEFT JOIN "Sales".territories t ON c.territory_id = t.id
+    '''
     conditions = []
     params = {}
     if customer_id is not None:
@@ -160,10 +158,21 @@ async def list_customers(
     if tax_id and tax_id.strip():
         conditions.append(" tax_id ILIKE :tax_id ESCAPE '\\' ")
         params["tax_id"] = "%" + escape_like(tax_id.strip()) + "%"
-    if conditions:
-        sql += " WHERE " + " AND ".join(conditions)
-    sql += " ORDER BY c.id LIMIT :lim"
-    params["lim"] = limit
+    where_sql = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    count_sql = f"SELECT COUNT(*) {base_from_sql} {where_sql}"
+    total = int((await session.execute(text(count_sql), params)).scalar() or 0)
+
+    sql = f'''SELECT c.id, c.name_client, c.firm_name, c.category_client, c.address,
+             c.city_id, ct.name AS city_name,
+             c.territory_id, t.name AS territory_name,
+             c.landmark, c.phone, c.contact_person, c.tax_id, c.status, c.login_agent, c.login_expeditor, c.latitude, c.longitude, c.pinfl, c.contract_no, c.account_no, c.bank, c.mfo, c.oked, c.vat_code,
+             EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) AS has_photo
+             {base_from_sql}
+             {where_sql}
+             ORDER BY c.id LIMIT :lim OFFSET :off'''
+    params["lim"] = pagination.limit
+    params["off"] = pagination.offset
     result = await session.execute(text(sql), params)
     rows = result.fetchall()
     out = []
@@ -196,7 +205,7 @@ async def list_customers(
             "VAT_code": r[24],
             "has_photo": bool(r[25]) if len(r) > 25 else False,
         })
-    return out
+    return PaginatedResponse.create(data=out, total=total, pagination=pagination)
 
 
 EXPORT_COLUMNS = [

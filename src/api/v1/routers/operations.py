@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from src.database.connection import get_db_session
 from src.database.models import Operation, Customer, Product, Order, OperationConfig, OperationType, Batch, Item, Status
 from src.core.deps import get_current_user, require_admin
+from src.core.pagination import PaginatedResponse, PaginationParams
 from src.database.models import User
 import json
 import logging
@@ -338,7 +339,7 @@ async def delete_operation_type(
     return {"code": code, "message": "deleted"}
 
 
-@router.get("/operations", response_model=EntityModel | list[EntityModel])
+@router.get("/operations", response_model=PaginatedResponse[EntityModel])
 async def list_operations(
     type_code: str | None = Query(None),
     customer_id: int | None = Query(None),
@@ -347,6 +348,7 @@ async def list_operations(
     from_date: date | None = Query(None),
     to_date: date | None = Query(None),
     created_by: str | None = Query(None),
+    pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
@@ -366,7 +368,9 @@ async def list_operations(
         q = q.where(func.date(Operation.operation_date) <= to_date)
     if created_by and created_by.strip():
         q = q.where(Operation.created_by == created_by.strip())
-    result = await session.execute(q)
+    count_q = q.with_only_columns(func.count()).order_by(None)
+    total = int((await session.execute(count_q)).scalar() or 0)
+    result = await session.execute(q.offset(pagination.offset).limit(pagination.limit))
     rows = result.scalars().all()
     type_codes = {r.type_code for r in rows if r.type_code}
     types_name_map = {}
@@ -404,7 +408,7 @@ async def list_operations(
             "order_id": o.order_id,
             "created_by": o.created_by,
         })
-    return out
+    return PaginatedResponse.create(data=out, total=total, pagination=pagination)
 
 
 class OperationCreate(BaseModel):

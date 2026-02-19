@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db_session
 from src.database.models import Order, Item, Customer, Product, Status, PaymentType, User as UserModel, Warehouse
 from src.core.deps import get_current_user, require_admin
+from src.core.pagination import PaginatedResponse, PaginationParams
 from src.core.sql import escape_like
 from src.database.models import User
 
@@ -89,7 +90,7 @@ async def list_order_statuses(
     return [{"code": r[0], "name": (r[1] or r[0])} for r in rows]
 
 
-@router.get("/orders", response_model=EntityModel | list[EntityModel])
+@router.get("/orders", response_model=PaginatedResponse[EntityModel])
 async def list_orders(
     order_no: int | None = Query(None, description="Номер заказа"),
     customer_id: int | None = Query(None, description="ID клиента"),
@@ -100,6 +101,7 @@ async def list_orders(
     login_agent: str | None = Query(None, description="Логин агента"),
     login_expeditor: str | None = Query(None, description="Логин экспедитора"),
     last_updated_by: str | None = Query(None, description="Логин пользователя, выполнившего последнее изменение"),
+    pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
@@ -137,7 +139,10 @@ async def list_orders(
         q = q.where(Customer.login_expeditor == login_expeditor.strip())
     if last_updated_by and last_updated_by.strip():
         q = q.where(Order.last_updated_by == last_updated_by.strip())
-    
+
+    count_q = q.with_only_columns(func.count()).order_by(None)
+    total = int((await session.execute(count_q)).scalar() or 0)
+
     # Подсчет общей суммы заказов (до получения данных)
     sum_q = (
         select(func.sum(func.coalesce(Order.total_amount, 0)))
@@ -172,8 +177,8 @@ async def list_orders(
     
     total_amount_result = await session.execute(sum_q)
     total_amount_all = float(total_amount_result.scalar() or 0)
-    
-    result = await session.execute(q)
+
+    result = await session.execute(q.offset(pagination.offset).limit(pagination.limit))
     rows = result.all()
     out = []
     for o, cust, st, pt in rows:
@@ -198,11 +203,8 @@ async def list_orders(
             "last_updated_by": o.last_updated_by,
         })
     
-    return {
-        "orders": out,
-        "total_count": len(out),
-        "total_amount": total_amount_all,
-    }
+    payload = PaginatedResponse.create(data=out, total=total, pagination=pagination)
+    return {**payload.model_dump(), "total_amount": total_amount_all}
 
 
 ORDERS_EXPORT_HEADERS_RU = [

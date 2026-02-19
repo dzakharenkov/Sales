@@ -25,6 +25,41 @@
 
   let currentUser = { login: '', fio: '', role: '' };
   const isAdmin = () => (currentUser.role || '').toLowerCase() === 'admin';
+  const DEFAULT_PAGE_LIMIT = 50;
+
+  const listPaginationState = {
+    customers: { limit: DEFAULT_PAGE_LIMIT, offset: 0, total: 0 },
+    orders: { limit: DEFAULT_PAGE_LIMIT, offset: 0, total: 0 },
+    operations: { limit: DEFAULT_PAGE_LIMIT, offset: 0, total: 0 },
+  };
+
+  function parsePaginated(payload) {
+    if (!payload || typeof payload !== 'object') return { data: [], total: 0, limit: DEFAULT_PAGE_LIMIT, offset: 0, has_more: false };
+    if (Array.isArray(payload)) return { data: payload, total: payload.length, limit: payload.length || DEFAULT_PAGE_LIMIT, offset: 0, has_more: false };
+    return {
+      data: Array.isArray(payload.data) ? payload.data : [],
+      total: Number(payload.total || 0),
+      limit: Number(payload.limit || DEFAULT_PAGE_LIMIT),
+      offset: Number(payload.offset || 0),
+      has_more: Boolean(payload.has_more),
+    };
+  }
+
+  function renderPager(sectionKey) {
+    const state = listPaginationState[sectionKey];
+    const total = state.total || 0;
+    const page = Math.floor((state.offset || 0) / (state.limit || DEFAULT_PAGE_LIMIT));
+    const totalPages = Math.max(1, Math.ceil(total / (state.limit || DEFAULT_PAGE_LIMIT)));
+    const prevDisabled = state.offset <= 0 ? 'disabled' : '';
+    const nextDisabled = (state.offset + state.limit) >= total ? 'disabled' : '';
+    return (
+      '<div class="pagination-bar" style="margin-top:12px;display:flex;gap:8px;align-items:center;">' +
+      '<button type="button" class="btn btn-secondary btn-small" data-page-prev="' + sectionKey + '" ' + prevDisabled + '>← Назад</button>' +
+      '<span>Страница ' + (page + 1) + ' из ' + totalPages + ' (' + total + ' записей)</span>' +
+      '<button type="button" class="btn btn-secondary btn-small" data-page-next="' + sectionKey + '" ' + nextDisabled + '>Вперёд →</button>' +
+      '</div>'
+    );
+  }
 
   function loadMe() {
     return api('/api/v1/auth/me').then((u) => {
@@ -287,13 +322,13 @@
   function customersSection() {
     let refreshFn;
     const doAdd = () => {
-      showModal('Добавить клиента', `
-        <div class="form-group"><label>Название / Фирма</label><input type="text" id="c_name_client"></div>
-        <div class="form-group"><label>Город</label><input type="text" id="c_city"></div>
-        <div class="form-group"><label>Адрес</label><input type="text" id="c_address"></div>
-        <div class="form-group"><label>Телефон</label><input type="text" id="c_phone"></div>
-        <div class="form-group"><label>Логин агента</label><input type="text" id="c_login_agent"></div>
-        <div class="form-group"><label>Логин экспедитора</label><input type="text" id="c_login_expeditor"></div>
+      showModal('???????? ???????', `
+        <div class="form-group"><label>???????? / ?????</label><input type="text" id="c_name_client"></div>
+        <div class="form-group"><label>?????</label><input type="text" id="c_city"></div>
+        <div class="form-group"><label>?????</label><input type="text" id="c_address"></div>
+        <div class="form-group"><label>???????</label><input type="text" id="c_phone"></div>
+        <div class="form-group"><label>????? ??????</label><input type="text" id="c_login_agent"></div>
+        <div class="form-group"><label>????? ???????????</label><input type="text" id="c_login_expeditor"></div>
       `, () => api('/api/v1/customers', {
         method: 'POST',
         body: JSON.stringify({
@@ -306,12 +341,13 @@
         }),
       }).then(() => refreshFn()));
     };
+
     const doEdit = (id, row) => {
-      showModal('Изменить клиента', `
-        <div class="form-group"><label>Название</label><input type="text" id="ce_name" value="' + (row.name_client || '').replace(/"/g, '&quot;') + '"></div>
-        <div class="form-group"><label>Город</label><input type="text" id="ce_city" value="' + (row.city || '') + '"></div>
-        <div class="form-group"><label>Телефон</label><input type="text" id="ce_phone" value="' + (row.phone || '') + '"></div>
-        <div class="form-group"><label>Статус</label><input type="text" id="ce_status" value="' + (row.status || '') + '"></div>
+      showModal('???????? ???????', `
+        <div class="form-group"><label>????????</label><input type="text" id="ce_name" value="' + (row.name_client || '').replace(/"/g, '&quot;') + '"></div>
+        <div class="form-group"><label>?????</label><input type="text" id="ce_city" value="' + (row.city || '') + '"></div>
+        <div class="form-group"><label>???????</label><input type="text" id="ce_phone" value="' + (row.phone || '') + '"></div>
+        <div class="form-group"><label>??????</label><input type="text" id="ce_status" value="' + (row.status || '') + '"></div>
       `, () => api('/api/v1/customers/' + id, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -322,35 +358,69 @@
         }),
       }).then(() => refreshFn()));
     };
-    refreshFn = section('Клиенты', 'Добавить клиента', true, () => api('/api/v1/customers'), (list) => {
-      if (!Array.isArray(list)) return '<p>Ошибка загрузки.</p>';
-      if (!list.length) return '<p>Нет клиентов.</p>';
-      let html = '<table><thead><tr><th>Название</th><th>Город</th><th>Телефон</th><th>Агент</th><th>Экспедитор</th><th>Действия</th></tr></thead><tbody>';
-      list.forEach((c) => {
-        html += '<tr><td>' + (c.name_client || '') + '</td><td>' + (c.city || '') + '</td><td>' + (c.phone || '') + '</td><td>' + (c.login_agent || '') + '</td><td>' + (c.login_expeditor || '') + '</td><td>';
-        html += '<button type="button" class="btn btn-secondary btn-small" data-edit="' + c.id + '" data-json="' + escape(JSON.stringify(c)) + '">Изменить</button>';
-        html += '</td></tr>';
-      });
-      html += '</tbody></table>';
+
+    refreshFn = section('???????', '???????? ???????', true, () => {
+      const st = listPaginationState.customers;
+      return api('/api/v1/customers?limit=' + st.limit + '&offset=' + st.offset);
+    }, (payload) => {
+      const page = parsePaginated(payload);
+      listPaginationState.customers.total = page.total;
+      listPaginationState.customers.limit = page.limit;
+      listPaginationState.customers.offset = page.offset;
+      const list = page.data;
+
+      let html = '';
+      if (!list.length) {
+        html = '<p>??? ????????.</p>';
+      } else {
+        html = '<table><thead><tr><th>????????</th><th>?????</th><th>???????</th><th>?????</th><th>??????????</th><th>????????</th></tr></thead><tbody>';
+        list.forEach((c) => {
+          html += '<tr><td>' + (c.name_client || '') + '</td><td>' + (c.city || '') + '</td><td>' + (c.phone || '') + '</td><td>' + (c.login_agent || '') + '</td><td>' + (c.login_expeditor || '') + '</td><td>';
+          html += '<button type="button" class="btn btn-secondary btn-small" data-edit="' + c.id + '" data-json="' + escape(JSON.stringify(c)) + '">????????</button>';
+          html += '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      html += renderPager('customers');
+
       setTimeout(() => {
-        document.getElementById('sectionTable').querySelectorAll('[data-edit]').forEach((el) => {
+        const container = document.getElementById('sectionTable');
+        container.querySelectorAll('[data-edit]').forEach((el) => {
           el.onclick = () => { try { doEdit(el.getAttribute('data-edit'), JSON.parse(unescape(el.getAttribute('data-json')))); } catch (_) {} };
+        });
+        container.querySelectorAll('[data-page-prev="customers"]').forEach((el) => {
+          el.onclick = () => {
+            const st = listPaginationState.customers;
+            st.offset = Math.max(0, st.offset - st.limit);
+            refreshFn();
+          };
+        });
+        container.querySelectorAll('[data-page-next="customers"]').forEach((el) => {
+          el.onclick = () => {
+            const st = listPaginationState.customers;
+            st.offset += st.limit;
+            refreshFn();
+          };
         });
       }, 0);
       return html;
     });
+
     document.getElementById('sectionAdd').onclick = doAdd;
   }
 
   function ordersSection() {
     let refreshFn;
     const doCreate = () => {
-      api('/api/v1/customers').then((customers) => {
-        if (!customers.length) { alert('Сначала добавьте клиента.'); return; }
-        let opts = customers.map((c) => '<option value="' + c.id + '">' + (c.name_client || c.id) + '</option>').join('');
-        showModal('Создать заказ', `
-          <div class="form-group"><label>Клиент</label><select id="o_customer_id">' + opts + '</select></div>
-          <div class="form-group"><label>Статус</label><select id="o_status"><option value="open">open</option><option value="delivery">delivery</option><option value="completed">completed</option><option value="canceled">canceled</option></select></div>
+      const st = listPaginationState.customers;
+      api('/api/v1/customers?limit=' + st.limit + '&offset=' + st.offset).then((resp) => {
+        const customers = parsePaginated(resp).data;
+        if (!customers.length) { alert('??????? ???????? ???????.'); return; }
+        const opts = customers.map((c) => '<option value="' + c.id + '">' + (c.name_client || c.id) + '</option>').join('');
+        showModal('??????? ?????', `
+          <div class="form-group"><label>??????</label><select id="o_customer_id">' + opts + '</select></div>
+          <div class="form-group"><label>??????</label><select id="o_status"><option value="open">open</option><option value="delivery">delivery</option><option value="completed">completed</option><option value="canceled">canceled</option></select></div>
         `, () => api('/api/v1/orders', {
           method: 'POST',
           body: JSON.stringify({
@@ -360,35 +430,76 @@
         }).then(() => refreshFn()));
       });
     };
-    refreshFn = section('Заказы', 'Создать заказ', true, () => api('/api/v1/orders'), (list) => {
-      if (!Array.isArray(list)) return '<p>Ошибка загрузки.</p>';
-      if (!list.length) return '<p>Нет заказов.</p>';
-      let html = '<table><thead><tr><th>ID</th><th>Клиент</th><th>Дата</th><th>Статус</th><th>Сумма</th></tr></thead><tbody>';
-      list.forEach((o) => {
-        html += '<tr><td>' + (o.id || '') + '</td><td>' + (o.customer_id || '') + '</td><td>' + (o.order_date || '') + '</td><td>' + (o.status_code || '') + '</td><td>' + (o.total_amount ?? '') + '</td></tr>';
-      });
-      html += '</tbody></table>';
+
+    refreshFn = section('??????', '??????? ?????', true, () => {
+      const st = listPaginationState.orders;
+      return api('/api/v1/orders?limit=' + st.limit + '&offset=' + st.offset);
+    }, (payload) => {
+      const page = parsePaginated(payload);
+      listPaginationState.orders.total = page.total;
+      listPaginationState.orders.limit = page.limit;
+      listPaginationState.orders.offset = page.offset;
+      const list = page.data;
+
+      let html = '';
+      if (!list.length) {
+        html = '<p>??? ???????.</p>';
+      } else {
+        html = '<table><thead><tr><th>ID</th><th>??????</th><th>????</th><th>??????</th><th>?????</th></tr></thead><tbody>';
+        list.forEach((o) => {
+          html += '<tr><td>' + (o.id || '') + '</td><td>' + (o.customer_id || '') + '</td><td>' + (o.order_date || '') + '</td><td>' + (o.status_code || '') + '</td><td>' + (o.total_amount ?? '') + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      html += renderPager('orders');
+
+      setTimeout(() => {
+        const container = document.getElementById('sectionTable');
+        container.querySelectorAll('[data-page-prev="orders"]').forEach((el) => {
+          el.onclick = () => {
+            const st = listPaginationState.orders;
+            st.offset = Math.max(0, st.offset - st.limit);
+            refreshFn();
+          };
+        });
+        container.querySelectorAll('[data-page-next="orders"]').forEach((el) => {
+          el.onclick = () => {
+            const st = listPaginationState.orders;
+            st.offset += st.limit;
+            refreshFn();
+          };
+        });
+      }, 0);
+
       document.getElementById('sectionAdd').onclick = doCreate;
       return html;
     });
+
     document.getElementById('sectionAdd').onclick = doCreate;
   }
 
   function operationsSection() {
     let refreshFn;
     const doCreate = () => {
-      Promise.all([api('/api/v1/operation-types'), api('/api/v1/dictionary/products'), api('/api/v1/customers')]).then(([types, products, customers]) => {
+      const customerState = listPaginationState.customers;
+      Promise.all([
+        api('/api/v1/operation-types'),
+        api('/api/v1/dictionary/products'),
+        api('/api/v1/customers?limit=' + customerState.limit + '&offset=' + customerState.offset),
+      ]).then(([types, products, customersResp]) => {
+        const customers = parsePaginated(customersResp).data;
         const typeOpts = (types || []).map((t) => '<option value="' + t.code + '">' + t.name + ' (' + t.code + ')</option>').join('');
         const prodOpts = (products || []).map((p) => '<option value="' + p.code + '">' + p.name + '</option>').join('');
         const custOpts = (customers || []).map((c) => '<option value="' + c.id + '">' + (c.name_client || c.id) + '</option>').join('');
-        showModal('Создать операцию (приход/расход/продажа)', `
-          <div class="form-group"><label>Дата</label><input type="date" id="op_date" required></div>
-          <div class="form-group"><label>Тип операции</label><select id="op_type">' + typeOpts + '</select></div>
-          <div class="form-group"><label>Товар</label><select id="op_product">' + prodOpts + '</select></div>
-          <div class="form-group"><label>Количество</label><input type="number" id="op_qty" required></div>
-          <div class="form-group"><label>Сумма</label><input type="number" step="0.01" id="op_amount"></div>
-          <div class="form-group"><label>Клиент (для продажи/возврата)</label><select id="op_customer"><option value="">—</option>' + custOpts + '</select></div>
-          <div class="form-group"><label>Комментарий</label><input type="text" id="op_comment"></div>
+        showModal('??????? ???????? (??????/??????/???????)', `
+          <div class="form-group"><label>????</label><input type="date" id="op_date" required></div>
+          <div class="form-group"><label>??? ????????</label><select id="op_type">' + typeOpts + '</select></div>
+          <div class="form-group"><label>?????</label><select id="op_product">' + prodOpts + '</select></div>
+          <div class="form-group"><label>??????????</label><input type="number" id="op_qty" required></div>
+          <div class="form-group"><label>?????</label><input type="number" step="0.01" id="op_amount"></div>
+          <div class="form-group"><label>??????</label><select id="op_customer"><option value="">?</option>' + custOpts + '</select></div>
+          <div class="form-group"><label>???????????</label><input type="text" id="op_comment"></div>
         `, () => {
           const d = document.getElementById('op_date').value;
           const cust = document.getElementById('op_customer').value;
@@ -408,17 +519,52 @@
         document.getElementById('op_date').value = new Date().toISOString().slice(0, 10);
       });
     };
-    refreshFn = section('Операции', 'Создать операцию', isAdmin(), () => api('/api/v1/operations'), (list) => {
-      if (!Array.isArray(list)) return '<p>Ошибка загрузки.</p>';
-      if (!list.length) return '<p>Нет операций.</p>';
-      let html = '<table><thead><tr><th>Дата</th><th>Тип</th><th>Товар</th><th>Кол-во</th><th>Сумма</th><th>Кто</th></tr></thead><tbody>';
-      list.slice(0, 100).forEach((o) => {
-        html += '<tr><td>' + (o.operation_date || '') + '</td><td>' + (o.type_code || '') + '</td><td>' + (o.product_code || '') + '</td><td>' + (o.quantity ?? '') + '</td><td>' + (o.amount ?? '') + '</td><td>' + (o.created_by || '') + '</td></tr>';
-      });
-      html += '</tbody></table>';
+
+    refreshFn = section('????????', '??????? ????????', isAdmin(), () => {
+      const st = listPaginationState.operations;
+      return api('/api/v1/operations?limit=' + st.limit + '&offset=' + st.offset);
+    }, (payload) => {
+      const page = parsePaginated(payload);
+      listPaginationState.operations.total = page.total;
+      listPaginationState.operations.limit = page.limit;
+      listPaginationState.operations.offset = page.offset;
+      const list = page.data;
+
+      let html = '';
+      if (!list.length) {
+        html = '<p>??? ????????.</p>';
+      } else {
+        html = '<table><thead><tr><th>????</th><th>???</th><th>?????</th><th>???-??</th><th>?????</th><th>???</th></tr></thead><tbody>';
+        list.forEach((o) => {
+          html += '<tr><td>' + (o.operation_date || '') + '</td><td>' + (o.type_code || '') + '</td><td>' + (o.product_code || '') + '</td><td>' + (o.quantity ?? '') + '</td><td>' + (o.amount ?? '') + '</td><td>' + (o.created_by || '') + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      html += renderPager('operations');
+
+      setTimeout(() => {
+        const container = document.getElementById('sectionTable');
+        container.querySelectorAll('[data-page-prev="operations"]').forEach((el) => {
+          el.onclick = () => {
+            const st = listPaginationState.operations;
+            st.offset = Math.max(0, st.offset - st.limit);
+            refreshFn();
+          };
+        });
+        container.querySelectorAll('[data-page-next="operations"]').forEach((el) => {
+          el.onclick = () => {
+            const st = listPaginationState.operations;
+            st.offset += st.limit;
+            refreshFn();
+          };
+        });
+      }, 0);
+
       if (isAdmin()) document.getElementById('sectionAdd').onclick = doCreate;
       return html;
     });
+
     if (isAdmin()) document.getElementById('sectionAdd').onclick = doCreate;
   }
 

@@ -14,6 +14,7 @@ from openpyxl import Workbook
 from src.database.connection import get_db_session
 from src.database.models import CustomerVisit, Customer, User
 from src.core.deps import get_current_user
+from src.core.pagination import PaginatedResponse, PaginationParams
 from src.core.sql import escape_like
 from src.database.models import User as UserModel
 
@@ -80,7 +81,7 @@ async def create_visit(
     return {"id": visit.id, "message": "created"}
 
 
-@router.get("/visits/search", response_model=EntityModel | list[EntityModel])
+@router.get("/visits/search", response_model=PaginatedResponse[EntityModel])
 async def search_visits(
     customer_id: int | None = Query(None),
     customer_name: str | None = Query(None),
@@ -88,8 +89,7 @@ async def search_visits(
     responsible_login: str | None = Query(None),
     from_date: str | None = Query(None),
     to_date: str | None = Query(None),
-    limit: int = Query(50, le=200),
-    offset: int = Query(0, ge=0),
+    pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
     user: UserModel = Depends(get_current_user),
 ):
@@ -151,7 +151,7 @@ async def search_visits(
         except (ValueError, TypeError):
             pass
     total = (await session.execute(count_q)).scalar() or 0
-    q = q.offset(offset).limit(limit)
+    q = q.offset(pagination.offset).limit(pagination.limit)
     result = await session.execute(q)
     rows = result.all()
     data = []
@@ -167,7 +167,7 @@ async def search_visits(
             "responsible_name": resp_fio or v.responsible_login or "",
             "comment": v.comment,
         })
-    return {"total": total, "data": data}
+    return PaginatedResponse.create(data=data, total=total, pagination=pagination)
 
 
 @router.get("/visits/export", response_model=None)
