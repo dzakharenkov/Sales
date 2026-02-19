@@ -88,7 +88,7 @@ python -m pytest tests/test_rate_limit.py tests/test_sql_injection_guards.py tes
 
 ## ?? Git Commits
 
-(To be filled after commit in this task execution block.)
+commit e5c3cfc95ef70676b570093fb1b896d0a768a573\nAuthor: Developer\nDate: 2026-02-19\n\n    [TASK-004] Enable async DB connection pooling\n\n    - Replace NullPool with AsyncAdaptedQueuePool\n    - Configure pool_size/max_overflow/pool_timeout/pool_recycle\n    - Add startup pool status logging and max_connections check\n    - Add graceful SQL timeout handling (HTTP 503)\n    - Add pooling config test\n\n    Acceptance criteria: ALL MET ?
 
 ---
 
