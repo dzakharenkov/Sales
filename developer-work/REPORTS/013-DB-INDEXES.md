@@ -117,7 +117,18 @@ Skipped due missing table in this environment:
 
 ## 🔗 Git Commits
 
-(To be filled after commit in this task execution block.)
+```text
+commit 2a7d2a7
+Author: Codex
+Date:   2026-02-19
+
+    [TASK-013] Add concurrent performance indexes migration
+
+    - Add Alembic revision with CONCURRENTLY index creation
+    - Add duplicate/equivalent index detection
+    - Add table existence guards for environment variance
+    - Fix baseline migration SQL execution compatibility
+```
 
 ---
 
