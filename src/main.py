@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.core.env import validate_runtime_secrets
+from src.core.rate_limit import InMemoryRateLimiter, RateLimitMiddleware
 from src.core.sentry_setup import init_sentry
 from src.database.connection import check_data_integrity, cleanup, get_schema_info, test_connection
 
@@ -47,6 +48,12 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
+)
+
+app.add_middleware(
+    RateLimitMiddleware,
+    auth_login_limiter=InMemoryRateLimiter(requests=10, window_seconds=10 * 60),
+    authenticated_api_limiter=InMemoryRateLimiter(requests=200, window_seconds=60),
 )
 
 app.add_middleware(
