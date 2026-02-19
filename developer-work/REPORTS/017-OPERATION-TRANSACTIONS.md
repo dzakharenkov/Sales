@@ -87,7 +87,18 @@ python -m pytest -q
 
 ## 🔗 Git Commits
 
-(To be filled after commit in this task execution block.)
+```text
+commit 9525f9b
+Author: Codex
+Date:   2026-02-19
+
+    [TASK-017] Add atomic operations flow transaction handling
+
+    - Add /operations/flow atomic endpoint
+    - Add row-level stock locking with SELECT FOR UPDATE
+    - Add deterministic lock order for deadlock prevention
+    - Add rollback and lock-order tests
+```
 
 ---
 
