@@ -91,7 +91,18 @@ python -m pytest -q
 
 ## 🔗 Git Commits
 
-(To be filled after commit in this task execution block.)
+```text
+commit 5a82cb4
+Author: Codex
+Date:   2026-02-19
+
+    [TASK-019] Implement GitHub Actions CI/CD workflows
+
+    - Add unified CI workflow (lint/test/security)
+    - Add manual-gated deploy workflow
+    - Add project README with CI badge
+    - Replace legacy lint-only workflow
+```
 
 ---
 
