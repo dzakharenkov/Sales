@@ -3,7 +3,8 @@
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 
 from src.core.config import settings
 
@@ -44,5 +45,5 @@ def decode_access_token(token: str) -> dict | None:
     """Decode JWT token. Return None on failure."""
     try:
         return jwt.decode(token, settings.jwt_secret_key, algorithms=[JWT_ALGORITHM])
-    except JWTError:
+    except InvalidTokenError:
         return None

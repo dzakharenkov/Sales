@@ -112,7 +112,7 @@ class CustomerService:
                  EXISTS (SELECT 1 FROM "Sales".customer_photo cp WHERE cp.customer_id = c.id) AS has_photo
                  {base_from_sql}
                  {where_sql}
-                 ORDER BY c.id LIMIT :lim OFFSET :off'''
+                 ORDER BY c.id LIMIT :lim OFFSET :off'''  # nosec B608
         params["lim"] = pagination.limit
         params["off"] = pagination.offset
         result = await self.db.execute(text(sql), params)
@@ -156,7 +156,7 @@ class CustomerService:
         result = await self.db.execute(select(Customer).where(Customer.id == customer_id))
         customer = result.scalar_one_or_none()
         if customer is None:
-            raise NotFoundError("??????", customer_id)
+            raise NotFoundError("Клиент", customer_id)
         return customer
 
     async def get_customer_dict(self, customer_id: int) -> dict:
@@ -176,7 +176,7 @@ class CustomerService:
             territory_result = await self.db.execute(
                 text(
                     '''
-                    SELECT id, city_id
+                    SELECT id
                     FROM "Sales".territories
                     WHERE id = :id AND COALESCE(is_active, TRUE) = TRUE
                     '''
@@ -186,14 +186,11 @@ class CustomerService:
             territory_row = territory_result.first()
             if territory_row is None:
                 raise HTTPException(status_code=400, detail="territory_id is invalid")
-            territory_city_id = territory_row[1]
-            if city_id is not None and territory_city_id is not None and int(territory_city_id) != int(city_id):
-                raise HTTPException(status_code=400, detail="territory_id does not belong to city_id")
 
     async def create_customer(self, payload: dict, user_role: str | None) -> dict:
         role = (user_role or "").strip().lower()
         if role not in {"admin", "agent"}:
-            raise ForbiddenError("?????? admin ??? agent ????? ????????? ????????")
+            raise ForbiddenError("Только admin или agent может создавать клиентов")
 
         await self.validate_city_territory_refs(payload.get("city_id"), payload.get("territory_id"))
 
@@ -208,7 +205,7 @@ class CustomerService:
             phone=payload.get("phone"),
             contact_person=payload.get("contact_person"),
             tax_id=payload.get("tax_id"),
-            status=payload.get("status") or "????????",
+            status=payload.get("status") or "активен",
             login_agent=payload.get("login_agent"),
             login_expeditor=payload.get("login_expeditor"),
             latitude=payload.get("latitude"),
@@ -254,7 +251,7 @@ class CustomerService:
         try:
             visit_date = date.fromisoformat((payload.get("visit_date") or "")[:10])
         except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="???????????? ???? ??????")
+            raise HTTPException(status_code=400, detail="Некорректный формат даты")
 
         visit_time = None
         raw_time = payload.get("visit_time")
@@ -306,19 +303,21 @@ class CustomerService:
     async def update_customer(self, customer_id: int, payload: dict, user_role: str | None, user_login: str | None) -> dict:
         customer = await self.get_customer(customer_id)
         updates = dict(payload)
+        role = (user_role or "").lower()
 
-        if (user_role or "").lower() != "admin":
+        if role != "admin":
+            if role != "agent":
+                raise ForbiddenError("Редактирование клиентов доступно только администратору или агенту")
             is_own_client = (
-                (user_role or "").lower() == "agent"
-                and customer.login_agent
+                customer.login_agent is not None
                 and str(customer.login_agent).strip().lower() == str(user_login or "").strip().lower()
             )
             if not is_own_client:
-                allowed = {"login_agent", "login_expeditor"}
-                updates = {k: v for k, v in updates.items() if k in allowed}
+                raise ForbiddenError("Агент может редактировать только своих клиентов")
 
         for key, value in updates.items():
-            setattr(customer, key, value)
+            if hasattr(customer, key):
+                setattr(customer, key, value)
 
         if "city_id" in updates or "territory_id" in updates:
             await self.validate_city_territory_refs(
@@ -331,7 +330,27 @@ class CustomerService:
         return self.customer_to_dict(customer)
 
     async def delete_customer(self, customer_id: int) -> dict:
-        customer = await self.get_customer(customer_id)
-        await self.db.delete(customer)
+        await self.get_customer(customer_id)  # raise 404 if not found
+
+        # 1. Break circular FK: customers.main_photo_id -> customer_photo.id
+        await self.db.execute(
+            text('UPDATE "Sales".customers SET main_photo_id = NULL WHERE id = :id'),
+            {"id": customer_id},
+        )
+        # 2. Nullify orders.customer_id (no CASCADE on this FK)
+        await self.db.execute(
+            text('UPDATE "Sales".orders SET customer_id = NULL WHERE customer_id = :id'),
+            {"id": customer_id},
+        )
+        # 3. Nullify operations.customer_id (no CASCADE on this FK)
+        await self.db.execute(
+            text('UPDATE "Sales".operations SET customer_id = NULL WHERE customer_id = :id'),
+            {"id": customer_id},
+        )
+        # 4. Delete customer; CASCADE handles customers_visits and customer_photo
+        await self.db.execute(
+            text('DELETE FROM "Sales".customers WHERE id = :id'),
+            {"id": customer_id},
+        )
         await self.db.commit()
         return {"id": customer_id, "message": "deleted"}

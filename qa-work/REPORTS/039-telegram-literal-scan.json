@@ -1,0 +1,22 @@
+{
+  "src/telegram_bot/handlers_auth.py": {
+    "direct_literal_calls": 0,
+    "sample": []
+  },
+  "src/telegram_bot/handlers_agent.py": {
+    "direct_literal_calls": 0,
+    "sample": []
+  },
+  "src/telegram_bot/handlers_expeditor.py": {
+    "direct_literal_calls": 0,
+    "sample": []
+  },
+  "src/telegram_bot/handlers_agent_create_visit.py": {
+    "direct_literal_calls": 0,
+    "sample": []
+  },
+  "src/telegram_bot/handlers_agent_v3_add_customer.py": {
+    "direct_literal_calls": 0,
+    "sample": []
+  }
+}

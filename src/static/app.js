@@ -1,5 +1,6 @@
 (function () {
   const token = localStorage.getItem('sds_token');
+  const useBearerHeader = !!token && token !== 'cookie';
   if (!token) {
     window.location.href = '/login';
     return;
@@ -7,13 +8,17 @@
 
   const api = (path, opts = {}) => {
     const url = path.startsWith('http') ? path : (window.location.origin + path);
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(opts.headers || {}),
+    };
+    if (useBearerHeader) {
+      headers['Authorization'] = 'Bearer ' + token;
+    }
     return fetch(url, {
       ...opts,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-        ...(opts.headers || {}),
-      },
+      credentials: 'same-origin',
+      headers,
     }).then(async (r) => {
       const text = await r.text();
       let data;
@@ -455,11 +460,11 @@
       const st = listPaginationState.customers;
       api('/api/v1/customers?limit=' + st.limit + '&offset=' + st.offset).then((resp) => {
         const customers = parsePaginated(resp).data;
-        if (!customers.length) { alert('??????? ???????? ???????.'); return; }
+        if (!customers.length) { alert('Сначала добавьте клиентов.'); return; }
         const opts = customers.map((c) => '<option value="' + c.id + '">' + (c.name_client || c.id) + '</option>').join('');
-        showModal('??????? ?????', `
-          <div class="form-group"><label>??????</label><select id="o_customer_id">' + opts + '</select></div>
-          <div class="form-group"><label>??????</label><select id="o_status"><option value="open">open</option><option value="delivery">delivery</option><option value="completed">completed</option><option value="canceled">canceled</option></select></div>
+        showModal('Создать заказ', `
+          <div class="form-group"><label>Клиент</label><select id="o_customer_id">' + opts + '</select></div>
+          <div class="form-group"><label>Статус</label><select id="o_status"><option value="open">open</option><option value="delivery">delivery</option><option value="completed">completed</option><option value="canceled">canceled</option></select></div>
         `, () => api('/api/v1/orders', {
           method: 'POST',
           body: JSON.stringify({
@@ -470,7 +475,7 @@
       });
     };
 
-    refreshFn = section('??????', '??????? ?????', true, () => {
+    refreshFn = section('Заказы', 'Создать заказ', true, () => {
       const st = listPaginationState.orders;
       return api('/api/v1/orders?limit=' + st.limit + '&offset=' + st.offset);
     }, (payload) => {
@@ -482,9 +487,9 @@
 
       let html = '';
       if (!list.length) {
-        html = '<p>??? ???????.</p>';
+        html = '<p>Нет заказов.</p>';
       } else {
-        html = '<table><thead><tr><th>ID</th><th>??????</th><th>????</th><th>??????</th><th>?????</th></tr></thead><tbody>';
+        html = '<table><thead><tr><th>ID</th><th>Клиент</th><th>Дата</th><th>Статус</th><th>Сумма</th></tr></thead><tbody>';
         list.forEach((o) => {
           html += '<tr><td>' + (o.id || '') + '</td><td>' + (o.customer_id || '') + '</td><td>' + (o.order_date || '') + '</td><td>' + (o.status_code || '') + '</td><td>' + (o.total_amount ?? '') + '</td></tr>';
         });
@@ -531,14 +536,14 @@
         const typeOpts = (types || []).map((t) => '<option value="' + t.code + '">' + t.name + ' (' + t.code + ')</option>').join('');
         const prodOpts = (products || []).map((p) => '<option value="' + p.code + '">' + p.name + '</option>').join('');
         const custOpts = (customers || []).map((c) => '<option value="' + c.id + '">' + (c.name_client || c.id) + '</option>').join('');
-        showModal('??????? ???????? (??????/??????/???????)', `
-          <div class="form-group"><label>????</label><input type="date" id="op_date" required></div>
-          <div class="form-group"><label>??? ????????</label><select id="op_type">' + typeOpts + '</select></div>
-          <div class="form-group"><label>?????</label><select id="op_product">' + prodOpts + '</select></div>
-          <div class="form-group"><label>??????????</label><input type="number" id="op_qty" required></div>
-          <div class="form-group"><label>?????</label><input type="number" step="0.01" id="op_amount"></div>
-          <div class="form-group"><label>??????</label><select id="op_customer"><option value="">?</option>' + custOpts + '</select></div>
-          <div class="form-group"><label>???????????</label><input type="text" id="op_comment"></div>
+        showModal('Создать операцию (приход/выдача/передача)', `
+          <div class="form-group"><label>Дата</label><input type="date" id="op_date" required></div>
+          <div class="form-group"><label>Тип операции</label><select id="op_type">' + typeOpts + '</select></div>
+          <div class="form-group"><label>Товар</label><select id="op_product">' + prodOpts + '</select></div>
+          <div class="form-group"><label>Количество</label><input type="number" id="op_qty" required></div>
+          <div class="form-group"><label>Сумма</label><input type="number" step="0.01" id="op_amount"></div>
+          <div class="form-group"><label>Клиент</label><select id="op_customer"><option value="">—</option>' + custOpts + '</select></div>
+          <div class="form-group"><label>Комментарий</label><input type="text" id="op_comment"></div>
         `, () => {
           const d = document.getElementById('op_date').value;
           const cust = document.getElementById('op_customer').value;
@@ -559,7 +564,7 @@
       });
     };
 
-    refreshFn = section('????????', '??????? ????????', isAdmin(), () => {
+    refreshFn = section('Операции', 'Создать операцию', isAdmin(), () => {
       const st = listPaginationState.operations;
       return api('/api/v1/operations?limit=' + st.limit + '&offset=' + st.offset);
     }, (payload) => {
@@ -571,9 +576,9 @@
 
       let html = '';
       if (!list.length) {
-        html = '<p>??? ????????.</p>';
+        html = '<p>Нет операций.</p>';
       } else {
-        html = '<table><thead><tr><th>????</th><th>???</th><th>?????</th><th>???-??</th><th>?????</th><th>???</th></tr></thead><tbody>';
+        html = '<table><thead><tr><th>Дата</th><th>Тип</th><th>Товар</th><th>Кол-во</th><th>Сумма</th><th>Кто</th></tr></thead><tbody>';
         list.forEach((o) => {
           html += '<tr><td>' + (o.operation_date || '') + '</td><td>' + (o.type_code || '') + '</td><td>' + (o.product_code || '') + '</td><td>' + (o.quantity ?? '') + '</td><td>' + (o.amount ?? '') + '</td><td>' + (o.created_by || '') + '</td></tr>';
         });
@@ -640,8 +645,12 @@
   }
 
   document.getElementById('btnLogout').onclick = () => {
-    localStorage.removeItem('sds_token');
-    window.location.href = '/login';
+    fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin' })
+      .catch(() => null)
+      .finally(() => {
+        localStorage.removeItem('sds_token');
+        window.location.href = '/login';
+      });
   };
 
   document.querySelectorAll('.sidebar a').forEach((a) => {

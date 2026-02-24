@@ -20,6 +20,7 @@ from src.core.deps import get_current_user, require_admin
 from src.core.pagination import PaginatedResponse, PaginationParams
 from src.database.models import User
 from src.api.v1.services.operation_service import OperationService
+from src.api.v1.services.translation_service import TranslationService
 import json
 import logging
 
@@ -242,6 +243,7 @@ async def suggest_allocation_items_by_delivery_date(
 
 @router.get("/operation-types", response_model=EntityModel | list[EntityModel])
 async def list_operation_types(
+    language: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
@@ -261,8 +263,17 @@ async def list_operation_types(
         )
     )
     rows = result.fetchall()
+    translation_service = TranslationService(session)
+    keys = [f"operation_type.{r[0]}" for r in rows if r[0]]
+    translated = await translation_service.resolve_many(keys, language)
     return [
-        {"code": r[0], "name": r[1], "description": r[2], "active": bool(r[3]), "has_config": bool(r[4])}
+        {
+            "code": r[0],
+            "name": translated.get(f"operation_type.{r[0]}", r[1]),
+            "description": r[2],
+            "active": bool(r[3]),
+            "has_config": bool(r[4]),
+        }
         for r in rows
     ]
 
@@ -353,7 +364,7 @@ async def list_operations(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """?????? ???????? ? ?????????."""
+    """Список операций с фильтрами."""
     data, total = await OperationService(session).list_operations(
         pagination,
         type_code=type_code,
@@ -870,8 +881,11 @@ async def create_operation_from_config(
                     )
             except HTTPException:
                 raise
-            except Exception:
-                pass  # VIEW может отсутствовать — не блокируем создание
+            except Exception as stock_check_error:
+                logger.warning(
+                    "Delivery stock pre-check skipped due to error: %s",
+                    stock_check_error,
+                )
     
     # ШАГ 6: Создать операцию в БД
     logger.info(f"\n[STEP 6] Создаём операцию в БД")

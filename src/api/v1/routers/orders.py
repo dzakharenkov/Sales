@@ -24,6 +24,7 @@ from src.core.pagination import PaginatedResponse, PaginationParams
 from src.core.sql import escape_like
 from src.database.models import User
 from src.api.v1.services.order_service import OrderService
+from src.api.v1.services.translation_service import TranslationService
 
 router = APIRouter()
 
@@ -87,13 +88,17 @@ class ItemUpdate(BaseModel):
 
 @router.get("/orders/statuses", response_model=EntityModel | list[EntityModel])
 async def list_order_statuses(
+    language: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Список статусов заказа (для выбора при создании/редактировании)."""
+    """Order statuses list."""
     result = await session.execute(select(Status.code, Status.name).order_by(Status.code))
     rows = result.all()
-    return [{"code": r[0], "name": (r[1] or r[0])} for r in rows]
+    translation_service = TranslationService(session)
+    keys = [f"status.{r[0]}" for r in rows if r[0]]
+    translated = await translation_service.resolve_many(keys, language)
+    return [{"code": r[0], "name": translated.get(f"status.{r[0]}", (r[1] or r[0]))} for r in rows]
 
 
 @router.get("/orders", response_model=PaginatedResponse[EntityModel])
@@ -557,7 +562,7 @@ async def create_order(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """??????? ?????."""
+    """Создать заказ."""
     try:
         response, notification = await OrderService(session).create_order(body.model_dump(), user.login)
         if notification:
@@ -570,16 +575,16 @@ async def create_order(
         if "payment_type_code" in msg and "does not exist" in msg:
             raise HTTPException(
                 status_code=500,
-                detail='? ??????? orders ??????????? ??????? payment_type_code. ????????? ? ??: ALTER TABLE "Sales".orders ADD COLUMN payment_type_code VARCHAR REFERENCES "Sales".payment_type(code);',
+                detail='В таблице orders отсутствует колонка payment_type_code. Добавьте её в БД: ALTER TABLE "Sales".orders ADD COLUMN payment_type_code VARCHAR REFERENCES "Sales".payment_type(code);',
             )
-        raise HTTPException(status_code=500, detail="?????? ??? ???????? ??????: " + msg)
+        raise HTTPException(status_code=500, detail="Ошибка при создании заказа: " + msg)
 @router.get("/orders/{order_id}", response_model=EntityModel | list[EntityModel])
 async def get_order(
     order_id: int,
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """????? ?? ?????? (order_no)."""
+    """Получить заказ по номеру (order_no)."""
     return await OrderService(session).get_order(order_id)
 @router.patch("/orders/{order_id}")
 async def update_order(
@@ -588,7 +593,7 @@ async def update_order(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """???????? ????? ?? ??????."""
+    """Обновить заказ по номеру."""
     response, notification = await OrderService(session).update_order(
         order_id=order_id,
         payload=body.model_dump(exclude_unset=True),

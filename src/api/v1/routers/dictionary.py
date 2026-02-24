@@ -10,8 +10,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db_session
 from src.database.models import Product, ProductType, Warehouse, PaymentType, User, Currency
 from src.core.deps import get_current_user, require_admin
+from src.api.v1.services.translation_service import TranslationService
 
 router = APIRouter()
+
+
+async def _has_column(session: AsyncSession, table_name: str, column_name: str) -> bool:
+    result = await session.execute(
+        text(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'Sales'
+              AND table_name = :table_name
+              AND column_name = :column_name
+            LIMIT 1
+            """
+        ),
+        {"table_name": table_name, "column_name": column_name},
+    )
+    return result.first() is not None
 
 
 @router.get("/user-logins", response_model=EntityModel | list[EntityModel])
@@ -155,13 +173,24 @@ async def delete_product_type(
 
 @router.get("/payment-types", response_model=EntityModel | list[EntityModel])
 async def list_payment_types(
+    language: str | None = Query(None),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Типы оплаты (наличные, безнал, карта)."""
+    """Payment types list."""
     result = await session.execute(select(PaymentType).order_by(PaymentType.code))
     rows = result.scalars().all()
-    return [{"code": r.code, "name": r.name, "description": r.description} for r in rows]
+    translation_service = TranslationService(session)
+    keys = [f"payment_type.{r.code}" for r in rows if r.code]
+    translated = await translation_service.resolve_many(keys, language)
+    return [
+        {
+            "code": r.code,
+            "name": translated.get(f"payment_type.{r.code}", r.name),
+            "description": r.description,
+        }
+        for r in rows
+    ]
 
 
 class PaymentTypeCreate(BaseModel):
@@ -595,22 +624,26 @@ async def list_cities(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    result = await session.execute(
-        text(
-            '''
-            SELECT id, name,
-                   CASE WHEN EXISTS (
-                       SELECT 1 FROM information_schema.columns
-                       WHERE table_schema = 'Sales' AND table_name = 'cities' AND column_name = 'region'
-                   ) THEN region ELSE NULL END AS region,
-                   COALESCE(is_active, TRUE) AS active
+    has_region = await _has_column(session, "cities", "region")
+    if has_region:
+        query = text(
+            """
+            SELECT id, name, region, COALESCE(is_active, TRUE) AS active
             FROM "Sales".cities
             WHERE (:active_only = FALSE OR COALESCE(is_active, TRUE) = TRUE)
             ORDER BY name
-            '''
-        ),
-        {"active_only": active_only},
-    )
+            """
+        )
+    else:
+        query = text(
+            """
+            SELECT id, name, NULL::text AS region, COALESCE(is_active, TRUE) AS active
+            FROM "Sales".cities
+            WHERE (:active_only = FALSE OR COALESCE(is_active, TRUE) = TRUE)
+            ORDER BY name
+            """
+        )
+    result = await session.execute(query, {"active_only": active_only})
     rows = result.fetchall()
     return [{"id": r[0], "name": r[1], "region": r[2], "active": bool(r[3])} for r in rows]
 
@@ -630,16 +663,8 @@ async def create_city(
     if not name:
         raise HTTPException(status_code=400, detail="City name is required")
 
-    has_region = await session.execute(
-        text(
-            '''
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'Sales' AND table_name = 'cities' AND column_name = 'region'
-            LIMIT 1
-            '''
-        )
-    )
-    if has_region.first():
+    has_region = await _has_column(session, "cities", "region")
+    if has_region:
         query = text(
             '''
             INSERT INTO "Sales".cities (name, region)
@@ -675,16 +700,8 @@ async def update_city(
     if not name:
         raise HTTPException(status_code=400, detail="City name is required")
 
-    has_region = await session.execute(
-        text(
-            '''
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'Sales' AND table_name = 'cities' AND column_name = 'region'
-            LIMIT 1
-            '''
-        )
-    )
-    if has_region.first():
+    has_region = await _has_column(session, "cities", "region")
+    if has_region:
         query = text(
             '''
             UPDATE "Sales".cities
@@ -746,8 +763,9 @@ async def list_territories_by_city(
     if not city.first():
         raise HTTPException(status_code=404, detail="City not found")
 
-    result = await session.execute(
-        text(
+    has_city_id = await _has_column(session, "territories", "city_id")
+    if has_city_id:
+        query = text(
             '''
             SELECT id, name, city_id, COALESCE(is_active, TRUE) AS active
             FROM "Sales".territories
@@ -755,9 +773,20 @@ async def list_territories_by_city(
               AND (:active_only = FALSE OR COALESCE(is_active, TRUE) = TRUE)
             ORDER BY name
             '''
-        ),
-        {"city_id": city_id, "active_only": active_only},
-    )
+        )
+        params = {"city_id": city_id, "active_only": active_only}
+    else:
+        query = text(
+            '''
+            SELECT id, name, NULL::int AS city_id, COALESCE(is_active, TRUE) AS active
+            FROM "Sales".territories
+            WHERE (:active_only = FALSE OR COALESCE(is_active, TRUE) = TRUE)
+            ORDER BY name
+            '''
+        )
+        params = {"active_only": active_only}
+
+    result = await session.execute(query, params)
     rows = result.fetchall()
     return [{"id": r[0], "name": r[1], "city_id": r[2], "active": bool(r[3])} for r in rows]
 
@@ -774,8 +803,9 @@ async def list_territories(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    result = await session.execute(
-        text(
+    has_city_id = await _has_column(session, "territories", "city_id")
+    if has_city_id:
+        query = text(
             '''
             SELECT id, name, city_id, COALESCE(is_active, TRUE) AS active
             FROM "Sales".territories
@@ -783,9 +813,20 @@ async def list_territories(
               AND (:active_only = FALSE OR COALESCE(is_active, TRUE) = TRUE)
             ORDER BY name
             '''
-        ),
-        {"city_id": city_id, "active_only": active_only},
-    )
+        )
+        params = {"city_id": city_id, "active_only": active_only}
+    else:
+        query = text(
+            '''
+            SELECT id, name, NULL::int AS city_id, COALESCE(is_active, TRUE) AS active
+            FROM "Sales".territories
+            WHERE (:active_only = FALSE OR COALESCE(is_active, TRUE) = TRUE)
+            ORDER BY name
+            '''
+        )
+        params = {"active_only": active_only}
+
+    result = await session.execute(query, params)
     rows = result.fetchall()
     return [{"id": r[0], "name": r[1], "city_id": r[2], "active": bool(r[3])} for r in rows]
 
@@ -800,24 +841,37 @@ async def create_territory(
     if not name:
         raise HTTPException(status_code=400, detail="Territory name is required")
 
-    if body.city_id is not None:
+    has_city_id = await _has_column(session, "territories", "city_id")
+    if body.city_id is not None and has_city_id:
         city = await session.execute(
             text('SELECT id FROM "Sales".cities WHERE id = :id AND COALESCE(is_active, TRUE) = TRUE'),
             {"id": body.city_id},
         )
         if not city.first():
             raise HTTPException(status_code=400, detail="city_id is invalid")
+    elif body.city_id is not None and not has_city_id:
+        raise HTTPException(status_code=400, detail="city_id is not supported by current DB schema")
 
-    result = await session.execute(
-        text(
+    if has_city_id:
+        query = text(
             '''
             INSERT INTO "Sales".territories (name, city_id)
             VALUES (:name, :city_id)
             RETURNING id, name, city_id, COALESCE(is_active, TRUE)
             '''
-        ),
-        {"name": name, "city_id": body.city_id},
-    )
+        )
+        params = {"name": name, "city_id": body.city_id}
+    else:
+        query = text(
+            '''
+            INSERT INTO "Sales".territories (name)
+            VALUES (:name)
+            RETURNING id, name, NULL::int, COALESCE(is_active, TRUE)
+            '''
+        )
+        params = {"name": name}
+
+    result = await session.execute(query, params)
     row = result.fetchone()
     await session.commit()
     return {"id": row[0], "name": row[1], "city_id": row[2], "active": bool(row[3])}
@@ -834,25 +888,39 @@ async def update_territory(
     if not name:
         raise HTTPException(status_code=400, detail="Territory name is required")
 
-    if body.city_id is not None:
+    has_city_id = await _has_column(session, "territories", "city_id")
+    if body.city_id is not None and has_city_id:
         city = await session.execute(
             text('SELECT id FROM "Sales".cities WHERE id = :id AND COALESCE(is_active, TRUE) = TRUE'),
             {"id": body.city_id},
         )
         if not city.first():
             raise HTTPException(status_code=400, detail="city_id is invalid")
+    elif body.city_id is not None and not has_city_id:
+        raise HTTPException(status_code=400, detail="city_id is not supported by current DB schema")
 
-    result = await session.execute(
-        text(
+    if has_city_id:
+        query = text(
             '''
             UPDATE "Sales".territories
             SET name = :name, city_id = :city_id, updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
             RETURNING id, name, city_id, COALESCE(is_active, TRUE)
             '''
-        ),
-        {"id": territory_id, "name": name, "city_id": body.city_id},
-    )
+        )
+        params = {"id": territory_id, "name": name, "city_id": body.city_id}
+    else:
+        query = text(
+            '''
+            UPDATE "Sales".territories
+            SET name = :name, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+            RETURNING id, name, NULL::int, COALESCE(is_active, TRUE)
+            '''
+        )
+        params = {"id": territory_id, "name": name}
+
+    result = await session.execute(query, params)
     row = result.fetchone()
     await session.commit()
     if not row:

@@ -219,26 +219,26 @@ async def get_cash_received(
     """Принятые деньги в кассу за период (cash_receipt, completed)."""
     try:
         tz_safe = tz.replace("'", "").replace(";", "")[:50] if tz else "UTC"
-        params = {"tz": tz_safe}
-        date_expr = "(o.operation_date AT TIME ZONE :tz)::date"
-        conditions = ["o.type_code = 'cash_receipt'", "o.status = 'completed'"]
-        df_iso = _parse_date_to_iso(date_from)
-        dt_iso = _parse_date_to_iso(date_to)
-        if df_iso:
-            conditions.append(f"{date_expr} >= :date_from")
-            params["date_from"] = df_iso
-        if dt_iso:
-            conditions.append(f"{date_expr} <= :date_to")
-            params["date_to"] = dt_iso
-        if not df_iso and not dt_iso:
-            conditions.append(f"{date_expr} = (CURRENT_TIMESTAMP AT TIME ZONE :tz)::date")
-        date_filter = " AND ".join(conditions)
-        q = f"""
+        df_date = _parse_date_to_date(date_from)
+        dt_date = _parse_date_to_date(date_to)
+        params = {
+            "tz": tz_safe,
+            "date_from": df_date,
+            "date_to": dt_date,
+            "has_date_from": bool(df_date),
+            "has_date_to": bool(dt_date),
+            "has_any_date": bool(df_date or dt_date),
+        }
+        q = """
         SELECT o.id, o.operation_number, o.amount, o.payment_type_code,
                o.cashier_login, o.expeditor_login, o.customer_id, o.order_id,
                o.operation_date, o.comment, o.related_operation_id
         FROM "Sales".operations o
-        WHERE {date_filter}
+        WHERE o.type_code = 'cash_receipt'
+          AND o.status = 'completed'
+          AND (:has_date_from = FALSE OR (o.operation_date AT TIME ZONE :tz)::date >= :date_from)
+          AND (:has_date_to = FALSE OR (o.operation_date AT TIME ZONE :tz)::date <= :date_to)
+          AND (:has_any_date = TRUE OR (o.operation_date AT TIME ZONE :tz)::date = (CURRENT_TIMESTAMP AT TIME ZONE :tz)::date)
         ORDER BY o.operation_date DESC
         """
         r = await session.execute(text(q), params)
@@ -266,23 +266,25 @@ async def export_cash_received_excel(
     """Выгрузка принятых денег за период в Excel."""
     try:
         tz_safe = tz.replace("'", "").replace(";", "")[:50] if tz else "UTC"
-        params = {"tz": tz_safe}
-        date_expr = "(o.operation_date AT TIME ZONE :tz)::date"
-        conditions = ["o.type_code = 'cash_receipt'", "o.status = 'completed'"]
-        df_iso = _parse_date_to_iso(date_from)
-        dt_iso = _parse_date_to_iso(date_to)
-        if df_iso:
-            conditions.append(f"{date_expr} >= :date_from")
-            params["date_from"] = df_iso
-        if dt_iso:
-            conditions.append(f"{date_expr} <= :date_to")
-            params["date_to"] = dt_iso
-        if not df_iso and not dt_iso:
-            conditions.append(f"{date_expr} = (CURRENT_TIMESTAMP AT TIME ZONE :tz)::date")
-        q = f"""
+        df_date = _parse_date_to_date(date_from)
+        dt_date = _parse_date_to_date(date_to)
+        params = {
+            "tz": tz_safe,
+            "date_from": df_date,
+            "date_to": dt_date,
+            "has_date_from": bool(df_date),
+            "has_date_to": bool(dt_date),
+            "has_any_date": bool(df_date or dt_date),
+        }
+        q = """
         SELECT o.operation_number, o.amount, o.payment_type_code, o.cashier_login,
                o.expeditor_login, o.customer_id, o.order_id, o.operation_date
-        FROM "Sales".operations o WHERE """ + " AND ".join(conditions) + """
+        FROM "Sales".operations o
+        WHERE o.type_code = 'cash_receipt'
+          AND o.status = 'completed'
+          AND (:has_date_from = FALSE OR (o.operation_date AT TIME ZONE :tz)::date >= :date_from)
+          AND (:has_date_to = FALSE OR (o.operation_date AT TIME ZONE :tz)::date <= :date_to)
+          AND (:has_any_date = TRUE OR (o.operation_date AT TIME ZONE :tz)::date = (CURRENT_TIMESTAMP AT TIME ZONE :tz)::date)
         ORDER BY o.operation_date DESC
         """
         r = await session.execute(text(q), params)
@@ -319,35 +321,21 @@ async def export_orders_for_confirmation_excel(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Выгрузка заказов для подтверждения оплаты в Excel."""
+    """Экспорт списка заказов для подтверждения оплаты в Excel."""
     try:
-        conditions = [
-            "o.payment_type_code IS NOT NULL",
-            "o.payment_type_code != ''",
-            "(o.status_code IS NULL OR o.status_code NOT IN ('cancelled', 'canceled'))",
-        ]
-        params = {}
-        if payment_type_code and payment_type_code.strip():
-            conditions.append("o.payment_type_code = :payment_type_code")
-            params["payment_type_code"] = payment_type_code.strip()
-        if status_code and status_code.strip():
-            conditions.append("o.status_code = :status_code")
-            params["status_code"] = status_code.strip()
         df_del = _parse_date_to_date(scheduled_delivery_from)
         dt_del = _parse_date_to_date(scheduled_delivery_to)
-        if df_del:
-            conditions.append("(o.scheduled_delivery_at::date >= :scheduled_delivery_from)")
-            params["scheduled_delivery_from"] = df_del
-        if dt_del:
-            conditions.append("(o.scheduled_delivery_at::date <= :scheduled_delivery_to)")
-            params["scheduled_delivery_to"] = dt_del
-        pc_val = (payment_confirmed or "").strip().lower()
-        if pc_val == "true":
-            conditions.append("EXISTS (SELECT 1 FROM \"Sales\".operations op WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no)")
-        elif pc_val == "false":
-            conditions.append("NOT EXISTS (SELECT 1 FROM \"Sales\".operations op WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no)")
-        where_clause = " AND ".join(conditions)
-        q = f"""
+        params = {
+            "payment_type_code": (payment_type_code or "").strip() or None,
+            "status_code": (status_code or "").strip() or None,
+            "scheduled_delivery_from": df_del,
+            "scheduled_delivery_to": dt_del,
+            "has_delivery_from": bool(df_del),
+            "has_delivery_to": bool(dt_del),
+            "payment_confirmed_filter": (payment_confirmed or "").strip().lower(),
+        }
+
+        q = """
         SELECT o.order_no, COALESCE(c.name_client, c.firm_name, '') AS customer_name,
                c.tax_id, c.account_no, ua.fio AS agent_fio, ue.fio AS expeditor_fio,
                o.total_amount, pt.name AS payment_type_name, s.name AS status_name,
@@ -360,7 +348,24 @@ async def export_orders_for_confirmation_excel(
         LEFT JOIN "Sales".status s ON o.status_code = s.code
         LEFT JOIN "Sales".users ua ON c.login_agent = ua.login
         LEFT JOIN "Sales".users ue ON c.login_expeditor = ue.login
-        WHERE {where_clause}
+        WHERE o.payment_type_code IS NOT NULL
+          AND o.payment_type_code != ''
+          AND (o.status_code IS NULL OR o.status_code NOT IN ('cancelled', 'canceled'))
+          AND (CAST(:payment_type_code AS text) IS NULL OR o.payment_type_code = CAST(:payment_type_code AS text))
+          AND (CAST(:status_code AS text) IS NULL OR o.status_code = CAST(:status_code AS text))
+          AND (:has_delivery_from = FALSE OR o.scheduled_delivery_at::date >= :scheduled_delivery_from)
+          AND (:has_delivery_to = FALSE OR o.scheduled_delivery_at::date <= :scheduled_delivery_to)
+          AND (
+            CAST(:payment_confirmed_filter AS text) = ''
+            OR (CAST(:payment_confirmed_filter AS text) = 'true' AND EXISTS (
+                SELECT 1 FROM "Sales".operations op
+                WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no
+            ))
+            OR (CAST(:payment_confirmed_filter AS text) = 'false' AND NOT EXISTS (
+                SELECT 1 FROM "Sales".operations op
+                WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no
+            ))
+          )
         ORDER BY o.scheduled_delivery_at DESC NULLS LAST, o.order_date DESC
         """
         r = await session.execute(text(q), params)
@@ -369,8 +374,20 @@ async def export_orders_for_confirmation_excel(
         rows = []
     wb = Workbook()
     ws = wb.active
-    ws.title = "Заказы для подтверждения"
-    headers = ["№ заказа", "Клиент", "ИНН", "Р/С", "Агент", "Экспедитор", "Сумма", "Тип оплаты", "Статус", "Дата поставки заказа", "Оплата подтверждена"]
+    ws.title = "Заказы для подтверждения оплаты"
+    headers = [
+        "№ заказа",
+        "Клиент",
+        "ИНН",
+        "Р/С",
+        "Агент",
+        "Экспедитор",
+        "Сумма",
+        "Тип оплаты",
+        "Статус",
+        "Дата поставки заказа",
+        "Оплата подтверждена",
+    ]
     for col, h in enumerate(headers, start=1):
         ws.cell(row=1, column=col, value=h)
     for row_idx, row in enumerate(rows[:50000], start=2):
@@ -398,52 +415,31 @@ async def export_orders_for_confirmation_excel(
         headers={"Content-Disposition": 'attachment; filename="orders_for_confirmation.xlsx"'},
     )
 
-
 @router.get("/orders-for-confirmation", response_model=EntityModel | list[EntityModel])
 async def get_orders_for_cashier_confirmation(
     payment_type_code: str | None = Query(None, description="Фильтр по типу оплаты"),
     status_code: str | None = Query(None, description="Фильтр по статусу заказа"),
-    payment_confirmed: str | None = Query(None, description="Фильтр: true=подтверждённые, false=не подтверждённые, пусто=все"),
+    payment_confirmed: str | None = Query(None, description="Фильтр оплаты: true=подтверждена, false=не подтверждена, пусто=все"),
     scheduled_delivery_from: str | None = Query(None, description="Дата поставки с (YYYY-MM-DD)"),
     scheduled_delivery_to: str | None = Query(None, description="Дата поставки по (YYYY-MM-DD)"),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Заказы с типом оплаты для подтверждения кассиром (приём денег)."""
+    """Получить заказы для подтверждения оплаты в кассе (экран кассира)."""
     try:
-        conditions = [
-            "o.payment_type_code IS NOT NULL",
-            "o.payment_type_code != ''",
-            "(o.status_code IS NULL OR o.status_code NOT IN ('cancelled', 'canceled'))",
-        ]
-        params = {}
-        if payment_type_code and payment_type_code.strip():
-            conditions.append("o.payment_type_code = :payment_type_code")
-            params["payment_type_code"] = payment_type_code.strip()
-        if status_code and status_code.strip():
-            conditions.append("o.status_code = :status_code")
-            params["status_code"] = status_code.strip()
         df_del = _parse_date_to_date(scheduled_delivery_from)
         dt_del = _parse_date_to_date(scheduled_delivery_to)
-        if df_del:
-            conditions.append("(o.scheduled_delivery_at::date >= :scheduled_delivery_from)")
-            params["scheduled_delivery_from"] = df_del
-        if dt_del:
-            conditions.append("(o.scheduled_delivery_at::date <= :scheduled_delivery_to)")
-            params["scheduled_delivery_to"] = dt_del
-        pc_val = (payment_confirmed or "").strip().lower()
-        if pc_val == "true":
-            conditions.append("""
-              EXISTS (SELECT 1 FROM "Sales".operations op
-                WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no)
-            """)
-        elif pc_val == "false":
-            conditions.append("""
-              NOT EXISTS (SELECT 1 FROM "Sales".operations op
-                WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no)
-            """)
-        where_clause = " AND ".join(conditions)
-        q = f"""
+        params = {
+            "payment_type_code": (payment_type_code or "").strip() or None,
+            "status_code": (status_code or "").strip() or None,
+            "scheduled_delivery_from": df_del,
+            "scheduled_delivery_to": dt_del,
+            "has_delivery_from": bool(df_del),
+            "has_delivery_to": bool(dt_del),
+            "payment_confirmed_filter": (payment_confirmed or "").strip().lower(),
+        }
+
+        q = """
         SELECT o.order_no, o.customer_id, o.total_amount, o.payment_type_code, o.status_code,
                o.scheduled_delivery_at,
                COALESCE(c.name_client, c.firm_name, '') AS customer_name,
@@ -463,7 +459,24 @@ async def get_orders_for_cashier_confirmation(
         LEFT JOIN "Sales".status s ON o.status_code = s.code
         LEFT JOIN "Sales".users ua ON c.login_agent = ua.login
         LEFT JOIN "Sales".users ue ON c.login_expeditor = ue.login
-        WHERE {where_clause}
+        WHERE o.payment_type_code IS NOT NULL
+          AND o.payment_type_code != ''
+          AND (o.status_code IS NULL OR o.status_code NOT IN ('cancelled', 'canceled'))
+          AND (CAST(:payment_type_code AS text) IS NULL OR o.payment_type_code = CAST(:payment_type_code AS text))
+          AND (CAST(:status_code AS text) IS NULL OR o.status_code = CAST(:status_code AS text))
+          AND (:has_delivery_from = FALSE OR o.scheduled_delivery_at::date >= :scheduled_delivery_from)
+          AND (:has_delivery_to = FALSE OR o.scheduled_delivery_at::date <= :scheduled_delivery_to)
+          AND (
+            CAST(:payment_confirmed_filter AS text) = ''
+            OR (CAST(:payment_confirmed_filter AS text) = 'true' AND EXISTS (
+                SELECT 1 FROM "Sales".operations op
+                WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no
+            ))
+            OR (CAST(:payment_confirmed_filter AS text) = 'false' AND NOT EXISTS (
+                SELECT 1 FROM "Sales".operations op
+                WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no
+            ))
+          )
         ORDER BY o.scheduled_delivery_at DESC NULLS LAST, o.order_date DESC
         """
         r = await session.execute(text(q), params)
@@ -493,7 +506,6 @@ async def get_orders_for_cashier_confirmation(
         return {"success": True, "data": data}
     except Exception as e:
         return {"success": False, "error": str(e)[:200], "data": []}
-
 
 @router.get("/ledger", response_model=EntityModel | list[EntityModel])
 async def get_financial_ledger(

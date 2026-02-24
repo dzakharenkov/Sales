@@ -26,7 +26,7 @@ def test_connection():
         # Проверка версии PostgreSQL
         cur.execute('SELECT version();')
         version = cur.fetchone()
-        print(f"\n✅ Подключение успешно!")
+        print("\n✅ Подключение успешно!")
         print(f"📌 PostgreSQL версия: {version[0]}\n")
 
         conn.close()
@@ -50,7 +50,7 @@ def test_schema_sales():
         # 1️⃣ Проверка наличия схемы
         cur.execute("""
             SELECT EXISTS(
-                SELECT 1 FROM information_schema.schemata 
+                SELECT 1 FROM information_schema.schemata
                 WHERE schema_name = 'Sales'
             );
         """)
@@ -65,8 +65,8 @@ def test_schema_sales():
 
         # 2️⃣ Список всех таблиц в схеме Sales
         cur.execute("""
-            SELECT table_name 
-            FROM information_schema.tables 
+            SELECT table_name
+            FROM information_schema.tables
             WHERE table_schema = 'Sales'
             ORDER BY table_name;
         """)
@@ -97,7 +97,7 @@ def test_users_table():
         # Структура таблицы
         cur.execute("""
             SELECT column_name, data_type, is_nullable
-            FROM information_schema.columns 
+            FROM information_schema.columns
             WHERE table_schema = 'Sales' AND table_name = 'users'
             ORDER BY ordinal_position;
         """)
@@ -118,8 +118,8 @@ def test_users_table():
         # Список пользователей
         if count > 0:
             cur.execute("""
-                SELECT login, fio, role, status 
-                FROM "Sales".users 
+                SELECT login, fio, role, status
+                FROM "Sales".users
                 LIMIT 10;
             """)
             users = cur.fetchall()
@@ -156,8 +156,8 @@ def test_product_table():
         # Список продуктов
         if count > 0:
             cur.execute("""
-                SELECT code, name, type_id, weight_g, price, expiry_days 
-                FROM "Sales".product 
+                SELECT code, name, type_id, weight_g, price, expiry_days
+                FROM "Sales".product
                 LIMIT 10;
             """)
             products = cur.fetchall()
@@ -196,8 +196,8 @@ def test_warehouse_table():
         # Список складов
         if count > 0:
             cur.execute("""
-                SELECT code, name, type, storekeeper, agent 
-                FROM "Sales".warehouse 
+                SELECT code, name, type, storekeeper, agent
+                FROM "Sales".warehouse
                 LIMIT 10;
             """)
             warehouses = cur.fetchall()
@@ -230,8 +230,8 @@ def test_all_tables_count():
 
         # Список таблиц
         cur.execute("""
-            SELECT table_name 
-            FROM information_schema.tables 
+            SELECT table_name
+            FROM information_schema.tables
             WHERE table_schema = 'Sales'
             ORDER BY table_name;
         """)
@@ -295,7 +295,7 @@ def main():
     if passed == total:
         print("\n🎉 ВСЕ ТЕСТЫ ПРОЙДЕНЫ УСПЕШНО! Готов к разработке DistroFlow!")
     else:
-        print(f"\n⚠️  Ошибки обнаружены. Проверь логи выше.")
+        print("\n⚠️  Ошибки обнаружены. Проверь логи выше.")
 
     print("\n")
 

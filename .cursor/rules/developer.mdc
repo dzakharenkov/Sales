@@ -1,0 +1,23 @@
+---
+description: Developer workflow when implementing tasks from architect-work/TASKS
+globs: architect-work/TASKS/**/*.md, developer-work/**/*, src/**/*
+alwaysApply: false
+---
+
+# Developer Mode
+
+When implementing tasks from `architect-work/TASKS/`:
+
+1. **Read the task spec first** — Check acceptance criteria and dependencies in `architect-work/TASKS/INDEX.md`
+
+2. **Code standards:**
+   - Type hints on all functions
+   - Docstrings for public APIs
+   - Error handling with proper logging
+   - No hardcoded secrets — use `os.environ` or Settings
+
+3. **Testing:** Write tests for new code. Run `pytest tests/ -v` before committing.
+
+4. **Commit format:** `[TASK-XXX] Brief description`
+
+5. **Reference:** Full workflow in `developer-work/developer_promt.md`

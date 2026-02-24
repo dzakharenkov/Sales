@@ -1,20 +1,25 @@
 """Menu by role: GET /menu, GET/POST /admin/roles/{role}/menu-access."""
 from typing import List
 from src.api.v1.schemas.common import EntityModel
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.connection import get_db_session
 from src.database.models import User
 from src.core.deps import get_current_user, require_admin
+from src.api.v1.services.translation_service import TranslationService
 
 router = APIRouter()
 ALLOWED_ROLES = ("admin", "agent", "expeditor", "stockman", "paymaster")
 ALLOWED_ACCESS = ("none", "view", "full")
 
 @router.get("/menu", response_model=EntityModel | list[EntityModel])
-async def get_menu(session: AsyncSession = Depends(get_db_session), user: User = Depends(get_current_user)):
+async def get_menu(
+    language: str | None = Query(None),
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
     role = (user.role or "").strip().lower() or "agent"
     q = text("""SELECT mi.id, mi.code, mi.label, mi.icon, mi.url, mi.sort_order, rma.access_level
         FROM "Sales".menu_items mi JOIN "Sales".role_menu_access rma ON mi.id = rma.menu_item_id
@@ -22,7 +27,21 @@ async def get_menu(session: AsyncSession = Depends(get_db_session), user: User =
         ORDER BY mi.sort_order""")
     result = await session.execute(q, {"role": role})
     rows = result.fetchall()
-    menu = [{"id": r[0], "code": r[1], "label": r[2], "icon": r[3] or "", "url": r[4] or r[1], "sort_order": r[5] or 0, "access_level": r[6] or "view"} for r in rows]
+    translation_service = TranslationService(session)
+    menu_keys = [f"menu.{r[1]}" for r in rows if r[1]]
+    translated_labels = await translation_service.resolve_many(menu_keys, language)
+    menu = [
+        {
+            "id": r[0],
+            "code": r[1],
+            "label": translated_labels.get(f"menu.{r[1]}", r[2]),
+            "icon": r[3] or "",
+            "url": r[4] or r[1],
+            "sort_order": r[5] or 0,
+            "access_level": r[6] or "view",
+        }
+        for r in rows
+    ]
     return {"menu": menu}
 
 @router.get("/admin/roles/{role}/menu-access", response_model=EntityModel | list[EntityModel])

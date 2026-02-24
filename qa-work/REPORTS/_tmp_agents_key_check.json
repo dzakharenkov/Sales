@@ -1,0 +1,29 @@
+{
+  "field.fio": {},
+  "field.to": {
+    "en": "to",
+    "ru": "по",
+    "uz": "gacha"
+  },
+  "ui.common.export_excel": {
+    "en": "Export to Excel",
+    "ru": "Выгрузить в Excel",
+    "uz": "Excelga eksport"
+  },
+  "ui.report.agents.title": {
+    "en": "Report: Agent performance",
+    "ru": "Отчёт: Эффективность агентов",
+    "uz": "Hisobot: Agentlar samaradorligi"
+  },
+  "ui.report.agents.total_agents": {},
+  "field.login": {},
+  "field.customers": {},
+  "field.visits": {},
+  "field.completed": {},
+  "field.orders_count": {
+    "en": "Orders count",
+    "ru": "ÐÐ¾Ð»Ð¸ÑÐµÑÑÐ²Ð¾ Ð·Ð°ÐºÐ°Ð·Ð¾Ð²",
+    "uz": "Buyurtmalar soni"
+  },
+  "field.total_amount": {}
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,6 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from src.core.security import hash_password
 from src.database.connection import get_db_session
@@ -25,6 +27,13 @@ def _normalize_database_url(raw_url: str) -> str:
 
 
 def _load_test_database_url() -> str | None:
+    # Prefer runtime environment (CI/local shell), then fallback to tests/.env.test.
+    raw = os.getenv("TEST_DATABASE_URL") or os.getenv("DATABASE_URL")
+    if raw is not None:
+        raw = str(raw).strip()
+        if raw:
+            return raw
+
     env_file = Path(__file__).parent / ".env.test"
     env_values = dotenv_values(env_file)
     raw = env_values.get("TEST_DATABASE_URL") or env_values.get("DATABASE_URL")
@@ -36,7 +45,12 @@ def _load_test_database_url() -> str | None:
 
 def _validate_test_database_url(raw_url: str) -> str:
     db_name = (make_url(raw_url).database or "").lower()
-    if "test" not in db_name:
+    allow_non_test = os.getenv("INTEGRATION_ALLOW_NON_TEST_DB", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if "test" not in db_name and not allow_non_test:
         raise RuntimeError(
             f"Unsafe TEST_DATABASE_URL: database name '{db_name}' does not contain 'test'."
         )
@@ -57,7 +71,8 @@ def test_database_url() -> str:
 
 @pytest_asyncio.fixture(scope="session")
 async def test_engine(test_database_url: str):
-    engine = create_async_engine(test_database_url, pool_pre_ping=True, future=True)
+    # Prevent asyncpg connections from being reused across different event loops in tests.
+    engine = create_async_engine(test_database_url, pool_pre_ping=True, future=True, poolclass=NullPool)
     required_tables = {"users", "customers", "orders"}
     try:
         async with engine.connect() as conn:

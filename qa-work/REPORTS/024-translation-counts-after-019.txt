@@ -1,0 +1,6 @@
+TOTAL_ROWS=347
+UNIQUE_KEY_LANG=347
+UNIQUE_KEYS=128
+BY_LANG=ru:91,uz:128,en:128
+BY_CATEGORY=buttons:39,fields:108,menu:94,messages:30,operation_types:26,payment_types:6,statuses:8,telegram:36
+BY_FILE=011_seed_en_uz_translations.py:70,012_seed_ui_translations_and_menu_item.py:45,013_finalize_translations.py:4,016_seed_menu_telegram_keys.py:63,017_seed_system_title.py:3,018_seed_telegram_auth_i18n.py:0,019_fill_ui_translations_and_backfill_langs.py:162

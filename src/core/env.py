@@ -49,7 +49,7 @@ def validate_jwt_secret_strength(secret: str, min_bytes: int = 32) -> None:
             raw = decoded
     except Exception:
         # Secret might be plain text (e.g., token_hex). Validate length as-is.
-        pass
+        decoded = b""
 
     if len(raw) < min_bytes:
         raise RuntimeError(

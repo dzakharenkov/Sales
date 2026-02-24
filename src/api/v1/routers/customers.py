@@ -23,6 +23,60 @@ from src.api.v1.services.customer_service import CustomerService
 
 router = APIRouter()
 
+EXPORT_COLUMNS = [
+    "id",
+    "name_client",
+    "firm_name",
+    "category_client",
+    "address",
+    "city",
+    "territory",
+    "landmark",
+    "phone",
+    "contact_person",
+    "tax_id",
+    "status",
+    "login_agent",
+    "login_expeditor",
+    "latitude",
+    "longitude",
+    "PINFL",
+    "contract_no",
+    "account_no",
+    "bank",
+    "MFO",
+    "OKED",
+    "VAT_code",
+    "has_photo",
+]
+
+EXPORT_HEADERS_RU = [
+    "ID",
+    "Название клиента",
+    "Название фирмы",
+    "Категория",
+    "Адрес",
+    "Город",
+    "Территория",
+    "Ориентир",
+    "Телефон",
+    "Контактное лицо",
+    "ИНН",
+    "Статус",
+    "Логин агента",
+    "Логин экспедитора",
+    "Широта",
+    "Долгота",
+    "ПИНФЛ",
+    "Номер договора",
+    "Номер счета",
+    "Банк",
+    "МФО",
+    "ОКЭД",
+    "Код НДС",
+    "Фото",
+]
+
 
 def _customer_to_dict(c: Customer) -> dict:
     return {
@@ -106,23 +160,23 @@ class CustomerUpdate(BaseModel):
 
 @router.get("/customers", response_model=PaginatedResponse[EntityModel])
 async def list_customers(
-    customer_id: int | None = Query(None, description="?? ??????? (?????? ??????????)"),
+    customer_id: int | None = Query(None, description="ID клиента (точное совпадение)"),
     search: str | None = Query(
         None,
-        description="??????????? ????? ?? ???????? ??????? ? ??? (????????? ??????????, OR)",
+        description="Объединённый поиск по названию клиента и ИНН (частичное совпадение, OR)",
     ),
-    name_client: str | None = Query(None, description="????? ?? ???????? ??????? (????????? ??????????)"),
-    firm_name: str | None = Query(None, description="????? ?? ???????? ?????"),
+    name_client: str | None = Query(None, description="Поиск по названию клиента (частичное совпадение)"),
+    firm_name: str | None = Query(None, description="Поиск по названию фирмы"),
     city: str | None = Query(None),
-    login_agent: str | None = Query(None, description="?????? ?? ?????? (?????)"),
-    login_expeditor: str | None = Query(None, description="?????? ?? ??????????? (?????)"),
-    phone: str | None = Query(None, description="????? ?? ???????? (????????? ??????????)"),
-    tax_id: str | None = Query(None, description="????? ?? ??? (????????? ??????????)"),
+    login_agent: str | None = Query(None, description="Фильтр по агенту (точно)"),
+    login_expeditor: str | None = Query(None, description="Фильтр по экспедитору (точно)"),
+    phone: str | None = Query(None, description="Поиск по телефону (частичное совпадение)"),
+    tax_id: str | None = Query(None, description="Поиск по ИНН (частичное совпадение)"),
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """?????? ???????? ? ??????? ?? ???????? ?????."""
+    """Список клиентов с фильтрами по параметрам поиска."""
     service = CustomerService(session)
     data, total = await service.list_customers(
         pagination,
@@ -292,7 +346,7 @@ async def create_customer(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """???????? ???????. Admin ??? Agent."""
+    """Создать клиента. Доступно ролям Admin и Agent."""
     return await CustomerService(session).create_customer(body.model_dump(), user.role)
 @router.get("/customers/{customer_id}/visits", response_model=EntityModel | list[EntityModel])
 async def list_customer_visits(
@@ -301,7 +355,7 @@ async def list_customer_visits(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """?????? ??????? ???????."""
+    """Список визитов клиента."""
     return await CustomerService(session).list_customer_visits(customer_id=customer_id, limit=limit)
 
 
@@ -318,7 +372,7 @@ async def create_customer_visit(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """??????? ????? ??? ???????."""
+    """Создать визит для клиента."""
     return await CustomerService(session).create_customer_visit(
         customer_id=customer_id,
         payload=body.model_dump(),
@@ -330,7 +384,7 @@ async def get_customer(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """???????? ??????? ?? id."""
+    """Получить клиента по id."""
     return await CustomerService(session).get_customer_dict(customer_id)
 @router.get("/customers/{customer_id}/balance", response_model=EntityModel | list[EntityModel])
 async def get_customer_balance(
@@ -338,7 +392,7 @@ async def get_customer_balance(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """?????? ???????: ????? ???????????? ????????."""
+    """Баланс клиента: сумма незавершённых операций."""
     return await CustomerService(session).get_customer_balance(customer_id)
 @router.patch("/customers/{customer_id}")
 async def update_customer(
@@ -347,7 +401,7 @@ async def update_customer(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """???????? ???????."""
+    """Обновить данные клиента."""
     return await CustomerService(session).update_customer(
         customer_id=customer_id,
         payload=body.model_dump(exclude_unset=True),
@@ -360,5 +414,5 @@ async def delete_customer(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """??????? ???????. ?????? admin."""
+    """Удалить клиента. Только admin."""
     return await CustomerService(session).delete_customer(customer_id)

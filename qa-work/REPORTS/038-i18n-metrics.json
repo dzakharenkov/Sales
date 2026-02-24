@@ -1,0 +1,79 @@
+{
+  "all_by_language": {
+    "en": 425,
+    "ru": 425,
+    "uz": 425
+  },
+  "all_keys": 425,
+  "telegram_by_language": {
+    "en": 158,
+    "ru": 158,
+    "uz": 158
+  },
+  "telegram_keys": 158,
+  "missing_any_language_keys_count": 0,
+  "missing_any_language_keys": [],
+  "suspicious_text_rows_count": 12,
+  "suspicious_text_rows": [
+    {
+      "key": "telegram.auth.logout_confirm",
+      "lang": "en",
+      "text": "Do you really want to logout?"
+    },
+    {
+      "key": "telegram.auth.logout_confirm",
+      "lang": "ru",
+      "text": "Вы действительно хотите выйти?"
+    },
+    {
+      "key": "telegram.auth.logout_confirm",
+      "lang": "uz",
+      "text": "Rostdan ham chiqmoqchimisiz?"
+    },
+    {
+      "key": "telegram.customer_create.all_correct",
+      "lang": "en",
+      "text": "Is everything correct?"
+    },
+    {
+      "key": "telegram.customer_create.all_correct",
+      "lang": "ru",
+      "text": "Всё верно?"
+    },
+    {
+      "key": "telegram.customer_create.all_correct",
+      "lang": "uz",
+      "text": "Hammasi to'g'rimi?"
+    },
+    {
+      "key": "telegram.visit_create.all_correct",
+      "lang": "en",
+      "text": "Is everything correct?"
+    },
+    {
+      "key": "telegram.visit_create.all_correct",
+      "lang": "ru",
+      "text": "Всё верно?"
+    },
+    {
+      "key": "telegram.visit_create.all_correct",
+      "lang": "uz",
+      "text": "Hammasi to'g'rimi?"
+    },
+    {
+      "key": "ui.translations.delete_confirm",
+      "lang": "en",
+      "text": "Delete translation?"
+    },
+    {
+      "key": "ui.translations.delete_confirm",
+      "lang": "ru",
+      "text": "Удалить перевод?"
+    },
+    {
+      "key": "ui.translations.delete_confirm",
+      "lang": "uz",
+      "text": "Tarjimani o'chirasizmi?"
+    }
+  ]
+}

@@ -55,15 +55,16 @@ class SDSApi:
             detail = "Нет доступа"
             try:
                 detail = resp.json().get("detail", detail)
-            except Exception:
-                pass
+            except Exception as parse_error:
+                logger.debug("Failed to parse 403 response: %s", parse_error)
             raise SDSApiError(403, detail)
         if resp.status_code >= 400:
             detail = str(resp.status_code)
             try:
                 d = resp.json()
                 detail = d.get("detail", str(d)) if isinstance(d, dict) else str(d)
-            except Exception:
+            except Exception as parse_error:
+                logger.debug("Failed to parse error response JSON: %s", parse_error)
                 detail = resp.text[:300]
             raise SDSApiError(resp.status_code, detail)
 
@@ -71,7 +72,8 @@ class SDSApi:
             return None
         try:
             return resp.json()
-        except Exception:
+        except Exception as parse_error:
+            logger.debug("Response is not JSON, returning text: %s", parse_error)
             return resp.text
 
     # ---------- Auth ----------
@@ -86,6 +88,10 @@ class SDSApi:
     async def me(self, token: str) -> dict:
         """GET /api/v1/auth/me"""
         return await self._request("GET", "/api/v1/auth/me", token=token)
+
+    async def get_current_user(self, token: str) -> dict:
+        """Alias for GET /api/v1/auth/me used by bot profile handlers."""
+        return await self.me(token)
 
     # ---------- Users ----------
 
@@ -144,8 +150,50 @@ class SDSApi:
     # ---------- Customers ----------
 
     async def search_customers(self, token: str, **params) -> list:
-        """GET /api/v1/customers"""
-        return await self._request("GET", "/api/v1/customers", token=token, params=params)
+        """GET /api/v1/customers.
+
+        Normalizes paginated response ({data: [...]}) to plain list for bot handlers.
+        Adds fallback search by explicit fields for backend compatibility.
+        """
+        query_params = dict(params or {})
+        response = await self._request("GET", "/api/v1/customers", token=token, params=query_params)
+
+        def _as_list(payload) -> list:
+            if isinstance(payload, list):
+                return payload
+            if isinstance(payload, dict):
+                data = payload.get("data")
+                if isinstance(data, list):
+                    return data
+            return []
+
+        customers = _as_list(response)
+        if customers:
+            return customers
+
+        raw_search = (query_params.get("search") or "").strip()
+        if not raw_search:
+            return customers
+
+        fallback_params = {k: v for k, v in query_params.items() if k != "search"}
+        if raw_search.isdigit():
+            fallback_params["tax_id"] = raw_search
+        else:
+            fallback_params["name_client"] = raw_search
+
+        fallback_response = await self._request("GET", "/api/v1/customers", token=token, params=fallback_params)
+        customers = _as_list(fallback_response)
+        if customers:
+            return customers
+
+        if "name_client" in fallback_params:
+            firm_params = dict(fallback_params)
+            firm_params.pop("name_client", None)
+            firm_params["firm_name"] = raw_search
+            firm_response = await self._request("GET", "/api/v1/customers", token=token, params=firm_params)
+            return _as_list(firm_response)
+
+        return customers
 
     async def get_customer(self, token: str, customer_id: int) -> dict:
         """GET /api/v1/customers/{id}"""
@@ -176,7 +224,8 @@ class SDSApi:
             detail = str(resp.status_code)
             try:
                 detail = resp.json().get("detail", detail)
-            except Exception:
+            except Exception as parse_error:
+                logger.debug("Failed to parse photo upload error JSON: %s", parse_error)
                 detail = resp.text[:200]
             raise SDSApiError(resp.status_code, detail)
         return resp.json()

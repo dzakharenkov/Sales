@@ -12,12 +12,46 @@ from .session import get_session, touch_session, log_action, delete_session
 from .sds_api import api, SDSApiError
 from .helpers import (
     fmt_money, fmt_date, date_picker_keyboard, calendar_keyboard,
-    back_button, STATUS_RU, PAYMENT_RU, get_cached_products, get_cached_payment_types,
+    back_button, get_cached_products, get_cached_payment_types,
 )
+from .i18n import t, localize_literal, localize_reply_markup
 from .handlers_agent_v3_add_customer import get_add_customer_v3_handler
 from .handlers_agent_create_visit import get_create_visit_handler
 
 logger = logging.getLogger(__name__)
+
+
+async def _loc(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> str:
+    return await localize_literal(update, context, text)
+
+
+async def _edit_loc(q, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
+    if "reply_markup" in kwargs and kwargs["reply_markup"] is not None:
+        kwargs["reply_markup"] = await localize_reply_markup(update, context, kwargs["reply_markup"])
+    return await q.edit_message_text(await _loc(update, context, text), **kwargs)
+
+
+async def _reply_loc(msg, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
+    if "reply_markup" in kwargs and kwargs["reply_markup"] is not None:
+        kwargs["reply_markup"] = await localize_reply_markup(update, context, kwargs["reply_markup"])
+    return await msg.reply_text(await _loc(update, context, text), **kwargs)
+
+
+
+async def _status_label(update: Update, context: ContextTypes.DEFAULT_TYPE, status_code: str) -> str:
+    code = (status_code or "").strip()
+    if not code:
+        return "—"
+    value = await t(update, context, f"status.{code}")
+    return value if value != f"status.{code}" else code
+
+
+async def _payment_label(update: Update, context: ContextTypes.DEFAULT_TYPE, payment_code: str) -> str:
+    code = (payment_code or "").strip()
+    if not code:
+        return "—"
+    value = await t(update, context, f"payment_type.{code}")
+    return value if value != f"payment_type.{code}" else code
 
 
 async def debug_log_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -37,7 +71,7 @@ async def _get_auth(update: Update):
     tg_id = q.from_user.id
     session = await get_session(tg_id)
     if not session:
-        await q.edit_message_text("Сессия истекла. Нажмите /start.")
+        await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start.")
         return None, None
     await touch_session(tg_id)
     return session, session.jwt_token
@@ -86,13 +120,13 @@ async def _handle_add_customer_text(update: Update, context: ContextTypes.DEFAUL
 
     session = await get_session(update.effective_user.id)
     if not session:
-        await update.message.reply_text("Сессия истекла. Нажмите /start.")
+        await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start.")
         return True
 
     if step == "name":
         name = update.message.text.strip()
         if len(name) < 2:
-            await update.message.reply_text("❌ Название минимум 2 символа. Введите снова:")
+            await _reply_loc(update.message, update, context, "❌ Название минимум 2 символа. Введите снова:")
             return True
         context.user_data["add_cust_name"] = name
         context.user_data["add_cust_step"] = "inn"
@@ -254,7 +288,7 @@ async def cb_agent_addcust_finish(update: Update, context: ContextTypes.DEFAULT_
         return
     name = (context.user_data.get("add_cust_name") or "").strip()
     if len(name) < 2:
-        await q.edit_message_text("❌ Заполните хотя бы *название клиента* (минимум 2 символа).", parse_mode="Markdown")
+        await _edit_loc(q, update, context, "❌ Заполните хотя бы *название клиента* (минимум 2 символа).", parse_mode="Markdown")
         return
 
     body = {"name_client": name, "status": "Активный", "login_agent": session.login}
@@ -301,9 +335,12 @@ async def cb_agent_addcust_finish(update: Update, context: ContextTypes.DEFAULT_
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
 
 
 async def cb_agent_addcust_skip_geo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -348,10 +385,10 @@ async def _handle_add_customer_photo(update: Update, context: ContextTypes.DEFAU
             file = await doc.get_file()
             filename = doc.file_name or "photo.jpg"
         else:
-            await update.message.reply_text("❌ Отправьте изображение (JPG, PNG, WEBP).")
+            await _reply_loc(update.message, update, context, "❌ Отправьте изображение (JPG, PNG, WEBP).")
             return True
         if file.file_size and file.file_size > 10 * 1024 * 1024:
-            await update.message.reply_text("❌ Файл слишком большой (макс. 10 МБ).")
+            await _reply_loc(update.message, update, context, "❌ Файл слишком большой (макс. 10 МБ).")
             return True
         file_bytes = await file.download_as_bytearray()
         context.user_data["add_cust_photo_bytes"] = bytes(file_bytes)
@@ -370,10 +407,10 @@ async def _handle_add_customer_photo(update: Update, context: ContextTypes.DEFAU
         file = await doc.get_file()
         filename = doc.file_name or "photo.jpg"
     else:
-        await update.message.reply_text("❌ Отправьте изображение (JPG, PNG, WEBP).")
+        await _reply_loc(update.message, update, context, "❌ Отправьте изображение (JPG, PNG, WEBP).")
         return True
     if file.file_size and file.file_size > 10 * 1024 * 1024:
-        await update.message.reply_text("❌ Файл слишком большой (макс. 10 МБ).")
+        await _reply_loc(update.message, update, context, "❌ Файл слишком большой (макс. 10 МБ).")
         return True
     file_bytes = await file.download_as_bytearray()
     context.user_data["add_cust_photo_bytes"] = bytes(file_bytes)
@@ -458,11 +495,14 @@ async def cb_agent_addcust_confirm(update: Update, context: ContextTypes.DEFAULT
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
         await log_action(q.from_user.id, session.login, session.role,
                          "customer_created", f"name={name}", "error", e.detail)
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
 
 
 # ====================== МОИ ВИЗИТЫ ======================
@@ -474,8 +514,16 @@ async def cb_agent_visits(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not session:
         return
     _clear_agent_state(context)
-    kb = date_picker_keyboard("agent_visits")
-    await q.edit_message_text("📋 *Мои визиты*\n\nВыберите дату:", reply_markup=kb, parse_mode="Markdown")
+    kb = date_picker_keyboard(
+        "agent_visits",
+        text_today=await t(update, context, "telegram.common.today", fallback="Сегодня"),
+        text_tomorrow=await t(update, context, "telegram.common.tomorrow", fallback="Завтра"),
+        text_choose=await t(update, context, "telegram.common.choose_date_btn", fallback="Выбрать дату"),
+        text_back=await t(update, context, "telegram.button.back", fallback="◀️ Назад")
+    )
+    title = await t(update, context, "telegram.button.my_visits", fallback="Мои визиты")
+    choose_prompt = await t(update, context, "telegram.common.choose_date", fallback="Выберите дату:")
+    await _edit_loc(q, update, context, f"📋 *{title}*\n\n{choose_prompt}", reply_markup=kb, parse_mode="Markdown")
 
 
 async def cb_agent_visits_calendar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -483,14 +531,22 @@ async def cb_agent_visits_calendar(update: Update, context: ContextTypes.DEFAULT
     await q.answer()
     offset = int(q.data.split("_")[-1])
     kb = calendar_keyboard("agent_visits", offset)
-    await q.edit_message_text("📅 Выберите дату:", reply_markup=kb, parse_mode="Markdown")
+    await _edit_loc(q, update, context, "📅 Выберите дату:", reply_markup=kb, parse_mode="Markdown")
 
 
 async def cb_agent_visits_pick_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    kb = date_picker_keyboard("agent_visits")
-    await q.edit_message_text("📋 *Мои визиты*\n\nВыберите дату:", reply_markup=kb, parse_mode="Markdown")
+    kb = date_picker_keyboard(
+        "agent_visits",
+        text_today=await t(update, context, "telegram.common.today", fallback="Сегодня"),
+        text_tomorrow=await t(update, context, "telegram.common.tomorrow", fallback="Завтра"),
+        text_choose=await t(update, context, "telegram.common.choose_date_btn", fallback="Выбрать дату"),
+        text_back=await t(update, context, "telegram.button.back", fallback="◀️ Назад")
+    )
+    title = await t(update, context, "telegram.button.my_visits", fallback="Мои визиты")
+    choose_prompt = await t(update, context, "telegram.common.choose_date", fallback="Выберите дату:")
+    await _edit_loc(q, update, context, f"📋 *{title}*\n\n{choose_prompt}", reply_markup=kb, parse_mode="Markdown")
 
 
 async def cb_agent_visits_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -514,9 +570,12 @@ async def cb_agent_visits_date(update: Update, context: ContextTypes.DEFAULT_TYP
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button("agent_visits"))
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button("agent_visits"),
+        )
         return
 
     visits = data.get("data") or [] if isinstance(data, dict) else data
@@ -533,7 +592,8 @@ async def cb_agent_visits_date(update: Update, context: ContextTypes.DEFAULT_TYP
         vid = v.get("id")
         client = v.get("customer_name", "—")
         time_str = v.get("visit_time", "—")
-        status = STATUS_RU.get(v.get("status", ""), v.get("status", ""))
+        status_code = v.get("status", "")
+        status = await _status_label(update, context, status_code)
         lines.append(f"• {time_str} | {client} | {status}")
         buttons.append([InlineKeyboardButton(
             f"{time_str} — {client}", callback_data=f"agent_visit_{vid}"
@@ -557,9 +617,12 @@ async def cb_agent_visit_detail(update: Update, context: ContextTypes.DEFAULT_TY
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button("agent_visits"))
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button("agent_visits"),
+        )
         return
 
     context.user_data["current_visit"] = v
@@ -568,7 +631,8 @@ async def cb_agent_visit_detail(update: Update, context: ContextTypes.DEFAULT_TY
     address = v.get("address", "—")
     visit_date = fmt_date(v.get("visit_date"))
     visit_time = v.get("visit_time", "—")
-    status = STATUS_RU.get(v.get("status", ""), v.get("status", ""))
+    status_code = v.get("status", "")
+    status = await _status_label(update, context, status_code)
     comment = v.get("comment") or "—"
     customer_id = v.get("customer_id")
 
@@ -577,29 +641,43 @@ async def cb_agent_visit_detail(update: Update, context: ContextTypes.DEFAULT_TY
         try:
             pr = await api.get_customer_photos(token, customer_id)
             photo_count = pr.get("total", 0) if isinstance(pr, dict) else len(pr if isinstance(pr, list) else [])
-        except Exception:
-            pass
+        except Exception as photos_error:
+            logger.debug("Failed to load customer photos for visit detail: %s", photos_error)
+
+    t_title = await t(update, context, "telegram.visit_card.title", fallback=f"📋 *Визит #{vid}*", id=vid)
+    t_client = await t(update, context, "telegram.visit_card.client", fallback=f"*Клиент:* {client}", client=client)
+    t_phone = await t(update, context, "telegram.visit_card.phone", fallback=f"*Телефон:* {phone}", phone=phone)
+    t_addr = await t(update, context, "telegram.visit_card.address", fallback=f"*Адрес:* {address}", address=address)
+    t_date = await t(update, context, "telegram.visit_card.date", fallback=f"*Дата:* {visit_date}", date=visit_date)
+    t_time = await t(update, context, "telegram.visit_card.time", fallback=f"*Время:* {visit_time}", time=visit_time)
+    t_status = await t(update, context, "telegram.visit_card.status", fallback=f"*Статус:* {status}", status=status)
+    t_comment = await t(update, context, "telegram.visit_card.comment", fallback=f"*Комментарий:* {comment}", comment=comment)
+    t_photos = await t(update, context, "telegram.visit_card.photos", fallback=f"📷 Фотографий: {photo_count}", count=photo_count)
 
     lines = [
-        f"📋 *Визит #{vid}*\n",
-        f"*Клиент:* {client}",
-        f"*Телефон:* {phone}",
-        f"*Адрес:* {address}",
-        f"*Дата:* {visit_date}",
-        f"*Время:* {visit_time}",
-        f"*Статус:* {status}",
-        f"*Комментарий:* {comment}",
-        f"📷 Фотографий: {photo_count}",
+        f"{t_title}\n",
+        t_client,
+        t_phone,
+        t_addr,
+        t_date,
+        t_time,
+        t_status,
+        t_comment,
+        t_photos,
     ]
 
     buttons = []
     if v.get("status") in ("planned", "in_progress"):
-        buttons.append([InlineKeyboardButton("✅ Отметить выполнено", callback_data=f"agent_vcomplete_{vid}")])
-        buttons.append([InlineKeyboardButton("❌ Отметить не выполнено", callback_data=f"agent_vcancel_{vid}")])
+        btn_complete = await t(update, context, "telegram.visit_card.completed_btn", fallback="✅ Отметить выполнено")
+        btn_cancel = await t(update, context, "telegram.visit_card.cancelled_btn", fallback="❌ Отметить не выполнено")
+        buttons.append([InlineKeyboardButton(btn_complete, callback_data=f"agent_vcomplete_{vid}")])
+        buttons.append([InlineKeyboardButton(btn_cancel, callback_data=f"agent_vcancel_{vid}")])
     if customer_id:
-        buttons.append([InlineKeyboardButton("📸 Фотографии", callback_data=f"agent_vphotos_{customer_id}")])
+        btn_photos = await t(update, context, "telegram.visit_card.photos_btn", fallback="📸 Фотографии")
+        buttons.append([InlineKeyboardButton(btn_photos, callback_data=f"agent_vphotos_{customer_id}")])
     date_str = context.user_data.get("agent_date", date.today().isoformat())
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data=f"agent_visits_date_{date_str}")])
+    btn_back = await t(update, context, "telegram.button.back", fallback="◀️ Назад")
+    buttons.append([InlineKeyboardButton(btn_back, callback_data=f"agent_visits_date_{date_str}")])
     await q.edit_message_text(
         "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
     )
@@ -614,7 +692,7 @@ async def cb_agent_vcomplete(update: Update, context: ContextTypes.DEFAULT_TYPE)
     _clear_agent_state(context)
     context.user_data["vcomplete_id"] = vid
     await q.edit_message_text(
-        f"Визит #{vid}\n\nВведите комментарий (минимум 10 символов):",
+        await t(update, context, "telegram.agent.visit_complete_enter_comment", fallback=f"Визит #{vid}\n\nВведите комментарий (минимум 10 символов):", vid=vid),
         reply_markup=back_button(f"agent_visit_{vid}"),
     )
 
@@ -628,7 +706,7 @@ async def _handle_vcomplete_comment(update: Update, context: ContextTypes.DEFAUL
         return True
     comment = update.message.text.strip()
     if len(comment) < 10:
-        await update.message.reply_text("❌ Комментарий минимум 10 символов. Введите снова:")
+        await _reply_loc(update.message, update, context, "❌ Комментарий минимум 10 символов. Введите снова:")
         return True
     try:
         await api.update_visit(session.jwt_token, vid, {"status": "completed", "comment": comment})
@@ -661,9 +739,11 @@ async def _handle_vcomplete_comment(update: Update, context: ContextTypes.DEFAUL
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
         else:
-            await update.message.reply_text(f"❌ Ошибка: {e.detail}")
+            await update.message.reply_text(
+                await t(update, context, "telegram.common.error_with_detail", detail=e.detail)
+            )
     return True
 
 
@@ -676,7 +756,7 @@ async def cb_agent_vcancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _clear_agent_state(context)
     context.user_data["vcancel_id"] = vid
     await q.edit_message_text(
-        f"Визит #{vid}\n\nВведите причину (или «-» чтобы пропустить):",
+        await t(update, context, "telegram.agent.visit_cancel_enter_reason", fallback=f"Визит #{vid}\n\nВведите причину (или «-» чтобы пропустить):", vid=vid),
         reply_markup=back_button(f"agent_visit_{vid}"),
     )
 
@@ -696,15 +776,19 @@ async def _handle_vcancel_comment(update: Update, context: ContextTypes.DEFAULT_
         await log_action(update.effective_user.id, session.login, session.role,
                          "visit_cancelled", f"visit={vid}", "success")
         context.user_data.pop("vcancel_id", None)
-        await update.message.reply_text(f"❌ Визит #{vid} отмечен как не выполненный.")
+        await update.message.reply_text(
+            await t(update, context, "telegram.agent.visit_mark_not_done", id=vid)
+        )
         from .handlers_auth import show_main_menu
         await show_main_menu(update, context, session)
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
         else:
-            await update.message.reply_text(f"❌ Ошибка: {e.detail}")
+            await update.message.reply_text(
+                await t(update, context, "telegram.common.error_with_detail", detail=e.detail)
+            )
     return True
 
 
@@ -744,12 +828,12 @@ async def _handle_create_visit_search(update: Update, context: ContextTypes.DEFA
         logger.error(f"User {update.effective_user.id}: API error searching customers: {e}")
         if getattr(e, "status", None) == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return True
         customers = []
     if not customers or not isinstance(customers, list) or len(customers) == 0:
         logger.info(f"User {update.effective_user.id}: No customers found")
-        await update.message.reply_text("Клиенты не найдены. Попробуйте другой запрос:")
+        await _reply_loc(update.message, update, context, "Клиенты не найдены. Попробуйте другой запрос:")
         return True
     buttons = []
     for c in customers:
@@ -759,7 +843,7 @@ async def _handle_create_visit_search(update: Update, context: ContextTypes.DEFA
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
     context.user_data.pop("create_visit_search", None)
     logger.info(f"User {update.effective_user.id}: Sending {len(customers)} customer buttons")
-    await update.message.reply_text("Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
+    await _reply_loc(update.message, update, context, "Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
     return True
 
 
@@ -774,7 +858,7 @@ async def cb_agent_create_visit_customer(update: Update, context: ContextTypes.D
     context.user_data["create_visit_customer_id"] = cid
     context.user_data["create_visit_date_input"] = True
     await q.edit_message_text(
-        f"🆕 *Создать визит*\n\nКлиент: #{cid}\n\nВведите *дату визита* (ДД.ММ.ГГГГ):",
+        await t(update, context, "telegram.visit_create.customer_selected_enter_date", fallback=f"🆕 *Создать визит*\n\nКлиент: #{cid}\n\nВведите *дату визита* (ДД.ММ.ГГГГ):", cid=cid),
         reply_markup=back_button("main_menu"), parse_mode="Markdown",
     )
 
@@ -795,14 +879,14 @@ async def _handle_create_visit_date(update: Update, context: ContextTypes.DEFAUL
         day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
         visit_date = date(year, month, day)
     except (ValueError, IndexError):
-        await update.message.reply_text("❌ Неверный формат даты. Введите дату в формате ДД.ММ.ГГГГ (например, 25.12.2024):")
+        await _reply_loc(update.message, update, context, "❌ Неверный формат даты. Введите дату в формате ДД.ММ.ГГГГ (например, 25.12.2024):")
         return True
 
     context.user_data["create_visit_date"] = visit_date.isoformat()
     context.user_data.pop("create_visit_date_input", None)
     context.user_data["create_visit_time_input"] = True
     await update.message.reply_text(
-        f"✅ Дата: {fmt_date(visit_date.isoformat())}\n\nВведите *время визита* (ЧЧ:ММ) или нажмите /skip чтобы пропустить:",
+        await t(update, context, "telegram.visit_create.date_ok_enter_time", fallback=f"✅ Дата: {fmt_date(visit_date.isoformat())}\n\nВведите *время визита* (ЧЧ:ММ) или нажмите /skip чтобы пропустить:", date=fmt_date(visit_date.isoformat())),
         parse_mode="Markdown",
     )
     return True
@@ -827,7 +911,7 @@ async def _handle_create_visit_time(update: Update, context: ContextTypes.DEFAUL
 
     # Парсим время ЧЧ:ММ
     if not re.match(r"^\d{1,2}:\d{2}$", time_str):
-        await update.message.reply_text("❌ Неверный формат времени. Введите время в формате ЧЧ:ММ (например, 14:30) или /skip:")
+        await _reply_loc(update.message, update, context, "❌ Неверный формат времени. Введите время в формате ЧЧ:ММ (например, 14:30) или /skip:")
         return True
 
     context.user_data["create_visit_time"] = time_str
@@ -842,16 +926,23 @@ async def _show_create_visit_confirm(update, context, is_callback: bool):
     visit_date = context.user_data.get("create_visit_date")
     visit_time = context.user_data.get("create_visit_time")
 
+    header = await t(update, context, "telegram.visit_create.confirm_header", fallback="📋 *Подтверждение визита:*\n")
+    lbl_client = await t(update, context, "telegram.visit_create.label_client", fallback="*Клиент:*")
+    lbl_date = await t(update, context, "telegram.visit_create.label_date", fallback="*Дата:*")
+    lbl_time = await t(update, context, "telegram.visit_create.label_time", fallback="*Время:*")
+    btn_create = await t(update, context, "telegram.visit_create.create_visit_btn", fallback="✅ Создать визит")
+    btn_back = await t(update, context, "telegram.action.back", fallback="◀️ Назад")
+
     lines = [
-        "📋 *Подтверждение визита:*\n",
-        f"*Клиент:* #{cid}",
-        f"*Дата:* {fmt_date(visit_date)}",
-        f"*Время:* {visit_time or '—'}",
+        header,
+        f"{lbl_client} #{cid}",
+        f"{lbl_date} {fmt_date(visit_date)}",
+        f"{lbl_time} {visit_time or '—'}",
     ]
 
     buttons = [
-        [InlineKeyboardButton("✅ Создать визит", callback_data="agent_createvisit_confirm")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
+        [InlineKeyboardButton(btn_create, callback_data="agent_createvisit_confirm")],
+        [InlineKeyboardButton(btn_back, callback_data="main_menu")],
     ]
     text = "\n".join(lines)
     if is_callback:
@@ -890,17 +981,20 @@ async def cb_agent_create_visit_confirm(update: Update, context: ContextTypes.DE
             context.user_data.pop(k, None)
 
         await q.edit_message_text(
-            f"✅ *Визит создан!*\n\nВизит #{visit_id}\nКлиент: #{cid}\nДата: {fmt_date(visit_date)}\nВремя: {visit_time or '—'}",
+            await t(update, context, "telegram.visit_create.visit_created_ok", fallback=f"✅ *Визит создан!*\n\nВизит #{visit_id}\nКлиент: #{cid}\nДата: {fmt_date(visit_date)}\nВремя: {visit_time or '—'}", visit_id=visit_id, cid=cid, date=fmt_date(visit_date), time=visit_time or '—'),
             reply_markup=back_button(), parse_mode="Markdown",
         )
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
         await log_action(q.from_user.id, session.login, session.role,
                          "visit_created", f"customer={cid}", "error", e.detail)
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
 
 
 # ====================== ФОТОГРАФИИ ======================
@@ -931,7 +1025,7 @@ async def cb_agent_vphotos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except SDSApiError as e:
         if getattr(e, "status", None) == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return True
         data = []
 
@@ -963,11 +1057,11 @@ async def _handle_photo_search(update: Update, context: ContextTypes.DEFAULT_TYP
     except SDSApiError as e:
         if getattr(e, "status", None) == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return True
         customers = []
     if not customers or not isinstance(customers, list) or len(customers) == 0:
-        await update.message.reply_text("Клиенты не найдены. Попробуйте другой запрос:")
+        await _reply_loc(update.message, update, context, "Клиенты не найдены. Попробуйте другой запрос:")
         return True
     buttons = []
     for c in customers:
@@ -978,7 +1072,7 @@ async def _handle_photo_search(update: Update, context: ContextTypes.DEFAULT_TYP
         buttons.append([InlineKeyboardButton(display, callback_data=f"agent_vphotos_{cid}")])
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
     context.user_data.pop("photo_search", None)
-    await update.message.reply_text("Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
+    await _reply_loc(update.message, update, context, "Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
     return True
 
 
@@ -1012,10 +1106,10 @@ async def msg_agent_photo_upload(update: Update, context: ContextTypes.DEFAULT_T
         file = await doc.get_file()
         filename = doc.file_name or f"{customer_id}_photo.jpg"
     else:
-        await update.message.reply_text("❌ Отправьте изображение (JPG, PNG, WEBP, макс. 10 МБ).")
+        await _reply_loc(update.message, update, context, "❌ Отправьте изображение (JPG, PNG, WEBP, макс. 10 МБ).")
         return
     if file.file_size and file.file_size > 10 * 1024 * 1024:
-        await update.message.reply_text("❌ Файл слишком большой (макс. 10 МБ).")
+        await _reply_loc(update.message, update, context, "❌ Файл слишком большой (макс. 10 МБ).")
         return
 
     now = datetime.now()
@@ -1027,21 +1121,22 @@ async def msg_agent_photo_upload(update: Update, context: ContextTypes.DEFAULT_T
         await api.upload_photo(session.jwt_token, customer_id, bytes(file_bytes), auto_filename)
         await log_action(update.effective_user.id, session.login, session.role,
                          "photo_upload", f"customer={customer_id}", "success")
-        await update.message.reply_text(f"✅ Фото загружено! ({auto_filename})")
+        await update.message.reply_text(
+            await t(update, context, "telegram.agent.photo_uploaded", filename=auto_filename)
+        )
         # Показать главное меню после загрузки фото
-        from .handlers_auth import main_menu_keyboard, ROLE_RU
-        role_ru = ROLE_RU.get(session.role, session.role)
-        menu_text = f"🏠 *Главное меню*\n\n{session.fio} ({role_ru})"
-        kb = main_menu_keyboard(session.role)
-        await update.message.reply_text(menu_text, reply_markup=kb, parse_mode="Markdown")
+        from .handlers_auth import show_main_menu
+        await show_main_menu(update, context, session)
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
         await log_action(update.effective_user.id, session.login, session.role,
                          "photo_upload", f"customer={customer_id}", "error", e.detail)
-        await update.message.reply_text(f"❌ Ошибка загрузки: {e.detail}")
+        await update.message.reply_text(
+            await t(update, context, "telegram.agent.photo_upload_failed", detail=e.detail)
+        )
 
 
 # ====================== СОЗДАТЬ ЗАКАЗ ======================
@@ -1070,11 +1165,11 @@ async def _handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYP
     except SDSApiError as e:
         if getattr(e, "status", None) == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return True
         customers = []
     if not customers or not isinstance(customers, list) or len(customers) == 0:
-        await update.message.reply_text("Клиенты не найдены. Попробуйте другой запрос:")
+        await _reply_loc(update.message, update, context, await t(update, context, "telegram.common.customers_not_found_try", fallback="Клиенты не найдены. Попробуйте другой запрос:"))
         return True
     buttons = []
     for c in customers:
@@ -1085,7 +1180,7 @@ async def _handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYP
         buttons.append([InlineKeyboardButton(display, callback_data=f"agent_ordercust_{cid}")])
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
     context.user_data.pop("order_search", None)
-    await update.message.reply_text("Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
+    await _reply_loc(update.message, update, context, "Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
     return True
 
 
@@ -1120,7 +1215,9 @@ async def _show_products_page(q, context, session):
             s = item["qty"] * item["price"]
             total_sum += s
             cart_lines.append(f"  • {item['name']}: {item['qty']} × {fmt_money(item['price'])}")
-        cart_text = "\n🛒 *Корзина:*\n" + "\n".join(cart_lines) + f"\n*Итого:* {fmt_money(total_sum)}\n"
+        cart_title = await t(update, context, "telegram.agent.cart_title", fallback="🛒 *Корзина:*")
+        total_lbl = await t(update, context, "telegram.agent.total", fallback="Итого:")
+        cart_text = f"\n{cart_title}\n" + "\n".join(cart_lines) + f"\n*{total_lbl}* {fmt_money(total_sum)}\n"
 
     total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
     lines = [f"📦 *Выберите товар* (стр. {page + 1}/{total_pages}){cart_text}\n"]
@@ -1140,7 +1237,8 @@ async def _show_products_page(q, context, session):
     if nav:
         buttons.append(nav)
     if cart:
-        buttons.append([InlineKeyboardButton("✅ Оформить заказ", callback_data="agent_ordercheckout")])
+        create_order_btn = await t(update, context, "telegram.button.create_order", fallback="🛒 Оформить заказ")
+        buttons.append([InlineKeyboardButton(create_order_btn, callback_data="agent_ordercheckout")])
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
     await q.edit_message_text(
         "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
@@ -1170,12 +1268,13 @@ async def cb_agent_prod_select(update: Update, context: ContextTypes.DEFAULT_TYP
     products = await get_cached_products(session.jwt_token)
     product = next((p for p in products if str(p.get("code")) == code), None)
     if not product:
-        await q.edit_message_text("Товар не найден.", reply_markup=back_button())
+        await _edit_loc(q, update, context, "Товар не найден.", reply_markup=back_button())
         return
     _clear_agent_state(context)
     context.user_data["adding_product"] = product
+    enter_qty = await t(update, context, "telegram.agent.enter_qty", fallback="Введите количество:")
     await q.edit_message_text(
-        f"📦 *{product['name']}*\nЦена: {fmt_money(product.get('price', 0))}\n\nВведите количество:",
+        f"📦 *{product['name']}*\nЦена: {fmt_money(product.get('price', 0))}\n\n{enter_qty}",
         parse_mode="Markdown",
     )
 
@@ -1192,7 +1291,7 @@ async def _handle_product_qty(update: Update, context: ContextTypes.DEFAULT_TYPE
         if qty <= 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("❌ Введите целое число > 0:")
+        await _reply_loc(update.message, update, context, "❌ Введите целое число > 0:")
         return True
     cart = context.user_data.get("order_cart", [])
     cart.append({
@@ -1211,14 +1310,21 @@ async def _handle_product_qty(update: Update, context: ContextTypes.DEFAULT_TYPE
         s = item["qty"] * item["price"]
         cart_lines.append(f"  • {item['name']}: {item['qty']} × {fmt_money(item['price'])} = {fmt_money(s)}")
 
-    cart_text = "🛒 *Корзина:*\n" + "\n".join(cart_lines) + f"\n\n*Итого:* {fmt_money(total)}"
+    cart_title = await t(update, context, "telegram.agent.cart_title", fallback="🛒 *Корзина:*")
+    total_lbl = await t(update, context, "telegram.agent.total", fallback="Итого:")
+    cart_text = f"{cart_title}\n" + "\n".join(cart_lines) + f"\n\n*{total_lbl}* {fmt_money(total)}"
 
+    btn_add = await t(update, context, "button.add", fallback="✅ Добавить ещё")
+    btn_checkout = await t(update, context, "telegram.button.create_order", fallback="🛒 Оформить заказ")
     buttons = [
-        [InlineKeyboardButton("✅ Добавить ещё", callback_data=f"agent_ordercust_{context.user_data.get('order_customer_id', 0)}")],
-        [InlineKeyboardButton("🛒 Оформить заказ", callback_data="agent_ordercheckout")],
+        [InlineKeyboardButton(btn_add, callback_data=f"agent_ordercust_{context.user_data.get('order_customer_id', 0)}")],
+        [InlineKeyboardButton(btn_checkout, callback_data="agent_ordercheckout")],
     ]
+    
+    added_lbl = await t(update, context, "telegram.agent.added", fallback="Добавлено:")
+    add_more_lbl = await t(update, context, "telegram.agent.add_more", fallback="Добавить ещё товар?")
     await update.message.reply_text(
-        f"✅ Добавлено: {product['name']} × {qty}\n\n{cart_text}\n\nДобавить ещё товар?",
+        f"✅ {added_lbl} {product['name']} × {qty}\n\n{cart_text}\n\n{add_more_lbl}",
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode="Markdown",
     )
@@ -1237,17 +1343,20 @@ async def cb_agent_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = []
     for pt in pay_types:
         code = pt.get("code")
-        name = PAYMENT_RU.get(code, pt.get("name", code))
+        translated_name = await _payment_label(update, context, code)
+        name = translated_name if translated_name != "—" else pt.get("name", code)
         buttons.append([InlineKeyboardButton(name, callback_data=f"agent_orderpay_{code}")])
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data=f"agent_ordercust_{context.user_data.get('order_customer_id', 0)}")])
 
     cart = context.user_data.get("order_cart", [])
     total = sum(i["qty"] * i["price"] for i in cart)
-    lines = ["🛒 *Корзина:*\n"]
+    cart_title = await t(update, context, "telegram.agent.cart_title", fallback="🛒 *Корзина:*")
+    total_lbl = await t(update, context, "telegram.agent.total", fallback="Итого:")
+    lines = [f"{cart_title}\n"]
     for item in cart:
         lines.append(f"• {item['name']}: {item['qty']} × {fmt_money(item['price'])}")
-    lines.append(f"\n*Итого:* {fmt_money(total)}")
-    lines.append("\nВыберите *тип оплаты*:")
+    lines.append(f"\n*{total_lbl}* {fmt_money(total)}")
+    lines.append("\n" + await t(update, context, "telegram.agent.choose_payment", fallback="Выберите *тип оплаты*:"))
     await q.edit_message_text(
         "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
     )
@@ -1297,10 +1406,10 @@ async def _handle_order_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif doc and doc.mime_type and doc.mime_type.startswith("image/"):
         file = await doc.get_file()
     else:
-        await update.message.reply_text("❌ Отправьте изображение (JPG, PNG, WEBP).")
+        await _reply_loc(update.message, update, context, "❌ Отправьте изображение (JPG, PNG, WEBP).")
         return
     if file.file_size and file.file_size > 10 * 1024 * 1024:
-        await update.message.reply_text("❌ Файл слишком большой (макс. 10 МБ).")
+        await _reply_loc(update.message, update, context, "❌ Файл слишком большой (макс. 10 МБ).")
         return
 
     now = datetime.now()
@@ -1310,13 +1419,17 @@ async def _handle_order_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
     try:
         await api.upload_photo(session.jwt_token, customer_id, bytes(file_bytes), auto_filename)
         context.user_data["order_photo_uploaded"] = True
-        await update.message.reply_text(f"✅ Фото загружено! ({auto_filename})")
+        await update.message.reply_text(
+            await t(update, context, "telegram.agent.photo_uploaded", filename=auto_filename)
+        )
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await update.message.reply_text(f"⚠️ Не удалось загрузить фото: {e.detail}")
+        await update.message.reply_text(
+            await t(update, context, "telegram.agent.photo_upload_warning", detail=e.detail)
+        )
 
     context.user_data.pop("order_photo_step", None)
     await _show_order_confirm(update, context, is_callback=False)
@@ -1327,7 +1440,7 @@ async def _show_order_confirm(update, context, is_callback: bool):
     total = sum(i["qty"] * i["price"] for i in cart)
     cid = context.user_data.get("order_customer_id")
     pay_code = context.user_data.get("order_payment", "cash_sum")
-    pay_name = PAYMENT_RU.get(pay_code, pay_code)
+    pay_name = await _payment_label(update, context, pay_code)
 
     lines = [
         "📋 *Подтверждение заказа:*\n",
@@ -1411,25 +1524,25 @@ async def cb_agent_order_confirm(update: Update, context: ContextTypes.DEFAULT_T
         order_lines.append(f"")
         order_lines.append(f"💰 *Сумма:* {fmt_money(total)}")
 
+        btn_main = await t(update, context, "telegram.button.main_menu", fallback="🏠 Главное меню")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(btn_main, callback_data="main_menu")]])
+
         await q.edit_message_text(
             "\n".join(order_lines),
             parse_mode="Markdown",
+            reply_markup=kb,
         )
-
-        # Показываем главное меню
-        from .handlers_auth import main_menu_keyboard, ROLE_RU
-        role_ru = ROLE_RU.get(session.role, session.role)
-        menu_text = f"🏠 *Главное меню*\n\n{session.fio} ({role_ru})"
-        kb = main_menu_keyboard(session.role)
-        await update.effective_chat.send_message(menu_text, reply_markup=kb, parse_mode="Markdown")
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
         await log_action(q.from_user.id, session.login, session.role,
                          "order_created", f"customer={cid}", "error", e.detail)
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
 
 
 # ====================== ОБЩИЙ ТЕКСТОВЫЙ ДИСПЕТЧЕР ======================
@@ -1505,8 +1618,9 @@ async def cb_agent_update_location(update: Update, context: ContextTypes.DEFAULT
         return
     _clear_agent_state(context)
     context.user_data["location_search"] = True
+    title = await t(update, context, "telegram.agent.update_location_prompt", fallback="📍 *Обновить локацию клиента*\n\nВведите ИНН или название клиента для поиска:")
     await q.edit_message_text(
-        "📍 *Обновить локацию клиента*\n\nВведите ИНН или название клиента для поиска:",
+        title,
         reply_markup=back_button(), parse_mode="Markdown",
     )
 
@@ -1524,11 +1638,11 @@ async def _handle_location_search(update: Update, context: ContextTypes.DEFAULT_
     except SDSApiError as e:
         if getattr(e, "status", None) == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return True
         customers = []
     if not customers or not isinstance(customers, list) or len(customers) == 0:
-        await update.message.reply_text("Клиенты не найдены. Попробуйте другой запрос:")
+        await _reply_loc(update.message, update, context, "Клиенты не найдены. Попробуйте другой запрос:")
         return True
     buttons = []
     for c in customers:
@@ -1539,7 +1653,7 @@ async def _handle_location_search(update: Update, context: ContextTypes.DEFAULT_
         buttons.append([InlineKeyboardButton(display, callback_data=f"agent_updloc_{cid}")])
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
     context.user_data.pop("location_search", None)
-    await update.message.reply_text("Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
+    await _reply_loc(update.message, update, context, "Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
     return True
 
 
@@ -1554,11 +1668,13 @@ async def cb_agent_update_loc_customer(update: Update, context: ContextTypes.DEF
     context.user_data["update_location_customer_id"] = cid
     context.user_data["update_location_step"] = True
 
+    prompt = await t(update, context, "telegram.agent.send_location_prompt", fallback="📍 *Отправьте геолокацию*\n\nНажмите кнопку 📎 → Геолокация для отправки координат")
+    btn_back = await t(update, context, "telegram.button.back", fallback="◀️ Назад")
+
     await q.edit_message_text(
-        "📍 *Отправьте геолокацию*\n\n"
-        "Нажмите кнопку 📎 → Геолокация для отправки координат",
+        prompt,
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
+            [InlineKeyboardButton(btn_back, callback_data="main_menu")],
         ]),
         parse_mode="Markdown",
     )
@@ -1576,7 +1692,7 @@ async def _handle_update_location(update: Update, context: ContextTypes.DEFAULT_
 
     loc = update.message.location
     if not loc:
-        await update.message.reply_text("❌ Пожалуйста, отправьте геолокацию через кнопку 📎")
+        await _reply_loc(update.message, update, context, "❌ Пожалуйста, отправьте геолокацию через кнопку 📎")
         return True
 
     try:
@@ -1594,11 +1710,16 @@ async def _handle_update_location(update: Update, context: ContextTypes.DEFAULT_
         context.user_data.pop("update_location_step", None)
         context.user_data.pop("update_location_customer_id", None)
 
+        updated_title = await t(update, context, "telegram.agent.location_updated_success", fallback="✅ *Локация обновлена!*\n\n")
+        client_label = await t(update, context, "telegram.profile.fio", fallback="👤 Клиент:")
+        inn_label = await t(update, context, "telegram.customer_create.tax_id", fallback="🔢 ИНН:")
+        coords_label = await t(update, context, "telegram.agent.coordinates", fallback="📍 *Координаты:*")
+
         text = (
-            f"✅ *Локация обновлена!*\n\n"
-            f"👤 *Клиент:* {customer_name}\n"
-            f"🔢 *ИНН:* {customer_inn}\n"
-            f"📍 *Координаты:* {loc.latitude:.6f}, {loc.longitude:.6f}\n"
+            f"{updated_title}"
+            f"*{client_label}* {customer_name}\n"
+            f"*{inn_label}* {customer_inn}\n"
+            f"{coords_label} {loc.latitude:.6f}, {loc.longitude:.6f}\n"
         )
 
         await log_action(update.effective_user.id, session.login, session.role,
@@ -1610,12 +1731,16 @@ async def _handle_update_location(update: Update, context: ContextTypes.DEFAULT_
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return True
-        await update.message.reply_text(f"❌ Ошибка: {e.detail}")
+        await update.message.reply_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail)
+        )
     except Exception as e:
         logger.error(f"Error updating location: {e}")
-        await update.message.reply_text(f"❌ Ошибка при обновлении локации: {str(e)}")
+        await update.message.reply_text(
+            await t(update, context, "telegram.agent.location_update_error", detail=str(e))
+        )
 
     return True
 

@@ -49,7 +49,7 @@ async def create_visit(
     session: AsyncSession = Depends(get_db_session),
     user: UserModel = Depends(get_current_user),
 ):
-    """??????? ????? ?????."""
+    """Создание нового визита."""
     response, notification = await VisitService(session).create_visit(body.model_dump(), user.login)
     schedule_notification(notify_new_visit(**notification))
     return response

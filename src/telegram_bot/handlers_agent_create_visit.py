@@ -19,6 +19,7 @@ from telegram.error import TelegramError
 
 from .session import get_session, touch_session, delete_session
 from .sds_api import api, SDSApiError
+from .i18n import t, localize_reply_markup
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,61 @@ PREFIX = "new_visit_"
 # ============================================================================
 # Helpers
 # ============================================================================
+async def tr(update: Update | None, context: ContextTypes.DEFAULT_TYPE | None, key: str, default: str, **params) -> str:
+    """Read text from translations table with safe fallback."""
+    text = await t(update, context, key, **params)
+    if text == key:
+        text = default.format(**params) if params else default
+    return text
+
+
+VISIT_I18N_MAP = {
+    "🆕 *Создание визита*": ("telegram.visit_create.title", "🆕 *Создание визита*"),
+    "📝 Шаг 1 из 5: Введите *название клиента* или *ИНН* для поиска:": ("telegram.visit_create.step1", "📝 Шаг 1 из 5: Введите *название клиента* или *ИНН* для поиска:"),
+    "📝 Шаг 2 из 5: Введите *дату визита* (ДД.ММ.ГГГГ или ДД.ММ):": ("telegram.visit_create.step2", "📝 Шаг 2 из 5: Введите *дату визита* (ДД.ММ.ГГГГ или ДД.ММ):"),
+    "⚠️ _Обязательное поле_": ("telegram.visit_create.required_field", "⚠️ _Обязательное поле_"),
+    "📝 Шаг 3 из 5: Введите *время визита* (ЧЧ:ММ) или нажмите Пропустить:": ("telegram.visit_create.step3", "📝 Шаг 3 из 5: Введите *время визита* (ЧЧ:ММ) или нажмите Пропустить:"),
+    "📝 Шаг 4 из 5: Выберите *статус визита*:": ("telegram.visit_create.step4", "📝 Шаг 4 из 5: Выберите *статус визита*:"),
+    "📝 Шаг 5 из 5: Введите *комментарий* или нажмите Пропустить:": ("telegram.visit_create.step5", "📝 Шаг 5 из 5: Введите *комментарий* или нажмите Пропустить:"),
+    "✅ *Проверьте данные:*": ("telegram.visit_create.check_data", "✅ *Проверьте данные:*"),
+    "Всё верно?": ("telegram.visit_create.all_correct", "Всё верно?"),
+    "❌ Сессия истекла. Нажмите /start.": ("telegram.auth.session_expired", "❌ Сессия истекла. Нажмите /start."),
+    "❌ Создание визита отменено.\n\nНажмите /start для возврата в главное меню.": ("telegram.visit_create.cancelled", "❌ Создание визита отменено.\n\nНажмите /start для возврата в главное меню."),
+    "❌ *Ошибка:* Введите минимум 2 символа для поиска.\n\nПопробуйте еще раз:": ("telegram.visit_create.error_min_search", "❌ *Ошибка:* Введите минимум 2 символа для поиска.\n\nПопробуйте еще раз:"),
+    "❌ *Ошибка:* Неверный формат даты.\n\nВведите дату в формате *ДД.ММ.ГГГГ* или *ДД.ММ*:\nНапример: 25.12.2026 или 25.12": ("telegram.visit_create.error_date_format", "❌ *Ошибка:* Неверный формат даты.\n\nВведите дату в формате *ДД.ММ.ГГГГ* или *ДД.ММ*:\nНапример: 25.12.2026 или 25.12"),
+    "❌ *Ошибка:* Неверный формат времени.\n\nВведите время в формате *ЧЧ:ММ*:\nНапример: 14:30": ("telegram.visit_create.error_time_format", "❌ *Ошибка:* Неверный формат времени.\n\nВведите время в формате *ЧЧ:ММ*:\nНапример: 14:30"),
+    "🔍 Изменить поиск": ("telegram.visit_create.change_search", "🔍 Изменить поиск"),
+    "🔍 *Найдено клиентов:*": ("telegram.visit_create.found_customers", "🔍 *Найдено клиентов:*"),
+    "Выберите клиента:": ("telegram.visit_create.select_customer", "Выберите клиента:"),
+    "✅ Создать визит": ("telegram.visit_create.create_visit_btn", "✅ Создать визит"),
+    "📅 Запланирован": ("telegram.visit_create.status_planned", "📅 Запланирован"),
+    "✅ Выполнен": ("telegram.visit_create.status_completed", "✅ Выполнен"),
+    "❌ Отменён": ("telegram.visit_create.status_cancelled", "❌ Отменён"),
+    "⏸ Перенесён": ("telegram.visit_create.status_postponed", "⏸ Перенесён"),
+}
+
+
+async def _localize_visit_text(update: Update | None, context: ContextTypes.DEFAULT_TYPE, text: str) -> str:
+    if not text:
+        return text
+    out = text
+    for src, (key, default) in VISIT_I18N_MAP.items():
+        if src in out:
+            out = out.replace(src, await tr(update, context, key, default))
+    return out
+
+
+async def _reply_i18n(message_obj, update: Update | None, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
+    if "reply_markup" in kwargs and kwargs["reply_markup"] is not None:
+        kwargs["reply_markup"] = await localize_reply_markup(update, context, kwargs["reply_markup"])
+    return await message_obj.reply_text(await _localize_visit_text(update, context, text), **kwargs)
+
+
+async def _edit_i18n(query_obj, update: Update | None, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
+    if "reply_markup" in kwargs and kwargs["reply_markup"] is not None:
+        kwargs["reply_markup"] = await localize_reply_markup(update, context, kwargs["reply_markup"])
+    return await query_obj.edit_message_text(await _localize_visit_text(update, context, text), **kwargs)
+
 
 def _escape_markdown(text: str) -> str:
     """Экранирует спецсимволы Markdown."""
@@ -51,58 +107,73 @@ def _escape_markdown(text: str) -> str:
     return text
 
 
-def _get_summary(context: ContextTypes.DEFAULT_TYPE) -> str:
-    """Формирует summary введённых данных."""
+async def _get_summary(update: Update | None, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Build localized summary for visit confirmation."""
     customer_name = context.user_data.get(f"{PREFIX}customer_name", "")
     visit_date = context.user_data.get(f"{PREFIX}visit_date", "")
     visit_time = context.user_data.get(f"{PREFIX}visit_time", "")
     status = context.user_data.get(f"{PREFIX}status", "")
     comment = context.user_data.get(f"{PREFIX}comment", "")
 
-    status_ru = {
-        "planned": "Запланирован",
-        "completed": "Выполнен",
-        "cancelled": "Отменён",
-        "postponed": "Перенесён",
-    }.get(status, status)
+    status_map = {
+        "planned": await tr(update, context, "status.planned", "Запланирован"),
+        "completed": await tr(update, context, "status.completed", "Завершён"),
+        "cancelled": await tr(update, context, "status.canceled", "Отменён"),
+        "postponed": await tr(update, context, "status.postponed", "На рассмотрении"),
+    }
+    status_label = status_map.get(status, status)
 
     lines = []
     if customer_name:
-        lines.append(f"✅ *Клиент:* {_escape_markdown(customer_name)}")
+        lines.append(f"👤 *{await tr(update, context, 'field.customer', 'Клиент')}:* {_escape_markdown(customer_name)}")
     if visit_date:
-        lines.append(f"✅ *Дата:* {visit_date}")
+        lines.append(f"📅 *{await tr(update, context, 'field.date', 'Дата')}:* {visit_date}")
     if visit_time:
-        lines.append(f"✅ *Время:* {visit_time}")
+        lines.append(f"🕐 *{await tr(update, context, 'field.time', 'Время')}:* {visit_time}")
     if status:
-        lines.append(f"✅ *Статус:* {status_ru}")
+        lines.append(f"📌 *{await tr(update, context, 'field.status', 'Статус')}:* {status_label}")
     if comment:
-        lines.append(f"✅ *Комментарий:* {_escape_markdown(comment)}")
+        lines.append(f"💬 *{await tr(update, context, 'field.comment', 'Комментарий')}:* {_escape_markdown(comment)}")
 
-    return "\n".join(lines) if lines else "Нет данных"
-
-
-def _cancel_keyboard() -> InlineKeyboardMarkup:
-    """Только кнопка Отмена."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отмена", callback_data="create_visit_cancel")]])
+    return "\n".join(lines) if lines else await tr(update, context, "ui.common.no_data", "Нет данных")
 
 
-def _skip_back_cancel_keyboard(skip_text: str = "⏩ Пропустить") -> InlineKeyboardMarkup:
-    """Кнопки Пропустить/Назад/Отмена."""
+async def _cancel_keyboard(update: Update | None, context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    """Cancel keyboard."""
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton(await tr(update, context, "telegram.button.cancel", "❌ Отмена"), callback_data="create_visit_cancel")]]
+    )
+
+
+async def _skip_back_cancel_keyboard(
+    update: Update | None,
+    context: ContextTypes.DEFAULT_TYPE,
+    skip_text: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Skip/back/cancel keyboard."""
+    if skip_text is None:
+        skip_text = await tr(update, context, "telegram.button.skip", "⏩ Пропустить")
+    back_text = await tr(update, context, "telegram.button.back", "◀️ Назад")
+    cancel_text = await tr(update, context, "telegram.button.cancel", "❌ Отмена")
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(skip_text, callback_data="create_visit_skip")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="create_visit_back")],
-        [InlineKeyboardButton("❌ Отмена", callback_data="create_visit_cancel")],
+        [InlineKeyboardButton(back_text, callback_data="create_visit_back")],
+        [InlineKeyboardButton(cancel_text, callback_data="create_visit_cancel")],
     ])
 
 
-def _back_cancel_keyboard() -> InlineKeyboardMarkup:
-    """Кнопки Назад/Отмена (нет Пропустить)."""
+async def _back_cancel_keyboard(update: Update | None, context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    """Back/cancel keyboard."""
+    back_text = await tr(update, context, "telegram.button.back", "◀️ Назад")
+    cancel_text = await tr(update, context, "telegram.button.cancel", "❌ Отмена")
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("◀️ Назад", callback_data="create_visit_back")],
-        [InlineKeyboardButton("❌ Отмена", callback_data="create_visit_cancel")],
+        [InlineKeyboardButton(back_text, callback_data="create_visit_back")],
+        [InlineKeyboardButton(cancel_text, callback_data="create_visit_cancel")],
     ])
 
 
+# ============================================================================
+# Entry point
 # ============================================================================
 # Entry point
 # ============================================================================
@@ -119,7 +190,7 @@ async def start_create_visit(update: Update, context: ContextTypes.DEFAULT_TYPE)
     active_customer_keys = [k for k in context.user_data.keys() if k.startswith("new_customer_v3_")]
     if active_customer_keys:
         logger.warning(f"[CREATE VISIT START] User {tg_id} has active add customer dialog, blocking create visit")
-        await q.edit_message_text(
+        await _edit_i18n(q, update, context, 
             "⚠️ У вас уже активен диалог добавления клиента.\n"
             "Пожалуйста, завершите его (нажмите Отмена) перед созданием визита."
         )
@@ -128,7 +199,7 @@ async def start_create_visit(update: Update, context: ContextTypes.DEFAULT_TYPE)
     session = await get_session(tg_id)
     if not session:
         logger.warning(f"[CREATE VISIT START] User {tg_id} has no session")
-        await q.edit_message_text("❌ Сессия истекла. Нажмите /start.")
+        await _edit_i18n(q, update, context, "❌ Сессия истекла. Нажмите /start.")
         return ConversationHandler.END
 
     await touch_session(tg_id)
@@ -145,7 +216,7 @@ async def start_create_visit(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "📝 Шаг 1 из 5: Введите *название клиента* или *ИНН* для поиска:"
     )
 
-    await q.edit_message_text(text, reply_markup=_cancel_keyboard(), parse_mode="Markdown")
+    await _edit_i18n(q, update, context, text, reply_markup=await _cancel_keyboard(update, context), parse_mode="Markdown")
 
     return SELECT_CUSTOMER
 
@@ -163,17 +234,17 @@ async def select_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if len(search_query) < 2:
         logger.warning(f"[SELECT_CUSTOMER] User {tg_id}: Search query too short")
-        await update.message.reply_text(
+        await _reply_i18n(update.message, update, context, 
             "❌ *Ошибка:* Введите минимум 2 символа для поиска.\n\n"
             "Попробуйте еще раз:",
-            reply_markup=_cancel_keyboard(),
+            reply_markup=await _cancel_keyboard(update, context),
             parse_mode="Markdown",
         )
         return SELECT_CUSTOMER
 
     session = await get_session(tg_id)
     if not session:
-        await update.message.reply_text("❌ Сессия истекла. Нажмите /start.")
+        await _reply_i18n(update.message, update, context, "❌ Сессия истекла. Нажмите /start.")
         return ConversationHandler.END
 
     # Поиск клиентов через API
@@ -186,22 +257,22 @@ async def select_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.error(f"[SELECT_CUSTOMER API ERROR] {e}")
         if e.status == 401:
             await delete_session(tg_id)
-            await update.message.reply_text("❌ Сессия истекла. Нажмите /start.")
+            await _reply_i18n(update.message, update, context, "❌ Сессия истекла. Нажмите /start.")
             return ConversationHandler.END
 
-        await update.message.reply_text(
+        await _reply_i18n(update.message, update, context, 
             f"❌ *Ошибка API:* {e.detail}\n\nПопробуйте снова:",
-            reply_markup=_cancel_keyboard(),
+            reply_markup=await _cancel_keyboard(update, context),
             parse_mode="Markdown",
         )
         return SELECT_CUSTOMER
 
     if not customers:
         logger.warning(f"[SELECT_CUSTOMER] No customers found for query: {search_query}")
-        await update.message.reply_text(
+        await _reply_i18n(update.message, update, context, 
             f"⚠️ Клиенты не найдены по запросу: *{_escape_markdown(search_query)}*\n\n"
             f"Попробуйте изменить запрос:",
-            reply_markup=_cancel_keyboard(),
+            reply_markup=await _cancel_keyboard(update, context),
             parse_mode="Markdown",
         )
         return SELECT_CUSTOMER
@@ -223,7 +294,7 @@ async def select_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f"Выберите клиента:"
     )
 
-    await update.message.reply_text(
+    await _reply_i18n(update.message, update, context, 
         text,
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode="Markdown",
@@ -244,7 +315,7 @@ async def customer_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     session = await get_session(tg_id)
     if not session:
-        await q.edit_message_text("❌ Сессия истекла. Нажмите /start.")
+        await _edit_i18n(q, update, context, "❌ Сессия истекла. Нажмите /start.")
         return ConversationHandler.END
 
     # Получить данные клиента
@@ -255,7 +326,7 @@ async def customer_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     except SDSApiError as e:
         logger.error(f"[CUSTOMER_SELECTED API ERROR] {e}")
-        await q.edit_message_text(
+        await _edit_i18n(q, update, context, 
             f"❌ *Ошибка получения данных клиента:* {e.detail}",
             parse_mode="Markdown",
         )
@@ -264,7 +335,7 @@ async def customer_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data[f"{PREFIX}customer_id"] = customer_id
     context.user_data[f"{PREFIX}customer_name"] = customer_name
 
-    summary = _get_summary(context)
+    summary = await _get_summary(update, context)
 
     text = (
         f"🆕 *Создание визита*\n\n"
@@ -273,7 +344,7 @@ async def customer_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"⚠️ _Обязательное поле_"
     )
 
-    await q.edit_message_text(text, reply_markup=_back_cancel_keyboard(), parse_mode="Markdown")
+    await _edit_i18n(q, update, context, text, reply_markup=await _back_cancel_keyboard(update, context), parse_mode="Markdown")
 
     return ASK_DATE
 
@@ -288,7 +359,7 @@ async def search_again(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         "📝 Шаг 1 из 5: Введите *название клиента* или *ИНН* для поиска:"
     )
 
-    await q.edit_message_text(text, reply_markup=_cancel_keyboard(), parse_mode="Markdown")
+    await _edit_i18n(q, update, context, text, reply_markup=await _cancel_keyboard(update, context), parse_mode="Markdown")
 
     return SELECT_CUSTOMER
 
@@ -317,11 +388,11 @@ async def ask_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             raise ValueError("Неверный формат")
     except ValueError:
         logger.warning(f"[ASK_DATE] Invalid date format: {date_text}")
-        await update.message.reply_text(
+        await _reply_i18n(update.message, update, context, 
             "❌ *Ошибка:* Неверный формат даты.\n\n"
             "Введите дату в формате *ДД.ММ.ГГГГ* или *ДД.ММ*:\n"
             "Например: 25.12.2026 или 25.12",
-            reply_markup=_back_cancel_keyboard(),
+            reply_markup=await _back_cancel_keyboard(update, context),
             parse_mode="Markdown",
         )
         return ASK_DATE
@@ -329,7 +400,7 @@ async def ask_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data[f"{PREFIX}visit_date"] = parsed_date.isoformat()
     logger.info(f"[ASK_DATE] Date saved: {parsed_date}")
 
-    summary = _get_summary(context)
+    summary = await _get_summary(update, context)
 
     text = (
         f"🆕 *Создание визита*\n\n"
@@ -337,9 +408,9 @@ async def ask_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         f"📝 Шаг 3 из 5: Введите *время визита* (ЧЧ:ММ) или нажмите Пропустить:"
     )
 
-    await update.message.reply_text(
+    await _reply_i18n(update.message, update, context, 
         text,
-        reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить время"),
+        reply_markup=await _skip_back_cancel_keyboard(update, context, await tr(update, context, "telegram.button.skip_time", "⏩ Пропустить время")),
         parse_mode="Markdown",
     )
 
@@ -356,7 +427,7 @@ async def back_to_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         "📝 Шаг 1 из 5: Введите *название клиента* или *ИНН* для поиска:"
     )
 
-    await q.edit_message_text(text, reply_markup=_cancel_keyboard(), parse_mode="Markdown")
+    await _edit_i18n(q, update, context, text, reply_markup=await _cancel_keyboard(update, context), parse_mode="Markdown")
 
     return SELECT_CUSTOMER
 
@@ -381,11 +452,11 @@ async def ask_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             raise ValueError("Неверный формат")
     except ValueError:
         logger.warning(f"[ASK_TIME] Invalid time format: {time_text}")
-        await update.message.reply_text(
+        await _reply_i18n(update.message, update, context, 
             "❌ *Ошибка:* Неверный формат времени.\n\n"
             "Введите время в формате *ЧЧ:ММ*:\n"
             "Например: 14:30",
-            reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить время"),
+            reply_markup=await _skip_back_cancel_keyboard(update, context, await tr(update, context, "telegram.button.skip_time", "⏩ Пропустить время")),
             parse_mode="Markdown",
         )
         return ASK_TIME
@@ -412,7 +483,7 @@ async def back_to_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     q = update.callback_query
     await q.answer()
 
-    summary = _get_summary(context)
+    summary = await _get_summary(update, context)
 
     text = (
         f"🆕 *Создание визита*\n\n"
@@ -421,7 +492,7 @@ async def back_to_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         f"⚠️ _Обязательное поле_"
     )
 
-    await q.edit_message_text(text, reply_markup=_back_cancel_keyboard(), parse_mode="Markdown")
+    await _edit_i18n(q, update, context, text, reply_markup=await _back_cancel_keyboard(update, context), parse_mode="Markdown")
 
     return ASK_DATE
 
@@ -433,7 +504,7 @@ async def back_to_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def _show_status_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, is_callback: bool) -> int:
     """Показать кнопки выбора статуса."""
 
-    summary = _get_summary(context)
+    summary = await _get_summary(update, context)
 
     text = (
         f"🆕 *Создание визита*\n\n"
@@ -442,22 +513,22 @@ async def _show_status_selection(update: Update, context: ContextTypes.DEFAULT_T
     )
 
     buttons = [
-        [InlineKeyboardButton("📅 Запланирован", callback_data="visit_status_planned")],
-        [InlineKeyboardButton("✅ Выполнен", callback_data="visit_status_completed")],
-        [InlineKeyboardButton("❌ Отменён", callback_data="visit_status_cancelled")],
-        [InlineKeyboardButton("⏸ Перенесён", callback_data="visit_status_postponed")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="create_visit_back")],
-        [InlineKeyboardButton("❌ Отмена", callback_data="create_visit_cancel")],
+        [InlineKeyboardButton(await tr(update, context, "telegram.visit_create.status_planned", "📅 Запланирован"), callback_data="visit_status_planned")],
+        [InlineKeyboardButton(await tr(update, context, "telegram.visit_create.status_completed", "✅ Выполнен"), callback_data="visit_status_completed")],
+        [InlineKeyboardButton(await tr(update, context, "telegram.visit_create.status_cancelled", "❌ Отменён"), callback_data="visit_status_cancelled")],
+        [InlineKeyboardButton(await tr(update, context, "telegram.visit_create.status_postponed", "⏸ Перенесён"), callback_data="visit_status_postponed")],
+        [InlineKeyboardButton(await tr(update, context, "telegram.button.back", "◀️ Назад"), callback_data="create_visit_back")],
+        [InlineKeyboardButton(await tr(update, context, "telegram.button.cancel", "❌ Отмена"), callback_data="create_visit_cancel")],
     ]
 
     if is_callback:
-        await update.callback_query.edit_message_text(
+        await _edit_i18n(update.callback_query, update, context, 
             text,
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode="Markdown",
         )
     else:
-        await update.message.reply_text(
+        await _reply_i18n(update.message, update, context, 
             text,
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode="Markdown",
@@ -477,7 +548,7 @@ async def select_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     context.user_data[f"{PREFIX}status"] = status
 
-    summary = _get_summary(context)
+    summary = await _get_summary(update, context)
 
     text = (
         f"🆕 *Создание визита*\n\n"
@@ -485,9 +556,9 @@ async def select_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         f"📝 Шаг 5 из 5: Введите *комментарий* или нажмите Пропустить:"
     )
 
-    await q.edit_message_text(
+    await _edit_i18n(q, update, context, 
         text,
-        reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить комментарий"),
+        reply_markup=await _skip_back_cancel_keyboard(update, context, await tr(update, context, "telegram.button.skip_comment", "⏩ Пропустить комментарий")),
         parse_mode="Markdown",
     )
 
@@ -499,7 +570,7 @@ async def back_to_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     q = update.callback_query
     await q.answer()
 
-    summary = _get_summary(context)
+    summary = await _get_summary(update, context)
 
     text = (
         f"🆕 *Создание визита*\n\n"
@@ -507,9 +578,9 @@ async def back_to_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         f"📝 Шаг 3 из 5: Введите *время визита* (ЧЧ:ММ) или нажмите Пропустить:"
     )
 
-    await q.edit_message_text(
+    await _edit_i18n(q, update, context, 
         text,
-        reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить время"),
+        reply_markup=await _skip_back_cancel_keyboard(update, context, await tr(update, context, "telegram.button.skip_time", "⏩ Пропустить время")),
         parse_mode="Markdown",
     )
 
@@ -558,7 +629,7 @@ async def back_to_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def _show_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, is_callback: bool) -> int:
     """Показать экран подтверждения."""
 
-    summary = _get_summary(context)
+    summary = await _get_summary(update, context)
 
     text = (
         f"🆕 *Создание визита*\n\n"
@@ -568,19 +639,19 @@ async def _show_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
     )
 
     buttons = [
-        [InlineKeyboardButton("✅ Создать визит", callback_data="create_visit_save")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="create_visit_back")],
-        [InlineKeyboardButton("❌ Отмена", callback_data="create_visit_cancel")],
+        [InlineKeyboardButton(await tr(update, context, "telegram.visit_create.create_visit_btn", "✅ Создать визит"), callback_data="create_visit_save")],
+        [InlineKeyboardButton(await tr(update, context, "telegram.button.back", "◀️ Назад"), callback_data="create_visit_back")],
+        [InlineKeyboardButton(await tr(update, context, "telegram.button.cancel", "❌ Отмена"), callback_data="create_visit_cancel")],
     ]
 
     if is_callback:
-        await update.callback_query.edit_message_text(
+        await _edit_i18n(update.callback_query, update, context, 
             text,
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode="Markdown",
         )
     else:
-        await update.message.reply_text(
+        await _reply_i18n(update.message, update, context, 
             text,
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode="Markdown",
@@ -599,7 +670,7 @@ async def save_visit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     session = await get_session(tg_id)
     if not session:
-        await q.edit_message_text("❌ Сессия истекла. Нажмите /start.")
+        await _edit_i18n(q, update, context, "❌ Сессия истекла. Нажмите /start.")
         return ConversationHandler.END
 
     # Собрать данные визита
@@ -637,7 +708,7 @@ async def save_visit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             f"⏰ *Время:* {visit_time}\n"
         )
 
-        await q.edit_message_text(text, parse_mode="Markdown")
+        await _edit_i18n(q, update, context, text, parse_mode="Markdown")
 
         # Очистка данных
         keys_to_clear = [k for k in context.user_data.keys() if k.startswith(PREFIX)]
@@ -647,11 +718,8 @@ async def save_visit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         logger.info(f"[SAVE VISIT] Cleared {len(keys_to_clear)} context keys")
 
         # Показать главное меню
-        from .handlers_auth import main_menu_keyboard, ROLE_RU
-        role_ru = ROLE_RU.get(session.role, session.role)
-        menu_text = f"🏠 *Главное меню*\n\n{session.fio} ({role_ru})"
-        kb = main_menu_keyboard(session.role)
-        await update.effective_chat.send_message(menu_text, reply_markup=kb, parse_mode="Markdown")
+        from .handlers_auth import show_main_menu
+        await show_main_menu(update, context, session)
 
         return ConversationHandler.END
 
@@ -660,10 +728,10 @@ async def save_visit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         if e.status == 401:
             await delete_session(tg_id)
-            await q.edit_message_text("❌ Сессия истекла. Нажмите /start.")
+            await _edit_i18n(q, update, context, "❌ Сессия истекла. Нажмите /start.")
             return ConversationHandler.END
 
-        await q.edit_message_text(
+        await _edit_i18n(q, update, context, 
             f"❌ *Ошибка при создании визита:*\n\n{e.detail}\n\nПопробуйте снова или нажмите /start.",
             parse_mode="Markdown",
         )
@@ -676,7 +744,7 @@ async def back_to_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     q = update.callback_query
     await q.answer()
 
-    summary = _get_summary(context)
+    summary = await _get_summary(update, context)
 
     text = (
         f"🆕 *Создание визита*\n\n"
@@ -684,9 +752,9 @@ async def back_to_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f"📝 Шаг 5 из 5: Введите *комментарий* или нажмите Пропустить:"
     )
 
-    await q.edit_message_text(
+    await _edit_i18n(q, update, context, 
         text,
-        reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить комментарий"),
+        reply_markup=await _skip_back_cancel_keyboard(update, context, await tr(update, context, "telegram.button.skip_comment", "⏩ Пропустить комментарий")),
         parse_mode="Markdown",
     )
 
@@ -710,7 +778,7 @@ async def cancel_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     for key in keys_to_clear:
         context.user_data.pop(key, None)
 
-    await q.edit_message_text(
+    await _edit_i18n(q, update, context, 
         "❌ Создание визита отменено.\n\nНажмите /start для возврата в главное меню."
     )
 
@@ -770,3 +838,4 @@ def get_create_visit_handler():
         per_message=False,
         name="create_visit_conv",
     )
+

@@ -11,10 +11,44 @@ from .session import get_session, touch_session, log_action, delete_session
 from .sds_api import api, SDSApiError
 from .helpers import (
     fmt_money, fmt_date, date_picker_keyboard, calendar_keyboard,
-    back_button, STATUS_RU, PAYMENT_RU,
+    back_button,
 )
+from .i18n import t, localize_literal, localize_reply_markup
 
 logger = logging.getLogger(__name__)
+
+
+async def _loc(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> str:
+    return await localize_literal(update, context, text)
+
+
+async def _edit_loc(q, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
+    if "reply_markup" in kwargs and kwargs["reply_markup"] is not None:
+        kwargs["reply_markup"] = await localize_reply_markup(update, context, kwargs["reply_markup"])
+    return await q.edit_message_text(await _loc(update, context, text), **kwargs)
+
+
+async def _reply_loc(msg, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
+    if "reply_markup" in kwargs and kwargs["reply_markup"] is not None:
+        kwargs["reply_markup"] = await localize_reply_markup(update, context, kwargs["reply_markup"])
+    return await msg.reply_text(await _loc(update, context, text), **kwargs)
+
+
+
+async def _status_label(update: Update, context: ContextTypes.DEFAULT_TYPE, status_code: str) -> str:
+    code = (status_code or "").strip()
+    if not code:
+        return "—"
+    value = await t(update, context, f"status.{code}")
+    return value if value != f"status.{code}" else code
+
+
+async def _payment_label(update: Update, context: ContextTypes.DEFAULT_TYPE, payment_code: str) -> str:
+    code = (payment_code or "").strip()
+    if not code:
+        return "—"
+    value = await t(update, context, f"payment_type.{code}")
+    return value if value != f"payment_type.{code}" else code
 
 
 # ---------- Yandex Maps helpers ----------
@@ -39,7 +73,7 @@ async def _get_auth(update: Update) -> tuple:
     tg_id = q.from_user.id
     session = await get_session(tg_id)
     if not session:
-        await q.edit_message_text("Сессия истекла. Нажмите /start.")
+        await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start.")
         return None, None
     await touch_session(tg_id)
     return session, session.jwt_token
@@ -65,8 +99,11 @@ async def _get_paid_order_ids(token: str, login: str) -> set[int]:
     except SDSApiError:
         return set()
 
+    op_list = operations if isinstance(operations, list) else (operations.get("data") if isinstance(operations, dict) else [])
     paid_order_ids: set[int] = set()
-    for op in (operations or []):
+    for op in (op_list or []):
+        if not isinstance(op, dict):
+            continue
         status = (op.get("status") or "").strip().lower()
         if status in ("cancelled", "canceled"):
             continue
@@ -89,7 +126,7 @@ async def cb_exp_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not session:
         return
     kb = date_picker_keyboard("exp_orders")
-    await q.edit_message_text("🗺 *Мой маршрут*\n\nВыберите дату:", reply_markup=kb, parse_mode="Markdown")
+    await _edit_loc(q, update, context, "🗺 *Мой маршрут*\n\nВыберите дату:", reply_markup=kb, parse_mode="Markdown")
 
 
 async def _exp_orders_list_today(update: Update, context: ContextTypes.DEFAULT_TYPE, completed_only: bool):
@@ -114,18 +151,24 @@ async def _exp_orders_list_today(update: Update, context: ContextTypes.DEFAULT_T
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
         return
     all_orders = data if isinstance(data, list) else (data.get("orders") or data.get("data") or [])
     if completed_only:
-        title = "✅ *Выполненные заказы сегодня*\n\n"
+        lbl_title = await t(update, context, "telegram.expeditor.completed_today", fallback="Выполненные заказы сегодня")
+        title = f"✅ *{lbl_title}*\n\n"
     else:
-        title = "📦 *Мои заказы на сегодня*\n\n"
+        lbl_title = await t(update, context, "telegram.expeditor.my_orders_today", fallback="Мои заказы на сегодня")
+        title = f"📦 *{lbl_title}*\n\n"
     if not all_orders:
-        await q.edit_message_text(
-            title + "Нет заказов.",
+        lbl_no_orders = await t(update, context, "telegram.expeditor.no_orders", fallback="Нет заказов.")
+        await _edit_loc(q, update, context,
+            title + lbl_no_orders,
             reply_markup=back_button(),
             parse_mode="Markdown",
         )
@@ -139,19 +182,21 @@ async def _exp_orders_list_today(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["exp_date"] = today
     lines = [title]
     if all_completed:
-        lines.append("Все заказы завершены!\n")
+        lbl_all_done = await t(update, context, "telegram.expeditor.all_done", fallback="Все заказы завершены!")
+        lines.append(f"{lbl_all_done}\n")
     buttons = []
     for o in all_orders:
         order_no = o.get("order_no")
         client = o.get("customer_name", "—")
         st = o.get("status_code", "")
-        status = STATUS_RU.get(st, st)
+        status = await _status_label(update, context, st)
         lines.append(f"• №{order_no} | {client} | {status}")
         buttons.append([InlineKeyboardButton(
             f"№{order_no} — {client}", callback_data=f"exp_order_{order_no}"
         )])
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
-    await q.edit_message_text(
+    btn_back = await t(update, context, "telegram.button.back", fallback="◀️ Назад")
+    buttons.append([InlineKeyboardButton(btn_back, callback_data="main_menu")])
+    await _edit_loc(q, update, context,
         "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
     )
 
@@ -169,14 +214,14 @@ async def cb_exp_orders_calendar(update: Update, context: ContextTypes.DEFAULT_T
     await q.answer()
     offset = int(q.data.split("_")[-1])
     kb = calendar_keyboard("exp_orders", offset)
-    await q.edit_message_text("📅 Выберите дату:", reply_markup=kb, parse_mode="Markdown")
+    await _edit_loc(q, update, context, "📅 Выберите дату:", reply_markup=kb, parse_mode="Markdown")
 
 
 async def cb_exp_orders_pick_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     kb = date_picker_keyboard("exp_orders")
-    await q.edit_message_text("🗺 *Мой маршрут*\n\nВыберите дату:", reply_markup=kb, parse_mode="Markdown")
+    await _edit_loc(q, update, context, "🗺 *Мой маршрут*\n\nВыберите дату:", reply_markup=kb, parse_mode="Markdown")
 
 
 async def cb_exp_orders_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -200,9 +245,12 @@ async def cb_exp_orders_date(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
         return
 
     all_orders = data if isinstance(data, list) else (data.get("orders") or data.get("data") or [])
@@ -224,7 +272,8 @@ async def cb_exp_orders_date(update: Update, context: ContextTypes.DEFAULT_TYPE)
         order_no = o.get("order_no")
         client = o.get("customer_name") or o.get("customer", {}).get("name_client", "—")
         amount = o.get("total_amount", 0)
-        status = STATUS_RU.get(o.get("status_code", ""), o.get("status_code", ""))
+        status_code = o.get("status_code", "")
+        status = await _status_label(update, context, status_code)
         lines.append(f"• №{order_no} | {client} | {fmt_money(amount)} | {status}")
         buttons.append([InlineKeyboardButton(
             f"📦 №{order_no} — {client}", callback_data=f"exp_order_{order_no}"
@@ -232,7 +281,7 @@ async def cb_exp_orders_date(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     buttons.append([InlineKeyboardButton("🗺 Построить маршрут", callback_data=f"exp_route_{chosen_date}")])
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="exp_orders")])
-    await q.edit_message_text(
+    await _edit_loc(q, update, context,
         "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
     )
 
@@ -247,10 +296,10 @@ async def cb_exp_route(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     orders = context.user_data.get("exp_orders_list", [])
     if not orders:
-        await q.edit_message_text("Нет заказов для маршрута.", reply_markup=back_button())
+        await _edit_loc(q, update, context, "Нет заказов для маршрута.", reply_markup=back_button())
         return
 
-    await q.edit_message_text("⏳ Строю маршрут...")
+    await _edit_loc(q, update, context, "⏳ Строю маршрут...")
 
     points = []
     point_names = []
@@ -295,9 +344,10 @@ async def cb_exp_route(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🗺 Открыть в Яндекс.Картах", url=url)],
         [InlineKeyboardButton("◀️ Назад", callback_data=f"exp_orders_date_{chosen_date}")],
     ]
-    await q.edit_message_text(
+    await _edit_loc(q, update, context,
         "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
     )
+
 
 
 async def cb_exp_order_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -313,9 +363,12 @@ async def cb_exp_order_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button("exp_orders"))
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button("exp_orders"),
+        )
         return
 
     customer_id = o.get("customer_id")
@@ -323,8 +376,9 @@ async def cb_exp_order_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     items = o.get("items") or []
     total = o.get("total_amount", 0)
     pay_code = o.get("payment_type_code", "")
-    pay = PAYMENT_RU.get(pay_code, pay_code)
-    status = STATUS_RU.get(o.get("status_code", ""), o.get("status_code", ""))
+    pay = await _payment_label(update, context, pay_code)
+    status_code = o.get("status_code", "")
+    status = await _status_label(update, context, status_code)
 
     lat, lon, address = None, None, "—"
     phone = "—"
@@ -335,8 +389,8 @@ async def cb_exp_order_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
             lon = cust.get("longitude")
             address = cust.get("address") or "—"
             phone = cust.get("phone") or "—"
-        except Exception:
-            pass
+        except Exception as customer_error:
+            logger.debug("Failed to load customer details for order: %s", customer_error)
 
     lines = [
         f"📦 *Заказ №{order_no}*\n",
@@ -363,8 +417,8 @@ async def cb_exp_order_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
         try:
             pr = await api.get_customer_photos(token, customer_id)
             photo_count = pr.get("total", 0) if isinstance(pr, dict) else len(pr if isinstance(pr, list) else [])
-        except Exception:
-            pass
+        except Exception as photos_error:
+            logger.debug("Failed to load customer photos for order: %s", photos_error)
     if photo_count > 0:
         lines.append(f"📷 Фотографий: {photo_count}")
 
@@ -382,9 +436,10 @@ async def cb_exp_order_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     date_str = context.user_data.get("exp_date", date.today().isoformat())
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data=f"exp_orders_date_{date_str}")])
-    await q.edit_message_text(
+    await _edit_loc(q, update, context,
         "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
     )
+
 
 
 # ---------- Доставить заказ (open → delivery) ----------
@@ -424,11 +479,14 @@ async def cb_exp_confirm_delivery(update: Update, context: ContextTypes.DEFAULT_
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
         await log_action(q.from_user.id, session.login, session.role, "delivery_complete",
                          f"order={order_no}", "error", e.detail)
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
 
 
 # ---------- Доставлен (только информирование, оплата — в «Получить оплату») ----------
@@ -436,7 +494,7 @@ async def cb_exp_confirm_delivery(update: Update, context: ContextTypes.DEFAULT_
 async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение доставки: создаёт операции delivery и списывает остатки."""
     q = update.callback_query
-    await q.answer("Обрабатываю подтверждение доставки...")
+    await q.answer(await _loc(update, context, "Обрабатываю подтверждение доставки..."))
     session, token = await _get_auth(update)
     if not session:
         return
@@ -597,11 +655,14 @@ async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
         await log_action(q.from_user.id, session.login, session.role, "order_delivered",
                          f"order={order_no}", "error", e.detail)
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
     finally:
         context.user_data.pop(in_progress_key, None)
 
@@ -628,9 +689,12 @@ async def cb_exp_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await _edit_loc(q, update, context,
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
         return
 
     all_orders = data if isinstance(data, list) else (data.get("orders") or data.get("data") or [])
@@ -642,26 +706,31 @@ async def cb_exp_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pay_orders = [o for o in pay_orders if int(o.get("order_no") or 0) not in paid_order_ids]
 
     if not pay_orders:
-        await q.edit_message_text(
-            f"💰 *Получить оплату* ({fmt_date(today)})\n\nНет заказов, ожидающих оплаты (без уже оплаченных).",
+        lbl_title = await t(update, context, "telegram.expeditor.receive_payment", fallback="Получить оплату")
+        lbl_no_orders = await t(update, context, "telegram.expeditor.no_orders_for_payment", fallback="Нет заказов, ожидающих оплаты (без уже оплаченных).")
+        await _edit_loc(q, update, context,
+            f"💰 *{lbl_title}* ({fmt_date(today)})\n\n{lbl_no_orders}",
             reply_markup=back_button(),
             parse_mode="Markdown",
         )
         return
 
-    lines = [f"💰 *Заказы для получения оплаты ({fmt_date(today)}):*\n"]
+    lbl_title_orders = await t(update, context, "telegram.expeditor.orders_for_payment", fallback="Заказы для получения оплаты")
+    lines = [f"💰 *{lbl_title_orders} ({fmt_date(today)}):*\n"]
     buttons = []
     for o in pay_orders:
         order_no = o.get("order_no")
         client = o.get("customer_name", "—")
         amount = o.get("total_amount", 0)
-        pay = PAYMENT_RU.get(o.get("payment_type_code", ""), "—")
+        pay_code = o.get("payment_type_code", "")
+        pay = await _payment_label(update, context, pay_code)
         lines.append(f"• №{order_no} | {client} | {fmt_money(amount)} | {pay}")
         buttons.append([InlineKeyboardButton(
             f"💰 №{order_no} — {fmt_money(amount)}", callback_data=f"exp_pay_{order_no}"
         )])
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
-    await q.edit_message_text(
+    btn_back = await t(update, context, "telegram.button.back", fallback="◀️ Назад")
+    buttons.append([InlineKeyboardButton(btn_back, callback_data="main_menu")])
+    await _edit_loc(q, update, context,
         "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
     )
 
@@ -679,9 +748,12 @@ async def cb_exp_pay_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button("exp_payment"))
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button("exp_payment"),
+        )
         return
 
     context.user_data["pay_order"] = o
@@ -738,11 +810,14 @@ async def cb_exp_pay_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
         await log_action(q.from_user.id, session.login, session.role, "payment_received",
                          f"order={order_no}", "error", e.detail)
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button("exp_payment"))
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button("exp_payment"),
+        )
 
 
 async def cb_exp_pay_other(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -763,17 +838,17 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     session = await get_session(update.effective_user.id)
     if not session:
-        await update.message.reply_text("Сессия истекла. Нажмите /start.")
+        await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start.")
         return
 
     text = update.message.text.strip().replace(",", ".").replace(" ", "")
     try:
         amount = float(text)
     except ValueError:
-        await update.message.reply_text("❌ Введите число > 0:")
+        await _reply_loc(update.message, update, context, "❌ Введите число > 0:")
         return
     if amount <= 0:
-        await update.message.reply_text("❌ Сумма должна быть > 0:")
+        await _reply_loc(update.message, update, context, "❌ Сумма должна быть > 0:")
         return
 
     o = context.user_data.get("current_order") or context.user_data.get("pay_order") or {}
@@ -816,9 +891,11 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(update.effective_user.id)
-            await update.message.reply_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await update.message.reply_text(f"❌ Ошибка: {e.detail}")
+        await update.message.reply_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail)
+        )
 
 
 # ---------- Полученная оплата (просмотр операций payment_receipt_from_customer) ----------
@@ -841,42 +918,55 @@ async def cb_exp_received_payments(update: Update, context: ContextTypes.DEFAULT
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
         return
 
     # Не показываем отменённые операции в блоке "Полученная оплата"
+    op_list = operations if isinstance(operations, list) else (operations.get("data") if isinstance(operations, dict) else [])
     visible_operations = [
-        op for op in (operations or [])
-        if (op.get("status") or "").strip().lower() not in ("cancelled", "canceled")
+        op for op in (op_list or []) if isinstance(op, dict) and (op.get("status") or "").strip().lower() not in ("cancelled", "canceled")
     ]
 
+    lbl_title = await t(update, context, "telegram.expeditor.rcv_payment_title", fallback="Полученная оплата")
     if not visible_operations:
-        await q.edit_message_text(
-            "💵 *Полученная оплата*\n\nНет операций получения оплаты от клиентов.",
+        lbl_no_ops = await t(update, context, "telegram.expeditor.no_operations", fallback="Нет операций получения оплаты от клиентов.")
+        await _edit_loc(q, update, context,
+            f"💵 *{lbl_title}*\n\n{lbl_no_ops}",
             reply_markup=back_button(),
             parse_mode="Markdown",
         )
         return
 
-    lines = ["💵 *Полученная оплата от клиентов:*\n"]
+    lbl_title_full = await t(update, context, "telegram.expeditor.rcv_payment_title_full", fallback="Полученная оплата от клиентов:")
+    lbl_order_num = await t(update, context, "telegram.expeditor.order_num", fallback="Заказ №")
+    
+    lbl_status_pending = await t(update, context, "telegram.expeditor.status_pending", fallback="Ожидает передачи")
+    lbl_status_completed = await t(update, context, "telegram.expeditor.status_completed", fallback="Передано")
+    lbl_status_cancelled = await t(update, context, "telegram.expeditor.status_cancelled", fallback="Отменено")
+
+    lines = [f"💵 *{lbl_title_full}*\n"]
     for op in visible_operations:
         op_num = op.get("operation_number", "—")
         amount = op.get("amount", 0)
         status = op.get("status", "")
-        status_ru = {"pending": "Ожидает передачи", "completed": "Передано", "cancelled": "Отменено"}.get(status, status)
+        status_ru = {"pending": lbl_status_pending, "completed": lbl_status_completed, "cancelled": lbl_status_cancelled}.get(status, status)
         order_id = op.get("order_id") or "—"
         op_date = op.get("operation_date", "")
         date_str = fmt_date(op_date[:10]) if op_date else "—"
 
-        lines.append(f"• {op_num} | Заказ №{order_id} | {fmt_money(amount)} | {status_ru} | {date_str}")
+        lines.append(f"• {op_num} | {lbl_order_num}{order_id} | {fmt_money(amount)} | {status_ru} | {date_str}")
 
     await q.edit_message_text(
         "\n".join(lines),
         reply_markup=back_button(),
         parse_mode="Markdown",
     )
+
 
 
 async def cb_exp_my_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -892,9 +982,12 @@ async def cb_exp_my_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
         return
 
     exp_wh = None
@@ -903,9 +996,11 @@ async def cb_exp_my_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
             exp_wh = w
             break
 
+    lbl_title = await t(update, context, "telegram.expeditor.my_stock", fallback="Мои остатки")
     if not exp_wh:
-        await q.edit_message_text(
-            "📊 *Мои остатки*\n\nЗа вами не закреплён склад.",
+        lbl_no_warehouse = await t(update, context, "telegram.expeditor.no_warehouse", fallback="За вами не закреплён склад.")
+        await _edit_loc(q, update, context,
+            f"📊 *{lbl_title}*\n\n{lbl_no_warehouse}",
             reply_markup=back_button(),
             parse_mode="Markdown",
         )
@@ -919,9 +1014,12 @@ async def cb_exp_my_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
-            await q.edit_message_text("Сессия истекла. Нажмите /start для повторной авторизации.")
+            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return
-        await q.edit_message_text(f"❌ Ошибка: {e.detail}", reply_markup=back_button())
+        await q.edit_message_text(
+            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
         return
 
     rows = []
@@ -933,9 +1031,11 @@ async def cb_exp_my_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif isinstance(stock_resp, list):
         rows = stock_resp
 
+    lbl_warehouse = await t(update, context, "telegram.expeditor.warehouse", fallback="Склад")
     if not rows:
-        await q.edit_message_text(
-            f"📊 *Мои остатки*\n\nСклад: {wh_name}\nОстатков нет.",
+        lbl_no_stock = await t(update, context, "telegram.expeditor.no_stock", fallback="Остатков нет.")
+        await _edit_loc(q, update, context,
+            f"📊 *{lbl_title}*\n\n{lbl_warehouse}: {wh_name}\n{lbl_no_stock}",
             reply_markup=back_button(),
             parse_mode="Markdown",
         )
@@ -952,7 +1052,10 @@ async def cb_exp_my_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_qty = sum(int(r.get("total_qty") or 0) for r in rows)
     total_cost = sum(float(r.get("total_cost") or 0) for r in rows)
 
-    lines = [f"📊 Мои остатки\nСклад: {wh_name}\n"]
+    lbl_pcs = await t(update, context, "telegram.expeditor.pcs", fallback="шт")
+    lbl_expiry = await t(update, context, "telegram.expeditor.expiry", fallback="срок")
+    
+    lines = [f"📊 *{lbl_title}*\n{lbl_warehouse}: {wh_name}\n"]
     max_lines = 30
     for i, r in enumerate(rows[:max_lines], 1):
         product = (r.get("product_name") or r.get("product_code") or "—").strip()
@@ -960,38 +1063,25 @@ async def cb_exp_my_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         expiry = r.get("expiry_date") or "—"
         if expiry and expiry != "—":
             expiry = fmt_date(str(expiry)[:10])
-        lines.append(f"{i}. {product} | {qty} шт | срок: {expiry}")
+        lines.append(f"{i}. {product} | {qty} {lbl_pcs} | {lbl_expiry}: {expiry}")
 
     if len(rows) > max_lines:
-        lines.append(f"\n… и ещё {len(rows) - max_lines} поз.")
+        lbl_and_more = await t(update, context, "telegram.expeditor.and_more", fallback="и ещё")
+        lbl_pos = await t(update, context, "telegram.expeditor.pos", fallback="поз.")
+        lines.append(f"\n… {lbl_and_more} {len(rows) - max_lines} {lbl_pos}")
 
-    lines.append(f"\nИтого: {total_qty} шт")
-    lines.append(f"Сумма: {fmt_money(total_cost)}")
+    lbl_total = await t(update, context, "telegram.expeditor.total_qty", fallback="Итого")
+    lbl_sum = await t(update, context, "telegram.expeditor.total_sum", fallback="Сумма")
+    lines.append(f"\n{lbl_total}: {total_qty} {lbl_pcs}")
+    lines.append(f"{lbl_sum}: {fmt_money(total_cost)}")
 
-    await q.edit_message_text(
+    btn_back = await t(update, context, "telegram.button.back", fallback="◀️ Назад")
+    buttons = [[InlineKeyboardButton(btn_back, callback_data="main_menu")]]
+    
+    await _edit_loc(q, update, context,
         "\n".join(lines),
-        reply_markup=back_button(),
-    )
-
-
-async def cb_exp_create_operation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Entry point for manual expeditor operation flow."""
-    q = update.callback_query
-    await q.answer()
-    session, _ = await _get_auth(update)
-    if not session:
-        return
-    await q.edit_message_text(
-        "⚙️ Создание операции\n\n"
-        "Для экспедитора операции отгрузки формируются во время подтверждения доставки заказа.\n"
-        "Откройте маршрут и выберите заказ для завершения доставки.\n\n"
-        "Используйте кнопки ниже:",
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("🗺 Мой маршрут на сегодня", callback_data="exp_orders_today")],
-                [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
-            ]
-        ),
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode="Markdown",
     )
 
 
@@ -1010,7 +1100,6 @@ def register_expeditor_handlers(app):
     app.add_handler(CallbackQueryHandler(cb_exp_delivered, pattern=r"^exp_delivered_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_route, pattern=r"^exp_route_\d{4}-\d{2}-\d{2}$"))
     app.add_handler(CallbackQueryHandler(cb_exp_payment, pattern="^exp_payment$"))
-    app.add_handler(CallbackQueryHandler(cb_exp_create_operation, pattern="^exp_create_operation$"))
     app.add_handler(CallbackQueryHandler(cb_exp_my_stock, pattern="^exp_my_stock$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_order, pattern=r"^exp_pay_\d+$"))
     app.add_handler(CallbackQueryHandler(cb_exp_pay_full, pattern=r"^exp_payfull_\d+$"))

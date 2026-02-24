@@ -1,4 +1,4 @@
-"""
+﻿"""
 Обработчик добавления клиента v3 (FSM) с полным набором полей.
 
 Архитектура:
@@ -24,6 +24,7 @@ from telegram.error import TelegramError
 from .session import get_session, touch_session, delete_session
 from .sds_api import api, SDSApiError
 from .helpers import get_cached_user_logins
+from .i18n import t, localize_literal
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,125 @@ logger = logging.getLogger(__name__)
 
 # User data keys prefix
 PREFIX = "new_customer_v3_"
+
+
+async def tr(
+    update: Update | None,
+    context: ContextTypes.DEFAULT_TYPE | None,
+    key: str,
+    default: str,
+    **params,
+) -> str:
+    text = await t(update, context, key, **params)
+    if text == key:
+        text = default.format(**params) if params else default
+    return text
+
+
+CUSTOMER_I18N_MAP = {
+    "❌ Отмена": ("telegram.button.cancel", "❌ Отмена"),
+    "◀️ Назад": ("telegram.button.back", "◀️ Назад"),
+    "⏩ Пропустить": ("telegram.button.skip", "⏩ Пропустить"),
+    "✅ Создать клиента": ("telegram.customer_create.create_btn", "✅ Создать клиента"),
+    "🔄 Обновить": ("telegram.button.refresh", "🔄 Обновить"),
+    "📍 Отправить геолокацию": ("telegram.customer_create.send_location_btn", "📍 Отправить геолокацию"),
+    "➕ *Добавление нового клиента*": ("telegram.customer_create.title", "➕ *Добавление нового клиента*"),
+    "📝 Шаг 1 из 11: Введите *название клиента* (минимум 2 символа):": ("telegram.customer_create.step1", "📝 Шаг 1 из 11: Введите *название клиента* (минимум 2 символа):"),
+    "📝 Шаг 2 из 11: Введите ИНН (9-12 цифр):": ("telegram.customer_create.step2_required_inn", "📝 Шаг 2 из 11: Введите ИНН (9-12 цифр):"),
+    "📝 Шаг 3 из 11: Введите *название фирмы* или нажмите Пропустить:": ("telegram.customer_create.step3", "📝 Шаг 3 из 11: Введите *название фирмы* или нажмите Пропустить:"),
+    "📝 Шаг 4 из 11: Введите *телефон* или нажмите Пропустить:": ("telegram.customer_create.step4", "📝 Шаг 4 из 11: Введите *телефон* или нажмите Пропустить:"),
+    "📝 Шаг 5 из 11: Введите *контактное лицо* или нажмите Пропустить:": ("telegram.customer_create.step5", "📝 Шаг 5 из 11: Введите *контактное лицо* или нажмите Пропустить:"),
+    "📝 Шаг 6 из 11: Введите *адрес* или нажмите Пропустить:": ("telegram.customer_create.step6", "📝 Шаг 6 из 11: Введите *адрес* или нажмите Пропустить:"),
+    "📝 Шаг 7 из 11: Выберите *город* (обязательно):": ("telegram.customer_create.step7", "📝 Шаг 7 из 11: Выберите *город* (обязательно):"),
+    "📝 Шаг 8 из 11: Выберите *территорию* (обязательно):": ("telegram.customer_create.step8", "📝 Шаг 8 из 11: Выберите *территорию* (обязательно):"),
+    "📝 Шаг 9 из 11: Введите *расчётный счёт* или нажмите Пропустить:": ("telegram.customer_create.step9", "📝 Шаг 9 из 11: Введите *расчётный счёт* или нажмите Пропустить:"),
+    "📝 Шаг 10 из 11: Выберите *экспедитора* или нажмите Пропустить:": ("telegram.customer_create.step10", "📝 Шаг 10 из 11: Выберите *экспедитора* или нажмите Пропустить:"),
+    "📝 Шаг 11 из 11: Отправьте *геолокацию клиента*\n⚠️ _Обязательное поле_ - используйте кнопку ниже:": ("telegram.customer_create.step11", "📝 Шаг 11 из 11: Отправьте *геолокацию клиента*\n⚠️ _Обязательное поле_ - используйте кнопку ниже:"),
+    "✅ *Проверьте введённые данные:*": ("telegram.customer_create.check_data", "✅ *Проверьте введённые данные:*"),
+    "Всё верно?": ("telegram.customer_create.all_correct", "Всё верно?"),
+    "⚠️ _Обязательное поле_": ("telegram.customer_create.required_field", "⚠️ _Обязательное поле_"),
+    "❌ Сессия истекла. Нажмите /start.": ("telegram.auth.session_expired", "❌ Сессия истекла. Нажмите /start."),
+    "❌ Добавление клиента отменено.\n\nНажмите /start для возврата в главное меню.": ("telegram.customer_create.cancelled", "❌ Добавление клиента отменено.\n\nНажмите /start для возврата в главное меню."),
+    "❌ *Ошибка:* Название должно содержать минимум 2 символа.\n\nПопробуйте еще раз:": ("telegram.customer_create.error_name_min", "❌ *Ошибка:* Название должно содержать минимум 2 символа.\n\nПопробуйте еще раз:"),
+    "❌ *Ошибка:* ИНН должен содержать от 9 до 12 цифр.\n\nПопробуйте еще раз:": ("telegram.customer_create.error_inn_format", "❌ *Ошибка:* ИНН должен содержать от 9 до 12 цифр.\n\nПопробуйте еще раз:"),
+    "❌ *Ошибка:* Телефон должен содержать минимум 5 символов.\n\nПопробуйте еще раз:": ("telegram.customer_create.error_phone_min", "❌ *Ошибка:* Телефон должен содержать минимум 5 символов.\n\nПопробуйте еще раз:"),
+    "❌ *Ошибка:* Геолокация обязательна!\n\nНажмите кнопку 📍 для отправки координат:": ("telegram.customer_create.error_location_required", "❌ *Ошибка:* Геолокация обязательна!\n\nНажмите кнопку 📍 для отправки координат:"),
+    "❌ Невозможно продолжить: в справочнике нет городов.\nГород обязателен при создании клиента.\n\nПопросите администратора заполнить справочник и повторите попытку.": ("telegram.customer_create.error_no_cities", "❌ Невозможно продолжить: в справочнике нет городов.\nГород обязателен при создании клиента.\n\nПопросите администратора заполнить справочник и повторите попытку."),
+    "❌ Невозможно продолжить: в справочнике нет территорий.\nТерритория обязательна при создании клиента.\n\nПопросите администратора заполнить справочник и повторите попытку.": ("telegram.customer_create.error_no_territories", "❌ Невозможно продолжить: в справочнике нет территорий.\nТерритория обязательна при создании клиента.\n\nПопросите администратора заполнить справочник и повторите попытку."),
+    "⚠️ У вас уже активен диалог создания визита.\nПожалуйста, завершите его (нажмите Отмена) перед добавлением клиента.": ("telegram.customer_create.error_active_visit_dialog", "⚠️ У вас уже активен диалог создания визита.\nПожалуйста, завершите его (нажмите Отмена) перед добавлением клиента."),
+    "⚠️ Экспедиторы не найдены в системе.": ("telegram.customer_create.expeditors_not_found", "⚠️ Экспедиторы не найдены в системе."),
+    "📎 Нажмите на кнопку Скрепка 📎 для отправки локации клиента:": ("telegram.customer_create.attach_prompt", "📎 Нажмите на кнопку Скрепка 📎 для отправки локации клиента:"),
+    "📎 *Нажмите на кнопку Скрепка 📎 для отправки локации клиента:*": ("telegram.customer_create.attach_prompt_md", "📎 *Нажмите на кнопку Скрепка 📎 для отправки локации клиента:*"),
+    "👇 *Нажмите кнопку для отправки координат:*": ("telegram.customer_create.send_coords_prompt", "👇 *Нажмите кнопку для отправки координат:*"),
+    "❌ Нельзя сохранить клиента.": ("telegram.customer_create.error_required_missing_head", "❌ Нельзя сохранить клиента."),
+    "Обязательные поля не выбраны:": ("telegram.customer_create.error_required_missing_list", "Обязательные поля не выбраны:"),
+    "Вернитесь назад и заполните их.": ("telegram.customer_create.error_required_missing_tail", "Вернитесь назад и заполните их."),
+    "✅ *Клиент успешно создан!*": ("telegram.customer_create.success", "✅ *Клиент успешно создан!*"),
+    "❌ *Ошибка при создании клиента:*": ("telegram.customer_create.error_create", "❌ *Ошибка при создании клиента:*"),
+    "❌ *Неожиданная ошибка:*": ("telegram.customer_create.error_unexpected", "❌ *Неожиданная ошибка:*"),
+    "Поле «Город» обязательно": ("telegram.customer_create.city_required_alert", "Поле «Город» обязательно"),
+    "Поле «Территория» обязательно": ("telegram.customer_create.territory_required_alert", "Поле «Территория» обязательно"),
+    "Название:": ("telegram.customer_create.summary.name", "Название:"),
+    "ИНН:": ("telegram.customer_create.summary.tax_id", "ИНН:"),
+    "Название фирмы:": ("telegram.customer_create.summary.firm_name", "Название фирмы:"),
+    "Телефон:": ("telegram.customer_create.summary.phone", "Телефон:"),
+    "Контактное лицо:": ("telegram.customer_create.summary.contact_person", "Контактное лицо:"),
+    "Адрес:": ("telegram.customer_create.summary.address", "Адрес:"),
+    "Город:": ("telegram.customer_create.summary.city", "Город:"),
+    "Территория:": ("telegram.customer_create.summary.territory", "Территория:"),
+    "Р/с:": ("telegram.customer_create.summary.account_no", "Р/с:"),
+    "Экспедитор:": ("telegram.customer_create.summary.expeditor", "Экспедитор:"),
+    "Координаты:": ("telegram.customer_create.summary.coords", "Координаты:"),
+}
+
+
+async def _localize_customer_text(
+    update: Update | None,
+    context: ContextTypes.DEFAULT_TYPE | None,
+    text: str,
+) -> str:
+    if not text:
+        return text
+    out = text
+    for src, (key, default) in CUSTOMER_I18N_MAP.items():
+        if src in out:
+            out = out.replace(src, await tr(update, context, key, default))
+    return out
+
+
+async def _localize_reply_markup(
+    update: Update | None,
+    context: ContextTypes.DEFAULT_TYPE | None,
+    reply_markup,
+):
+    if isinstance(reply_markup, InlineKeyboardMarkup):
+        rows = []
+        for row in (reply_markup.inline_keyboard or []):
+            new_row = []
+            for btn in row:
+                text = await _localize_customer_text(update, context, btn.text or "")
+                text = await localize_literal(update, context, text)
+                new_row.append(InlineKeyboardButton(text, callback_data=btn.callback_data, url=btn.url))
+            rows.append(new_row)
+        return InlineKeyboardMarkup(rows)
+    if isinstance(reply_markup, ReplyKeyboardMarkup):
+        rows = []
+        for row in (reply_markup.keyboard or []):
+            new_row = []
+            for btn in row:
+                text = await _localize_customer_text(update, context, getattr(btn, "text", "") or "")
+                text = await localize_literal(update, context, text)
+                new_row.append(KeyboardButton(text, request_location=getattr(btn, "request_location", None)))
+            rows.append(new_row)
+        return ReplyKeyboardMarkup(
+            rows,
+            resize_keyboard=reply_markup.resize_keyboard,
+            one_time_keyboard=reply_markup.one_time_keyboard,
+            selective=reply_markup.selective,
+            input_field_placeholder=reply_markup.input_field_placeholder,
+            is_persistent=reply_markup.is_persistent,
+        )
+    return reply_markup
 
 
 # ============================================================================
@@ -77,7 +197,13 @@ def _escape_markdown(text: str) -> str:
 # Helper: Safe send message with logging
 # ============================================================================
 
-async def _safe_send_message(message_obj, text: str, **kwargs) -> bool:
+async def _safe_send_message(
+    update: Update | None,
+    context: ContextTypes.DEFAULT_TYPE | None,
+    message_obj,
+    text: str,
+    **kwargs,
+) -> bool:
     """
     Безопасная отправка сообщения с логированием.
 
@@ -91,7 +217,10 @@ async def _safe_send_message(message_obj, text: str, **kwargs) -> bool:
         logger.info(f"[SEND] FULL TEXT:\n'''{text}'''")
         logger.info(f"[SEND] kwargs: {kwargs}")
 
-        result = await message_obj.reply_text(text, **kwargs)
+        localized = await _localize_customer_text(update, context, text)
+        if "reply_markup" in kwargs and kwargs["reply_markup"] is not None:
+            kwargs["reply_markup"] = await _localize_reply_markup(update, context, kwargs["reply_markup"])
+        result = await message_obj.reply_text(localized, **kwargs)
 
         logger.info(f"[SEND] Message sent successfully, message_id={result.message_id}")
         return True
@@ -108,7 +237,13 @@ async def _safe_send_message(message_obj, text: str, **kwargs) -> bool:
         return False
 
 
-async def _safe_edit_message(query, text: str, **kwargs) -> bool:
+async def _safe_edit_message(
+    update: Update | None,
+    context: ContextTypes.DEFAULT_TYPE | None,
+    query,
+    text: str,
+    **kwargs,
+) -> bool:
     """
     Безопасное редактирование сообщения с логированием.
 
@@ -120,7 +255,10 @@ async def _safe_edit_message(query, text: str, **kwargs) -> bool:
         logger.debug(f"[EDIT] Message text preview: {text[:200]}...")
         logger.debug(f"[EDIT] kwargs: {kwargs}")
 
-        result = await query.edit_message_text(text, **kwargs)
+        localized = await _localize_customer_text(update, context, text)
+        if "reply_markup" in kwargs and kwargs["reply_markup"] is not None:
+            kwargs["reply_markup"] = await _localize_reply_markup(update, context, kwargs["reply_markup"])
+        result = await query.edit_message_text(localized, **kwargs)
 
         logger.info(f"[EDIT] Message edited successfully")
         return True
@@ -247,7 +385,7 @@ async def start_add_customer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     active_visit_keys = [k for k in context.user_data.keys() if k.startswith("new_visit_")]
     if active_visit_keys:
         logger.warning(f"[START] User {tg_id} has active visit dialog, blocking add customer")
-        await _safe_edit_message(
+        await _safe_edit_message(update, context, 
             q,
             "⚠️ У вас уже активен диалог создания визита.\n"
             "Пожалуйста, завершите его (нажмите Отмена) перед добавлением клиента."
@@ -257,7 +395,7 @@ async def start_add_customer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     session = await get_session(tg_id)
     if not session:
         logger.warning(f"[START] User {tg_id} has no session")
-        await _safe_edit_message(q, "❌ Сессия истекла. Нажмите /start.")
+        await _safe_edit_message(update, context, q, "❌ Сессия истекла. Нажмите /start.")
         return ConversationHandler.END
 
     await touch_session(tg_id)
@@ -274,7 +412,7 @@ async def start_add_customer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "📝 Шаг 1 из 11: Введите *название клиента* (минимум 2 символа):"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_cancel_keyboard(), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_cancel_keyboard(), parse_mode="Markdown")
 
     return ASK_NAME
 
@@ -297,7 +435,7 @@ async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     if len(name) < 2:
         logger.warning(f"[ASK_NAME] User {tg_id}: Name too short")
-        await _safe_send_message(
+        await _safe_send_message(update, context, 
             update.message,
             "❌ *Ошибка:* Название должно содержать минимум 2 символа.\n\n"
             "Попробуйте еще раз:",
@@ -323,7 +461,7 @@ async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         [InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")],
     ])
 
-    success = await _safe_send_message(
+    success = await _safe_send_message(update, context, 
         update.message,
         text,
         reply_markup=kb,
@@ -361,7 +499,7 @@ async def ask_tax_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             [InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")],
         ])
 
-        await _safe_send_message(
+        await _safe_send_message(update, context, 
             update.message,
             "❌ *Ошибка:* ИНН должен содержать от 9 до 12 цифр.\n\n"
             "Попробуйте еще раз:",
@@ -381,7 +519,7 @@ async def ask_tax_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         f"📝 Шаг 3 из 11: Введите *название фирмы* или нажмите Пропустить:"
     )
 
-    await _safe_send_message(
+    await _safe_send_message(update, context, 
         update.message,
         text,
         reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"),
@@ -408,7 +546,7 @@ async def skip_tax_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         f"📝 Шаг 3 из 11: Введите *название фирмы* или нажмите Пропустить:"
     )
 
-    await _safe_send_message(
+    await _safe_send_message(update, context, 
         q,
         text,
         reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"),
@@ -434,7 +572,7 @@ async def back_to_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         f"📝 Шаг 1 из 11: Введите *название клиента* (минимум 2 символа):"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_cancel_keyboard(), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_cancel_keyboard(), parse_mode="Markdown")
 
     return ASK_NAME
 
@@ -464,7 +602,7 @@ async def ask_firm_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         f"📝 Шаг 4 из 11: Введите *телефон* или нажмите Пропустить:"
     )
 
-    await _safe_send_message(
+    await _safe_send_message(update, context, 
         update.message,
         text,
         reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"),
@@ -490,7 +628,7 @@ async def back_to_tax_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         f"📝 Шаг 2 из 11: Введите *ИНН* (9-12 цифр) или нажмите Пропустить:"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить ИНН"), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить ИНН"), parse_mode="Markdown")
 
     return ASK_TAX_ID
 
@@ -512,7 +650,7 @@ async def skip_firm_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         f"📝 Шаг 4 из 11: Введите *телефон* или нажмите Пропустить:"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
 
     return ASK_PHONE
 
@@ -540,7 +678,7 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             [InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")],
         ])
 
-        await _safe_send_message(
+        await _safe_send_message(update, context, 
             update.message,
             "❌ *Ошибка:* Телефон должен содержать минимум 5 символов.\n\n"
             "Попробуйте еще раз:",
@@ -560,7 +698,7 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         f"📝 Шаг 5 из 11: Введите *контактное лицо* или нажмите Пропустить:"
     )
 
-    await _safe_send_message(
+    await _safe_send_message(update, context, 
         update.message,
         text,
         reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"),
@@ -587,7 +725,7 @@ async def skip_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         f"📝 Шаг 5 из 11: Введите *контактное лицо* или нажмите Пропустить:"
     )
 
-    await _safe_send_message(
+    await _safe_send_message(update, context, 
         q,
         text,
         reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"),
@@ -613,7 +751,7 @@ async def back_to_firm_name(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"📝 Шаг 3 из 11: Введите *название фирмы* или нажмите Пропустить:"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
 
     return ASK_FIRM_NAME
 
@@ -643,7 +781,7 @@ async def ask_contact_person(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"📝 Шаг 6 из 11: Введите *адрес* или нажмите Пропустить:"
     )
 
-    await _safe_send_message(
+    await _safe_send_message(update, context, 
         update.message,
         text,
         reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"),
@@ -669,7 +807,7 @@ async def back_to_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         f"📝 Шаг 4 из 11: Введите *телефон* или нажмите Пропустить:"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
 
     return ASK_PHONE
 
@@ -691,7 +829,7 @@ async def skip_contact_person(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"📝 Шаг 6 из 11: Введите *адрес* или нажмите Пропустить:"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
 
     return ASK_ADDRESS
 
@@ -730,7 +868,7 @@ async def back_to_contact_person(update: Update, context: ContextTypes.DEFAULT_T
         f"📝 Шаг 5 из 11: Введите *контактное лицо* или нажмите Пропустить:"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
 
     return ASK_CONTACT_PERSON
 
@@ -763,9 +901,9 @@ async def _show_city_list(update: Update, context: ContextTypes.DEFAULT_TYPE, is
         logger.warning(f"[CITY] User {tg_id}: No session")
         msg = "❌ Сессия истекла. Нажмите /start."
         if is_callback:
-            await _safe_edit_message(update.callback_query, msg)
+            await _safe_edit_message(update, context, update.callback_query, msg)
         else:
-            await _safe_send_message(update.message, msg)
+            await _safe_send_message(update, context, update.message, msg)
         return ConversationHandler.END
 
     await touch_session(tg_id)
@@ -782,9 +920,9 @@ async def _show_city_list(update: Update, context: ContextTypes.DEFAULT_TYPE, is
             await delete_session(tg_id)
             msg = "❌ Сессия истекла. Нажмите /start."
             if is_callback:
-                await _safe_edit_message(update.callback_query, msg)
+                await _safe_edit_message(update, context, update.callback_query, msg)
             else:
-                await _safe_send_message(update.message, msg)
+                await _safe_send_message(update, context, update.message, msg)
             return ConversationHandler.END
         cities = []
     except Exception as e:
@@ -795,22 +933,26 @@ async def _show_city_list(update: Update, context: ContextTypes.DEFAULT_TYPE, is
     summary = _get_summary(context)
 
     if not cities:
-        logger.warning(f"[CITY] User {tg_id}: No cities found, skipping to territory")
-        # Переход к территории
+        logger.warning(f"[CITY] User {tg_id}: No cities found, cannot continue")
         text = (
             f"➕ *Добавление нового клиента*\n"
             f"{summary}\n\n"
-            f"⚠️ Города не найдены в системе.\n\n"
-            f"📝 Шаг 8 из 11: Переход к выбору территории..."
+            f"❌ Невозможно продолжить: в справочнике нет городов.\n"
+            f"Город обязателен при создании клиента.\n\n"
+            f"Попросите администратора заполнить справочник и повторите попытку."
         )
 
-        if is_callback:
-            await _safe_edit_message(update.callback_query, text, parse_mode="Markdown")
-        else:
-            await _safe_send_message(update.message, text, parse_mode="Markdown")
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Обновить", callback_data="addcust_v3_retry_city")],
+            [InlineKeyboardButton("◀️ Назад", callback_data="addcust_v3_back")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")],
+        ])
 
-        # Показать территории
-        return await _show_territory_list(update, context, is_callback=is_callback)
+        if is_callback:
+            await _safe_edit_message(update, context, update.callback_query, text, reply_markup=kb, parse_mode="Markdown")
+        else:
+            await _safe_send_message(update, context, update.message, text, reply_markup=kb, parse_mode="Markdown")
+        return ASK_CITY
 
     # Создать кнопки с городами
     logger.info(f"[CITY] Building buttons for {len(cities)} cities")
@@ -821,20 +963,19 @@ async def _show_city_list(update: Update, context: ContextTypes.DEFAULT_TYPE, is
         logger.debug(f"[CITY] Adding button: {city_name} (id={city_id})")
         buttons.append([InlineKeyboardButton(city_name, callback_data=f"addcust_v3_city_{city_id}")])
 
-    buttons.append([InlineKeyboardButton("⏩ Пропустить", callback_data="addcust_v3_skip")])
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="addcust_v3_back")])
     buttons.append([InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")])
 
     text = (
         f"➕ *Добавление нового клиента*\n"
         f"{summary}\n\n"
-        f"📝 Шаг 7 из 11: Выберите *город* или нажмите Пропустить:"
+        f"📝 Шаг 7 из 11: Выберите *город* (обязательно):"
     )
 
     if is_callback:
-        await _safe_edit_message(update.callback_query, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _safe_edit_message(update, context, update.callback_query, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
     else:
-        await _safe_send_message(update.message, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _safe_send_message(update, context, update.message, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
 
     logger.info(f"[CITY] City selection displayed")
 
@@ -889,23 +1030,20 @@ async def back_to_address(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f"📝 Шаг 6 из 11: Введите *адрес* или нажмите Пропустить:"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
 
     return ASK_ADDRESS
 
 
 async def skip_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Пропуск города."""
+    """Пропуск города запрещён."""
     q = update.callback_query
     await q.answer()
     tg_id = q.from_user.id
 
-    context.user_data.pop(f"{PREFIX}city", None)
-    context.user_data.pop(f"{PREFIX}city_id", None)
-    logger.info(f"[SKIP] User {tg_id}: Skipped city")
-
-    # Переход к выбору территории
-    return await _show_territory_list(update, context, is_callback=True)
+    logger.info(f"[SKIP] User {tg_id}: Skip city blocked (required field)")
+    await q.answer(await _localize_customer_text(update, context, "Поле «Город» обязательно"), show_alert=True)
+    return await _show_city_list(update, context, is_callback=True)
 
 
 # ============================================================================
@@ -923,9 +1061,9 @@ async def _show_territory_list(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.warning(f"[TERRITORY] User {tg_id}: No session")
         msg = "❌ Сессия истекла. Нажмите /start."
         if is_callback:
-            await _safe_edit_message(update.callback_query, msg)
+            await _safe_edit_message(update, context, update.callback_query, msg)
         else:
-            await _safe_send_message(update.message, msg)
+            await _safe_send_message(update, context, update.message, msg)
         return ConversationHandler.END
 
     await touch_session(tg_id)
@@ -933,7 +1071,7 @@ async def _show_territory_list(update: Update, context: ContextTypes.DEFAULT_TYP
     # Получить список территорий через API
     try:
         logger.info(f"[TERRITORY API] Calling get_territories...")
-        territories = await api.get_territories(session.jwt_token, city_id=context.user_data.get(f"{PREFIX}city_id"))
+        territories = await api.get_territories(session.jwt_token)
         logger.info(f"[TERRITORY API] Got {len(territories)} territories: {territories}")
 
     except SDSApiError as e:
@@ -942,9 +1080,9 @@ async def _show_territory_list(update: Update, context: ContextTypes.DEFAULT_TYP
             await delete_session(tg_id)
             msg = "❌ Сессия истекла. Нажмите /start."
             if is_callback:
-                await _safe_edit_message(update.callback_query, msg)
+                await _safe_edit_message(update, context, update.callback_query, msg)
             else:
-                await _safe_send_message(update.message, msg)
+                await _safe_send_message(update, context, update.message, msg)
             return ConversationHandler.END
         territories = []
     except Exception as e:
@@ -955,23 +1093,27 @@ async def _show_territory_list(update: Update, context: ContextTypes.DEFAULT_TYP
     summary = _get_summary(context)
 
     if not territories:
-        logger.warning(f"[TERRITORY] User {tg_id}: No territories found, skipping to account_no")
-        # Переход к расчётному счёту
+        logger.warning(f"[TERRITORY] User {tg_id}: No territories found, cannot continue")
         text = (
             f"➕ *Добавление нового клиента*\n"
             f"{summary}\n\n"
-            f"⚠️ Территории не найдены в системе.\n\n"
-            f"📝 Шаг 9 из 11: Введите *расчётный счёт* или нажмите Пропустить:"
+            f"❌ Невозможно продолжить: в справочнике нет территорий.\n"
+            f"Территория обязательна при создании клиента.\n\n"
+            f"Попросите администратора заполнить справочник и повторите попытку."
         )
 
-        kb = _skip_back_cancel_keyboard("⏩ Пропустить")
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Обновить", callback_data="addcust_v3_retry_territory")],
+            [InlineKeyboardButton("◀️ Назад", callback_data="addcust_v3_back")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")],
+        ])
 
         if is_callback:
-            await _safe_edit_message(update.callback_query, text, reply_markup=kb, parse_mode="Markdown")
+            await _safe_edit_message(update, context, update.callback_query, text, reply_markup=kb, parse_mode="Markdown")
         else:
-            await _safe_send_message(update.message, text, reply_markup=kb, parse_mode="Markdown")
+            await _safe_send_message(update, context, update.message, text, reply_markup=kb, parse_mode="Markdown")
 
-        return ASK_ACCOUNT_NO
+        return ASK_TERRITORY
 
     # Создать кнопки с территориями
     logger.info(f"[TERRITORY] Building buttons for {len(territories)} territories")
@@ -982,20 +1124,19 @@ async def _show_territory_list(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.debug(f"[TERRITORY] Adding button: {territory_name} (id={territory_id})")
         buttons.append([InlineKeyboardButton(territory_name, callback_data=f"addcust_v3_terr_{territory_id}")])
 
-    buttons.append([InlineKeyboardButton("⏩ Пропустить", callback_data="addcust_v3_skip")])
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="addcust_v3_back")])
     buttons.append([InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")])
 
     text = (
         f"➕ *Добавление нового клиента*\n"
         f"{summary}\n\n"
-        f"📝 Шаг 8 из 11: Выберите *территорию* или нажмите Пропустить:"
+        f"📝 Шаг 8 из 11: Выберите *территорию* (обязательно):"
     )
 
     if is_callback:
-        await _safe_edit_message(update.callback_query, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _safe_edit_message(update, context, update.callback_query, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
     else:
-        await _safe_send_message(update.message, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _safe_send_message(update, context, update.message, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
 
     logger.info(f"[TERRITORY] Territory selection displayed")
 
@@ -1017,7 +1158,7 @@ async def select_territory(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     session = await get_session(tg_id)
     if session:
         try:
-            territories = await api.get_territories(session.jwt_token, city_id=context.user_data.get(f"{PREFIX}city_id"))
+            territories = await api.get_territories(session.jwt_token)
             territory = next((t for t in territories if t.get("id") == territory_id), None)
             territory_name = territory.get("name", str(territory_id)) if territory else str(territory_id)
         except Exception as e:
@@ -1038,7 +1179,7 @@ async def select_territory(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         f"📝 Шаг 9 из 11: Введите *расчётный счёт* или нажмите Пропустить:"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
 
     return ASK_ACCOUNT_NO
 
@@ -1056,26 +1197,28 @@ async def back_to_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 
 async def skip_territory(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Пропуск территории."""
+    """Пропуск территории запрещён."""
     q = update.callback_query
     await q.answer()
     tg_id = q.from_user.id
 
-    context.user_data.pop(f"{PREFIX}territory", None)
-    context.user_data.pop(f"{PREFIX}territory_id", None)
-    logger.info(f"[SKIP] User {tg_id}: Skipped territory")
+    logger.info(f"[SKIP] User {tg_id}: Skip territory blocked (required field)")
+    await q.answer(await _localize_customer_text(update, context, "Поле «Территория» обязательно"), show_alert=True)
+    return await _show_territory_list(update, context, is_callback=True)
 
-    summary = _get_summary(context)
 
-    text = (
-        f"➕ *Добавление нового клиента*\n"
-        f"{summary}\n\n"
-        f"📝 Шаг 9 из 11: Введите *расчётный счёт* или нажмите Пропустить:"
-    )
+async def retry_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Повторная загрузка списка городов."""
+    q = update.callback_query
+    await q.answer()
+    return await _show_city_list(update, context, is_callback=True)
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
 
-    return ASK_ACCOUNT_NO
+async def retry_territory(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Повторная загрузка списка территорий."""
+    q = update.callback_query
+    await q.answer()
+    return await _show_territory_list(update, context, is_callback=True)
 
 
 # ============================================================================
@@ -1112,7 +1255,7 @@ async def back_to_territory(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"📝 Шаг 8 из 11: Введите *территорию* или нажмите Пропустить:"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
 
     return ASK_TERRITORY
 
@@ -1145,9 +1288,9 @@ async def _show_expeditor_list(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.warning(f"[EXPEDITOR] User {tg_id}: No session")
         msg = "❌ Сессия истекла. Нажмите /start."
         if is_callback:
-            await _safe_edit_message(update.callback_query, msg)
+            await _safe_edit_message(update, context, update.callback_query, msg)
         else:
-            await _safe_send_message(update.message, msg)
+            await _safe_send_message(update, context, update.message, msg)
         return ConversationHandler.END
 
     await touch_session(tg_id)
@@ -1167,9 +1310,9 @@ async def _show_expeditor_list(update: Update, context: ContextTypes.DEFAULT_TYP
             await delete_session(tg_id)
             msg = "❌ Сессия истекла. Нажмите /start."
             if is_callback:
-                await _safe_edit_message(update.callback_query, msg)
+                await _safe_edit_message(update, context, update.callback_query, msg)
             else:
-                await _safe_send_message(update.message, msg)
+                await _safe_send_message(update, context, update.message, msg)
             return ConversationHandler.END
         expeditors = []
     except Exception as e:
@@ -1197,9 +1340,9 @@ async def _show_expeditor_list(update: Update, context: ContextTypes.DEFAULT_TYP
         ])
 
         if is_callback:
-            await _safe_edit_message(update.callback_query, text, reply_markup=kb, parse_mode="Markdown")
+            await _safe_edit_message(update, context, update.callback_query, text, reply_markup=kb, parse_mode="Markdown")
         else:
-            await _safe_send_message(update.message, text, reply_markup=kb, parse_mode="Markdown")
+            await _safe_send_message(update, context, update.message, text, reply_markup=kb, parse_mode="Markdown")
 
         # Отправить reply-клавиатуру с кнопкой геолокации
         await update.effective_chat.send_message(
@@ -1229,9 +1372,9 @@ async def _show_expeditor_list(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
     if is_callback:
-        await _safe_edit_message(update.callback_query, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _safe_edit_message(update, context, update.callback_query, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
     else:
-        await _safe_send_message(update.message, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _safe_send_message(update, context, update.message, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
 
     logger.info(f"[EXPEDITOR] Expeditor selection displayed")
 
@@ -1280,7 +1423,7 @@ async def select_expeditor(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         [InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")],
     ])
 
-    await _safe_edit_message(q, text, reply_markup=kb, parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=kb, parse_mode="Markdown")
 
     # Отправить reply-клавиатуру с кнопкой геолокации
     await q.message.reply_text(
@@ -1310,7 +1453,7 @@ async def back_to_account_no(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"📝 Шаг 9 из 11: Введите *расчётный счёт* или нажмите Пропустить:"
     )
 
-    await _safe_edit_message(q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=_skip_back_cancel_keyboard("⏩ Пропустить"), parse_mode="Markdown")
 
     return ASK_ACCOUNT_NO
 
@@ -1340,7 +1483,7 @@ async def skip_expeditor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         [InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")],
     ])
 
-    await _safe_edit_message(q, text, reply_markup=kb, parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=kb, parse_mode="Markdown")
 
     # Отправить reply-клавиатуру с кнопкой геолокации
     await q.message.reply_text(
@@ -1374,7 +1517,7 @@ async def ask_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             [InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")],
         ])
 
-        await _safe_send_message(
+        await _safe_send_message(update, context, 
             update.message,
             "❌ *Ошибка:* Геолокация обязательна!\n\n"
             "Нажмите кнопку 📍 для отправки координат:",
@@ -1451,7 +1594,7 @@ async def back_to_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         [InlineKeyboardButton("❌ Отмена", callback_data="addcust_v3_cancel")],
     ])
 
-    await _safe_edit_message(q, text, reply_markup=kb, parse_mode="Markdown")
+    await _safe_edit_message(update, context, q, text, reply_markup=kb, parse_mode="Markdown")
 
     # Отправить reply-клавиатуру с кнопкой геолокации
     await q.message.reply_text(
@@ -1489,13 +1632,13 @@ async def _show_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
     ])
 
     if is_callback:
-        await _safe_edit_message(
+        await _safe_edit_message(update, context, 
             update.callback_query,
             text, reply_markup=kb, parse_mode="Markdown"
         )
     else:
         # Убрать reply-клавиатуру
-        await _safe_send_message(
+        await _safe_send_message(update, context, 
             update.message,
             text, reply_markup=kb, parse_mode="Markdown"
         )
@@ -1525,10 +1668,27 @@ async def save_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     session = await get_session(tg_id)
     if not session:
         logger.warning(f"[SAVE] User {tg_id}: No session")
-        await _safe_edit_message(q, "❌ Сессия истекла. Нажмите /start.")
+        await _safe_edit_message(update, context, q, "❌ Сессия истекла. Нажмите /start.")
         return ConversationHandler.END
 
     await touch_session(tg_id)
+
+    city_id = context.user_data.get(f"{PREFIX}city_id")
+    territory_id = context.user_data.get(f"{PREFIX}territory_id")
+    if not city_id or not territory_id:
+        missing_fields = []
+        if not city_id:
+            missing_fields.append("Город")
+        if not territory_id:
+            missing_fields.append("Территория")
+        await _safe_edit_message(update, context, 
+            q,
+            "❌ Нельзя сохранить клиента.\n"
+            f"Обязательные поля не выбраны: *{', '.join(missing_fields)}*.\n"
+            "Вернитесь назад и заполните их.",
+            parse_mode="Markdown",
+        )
+        return CONFIRM
 
     # Собрать данные клиента
     customer_data = {
@@ -1558,7 +1718,7 @@ async def save_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
         logger.info(f"[SAVE API SUCCESS] User {tg_id}: Customer created, ID={customer_id}")
 
-        await _safe_edit_message(
+        await _safe_edit_message(update, context, 
             q,
             f"✅ *Клиент успешно создан!*\n\n"
             f"ID: *{customer_id}*\n"
@@ -1574,11 +1734,10 @@ async def save_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         logger.info(f"[SAVE] User {tg_id}: Cleared {len(keys_to_clear)} context keys")
 
         # Показать главное меню
-        from .handlers_auth import show_main_menu, main_menu_keyboard, ROLE_RU
-        role_ru = ROLE_RU.get(session.role, session.role)
-        menu_text = f"🏠 *Главное меню*\n\n{session.fio} ({role_ru})"
-        kb = main_menu_keyboard(session.role)
-        await update.effective_chat.send_message(menu_text, reply_markup=kb, parse_mode="Markdown")
+
+
+        from .handlers_auth import show_main_menu
+        await show_main_menu(update, context, session)
 
         return ConversationHandler.END
 
@@ -1587,12 +1746,13 @@ async def save_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
         if e.status == 401:
             await delete_session(tg_id)
-            await _safe_edit_message(q, "❌ Сессия истекла. Нажмите /start.")
+            await _safe_edit_message(update, context, q, "❌ Сессия истекла. Нажмите /start.")
             return ConversationHandler.END
 
-        await _safe_edit_message(
+        error_fmt = _escape_markdown(str(e.detail))
+        await _safe_edit_message(update, context, 
             q,
-            f"❌ *Ошибка при создании клиента:*\n\n{e.detail}\n\nПопробуйте снова или нажмите /start.",
+            f"❌ *Ошибка при создании клиента:*\n\n{error_fmt}\n\nПопробуйте снова или нажмите /start.",
             parse_mode="Markdown",
         )
 
@@ -1602,9 +1762,10 @@ async def save_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         logger.error(f"[SAVE ERROR] User {tg_id}: Unexpected error: {e}")
         logger.error(f"[SAVE ERROR] Traceback: {traceback.format_exc()}")
 
-        await _safe_edit_message(
+        error_fmt = _escape_markdown(str(e))
+        await _safe_edit_message(update, context, 
             q,
-            f"❌ *Неожиданная ошибка:*\n\n{str(e)}\n\nПопробуйте снова или нажмите /start.",
+            f"❌ *Неожиданная ошибка:*\n\n{error_fmt}\n\nПопробуйте снова или нажмите /start.",
             parse_mode="Markdown",
         )
 
@@ -1630,14 +1791,17 @@ async def cancel_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     logger.info(f"[CANCEL] Cleared {len(keys_to_clear)} context keys")
 
-    await _safe_edit_message(
+    await _safe_edit_message(update, context, 
         q,
         "❌ Добавление клиента отменено.\n\nНажмите /start для возврата в главное меню."
     )
 
     # Убрать reply-клавиатуру если была
     try:
-        msg = await q.message.reply_text(".", reply_markup=ReplyKeyboardRemove())
+        msg = await q.message.reply_text(
+            await t(update, context, "telegram.common.processing", fallback="..."),
+            reply_markup=ReplyKeyboardRemove(),
+        )
         await msg.delete()
     except Exception as e:
         logger.error(f"[CANCEL] Error removing reply keyboard: {e}")
@@ -1694,12 +1858,14 @@ def get_add_customer_v3_handler():
             ],
             ASK_CITY: [
                 CallbackQueryHandler(select_city, pattern="^addcust_v3_city_.+$"),
+                CallbackQueryHandler(retry_city, pattern="^addcust_v3_retry_city$"),
                 CallbackQueryHandler(skip_city, pattern="^addcust_v3_skip$"),
                 CallbackQueryHandler(back_to_address, pattern="^addcust_v3_back$"),
                 CallbackQueryHandler(cancel_dialog, pattern="^addcust_v3_cancel$"),
             ],
             ASK_TERRITORY: [
                 CallbackQueryHandler(select_territory, pattern="^addcust_v3_terr_.+$"),
+                CallbackQueryHandler(retry_territory, pattern="^addcust_v3_retry_territory$"),
                 CallbackQueryHandler(skip_territory, pattern="^addcust_v3_skip$"),
                 CallbackQueryHandler(back_to_city, pattern="^addcust_v3_back$"),
                 CallbackQueryHandler(cancel_dialog, pattern="^addcust_v3_cancel$"),
@@ -1734,3 +1900,4 @@ def get_add_customer_v3_handler():
         per_message=False,
         name="add_customer_v3_conv",
     )
+

@@ -60,6 +60,9 @@ async def get_db_session():
         async with async_session() as session:
             try:
                 yield session
+            except HTTPException:
+                await session.rollback()
+                raise
             except Exception as exc:
                 await session.rollback()
                 logger.error("Database session error: %s", exc)
@@ -128,7 +131,7 @@ async def check_data_integrity() -> None:
         ),
         (
             "Items without order",
-            'SELECT COUNT(*) FROM "Sales".items WHERE order_id NOT IN (SELECT id FROM "Sales".orders)',
+            'SELECT COUNT(*) FROM "Sales".items WHERE order_id NOT IN (SELECT order_no FROM "Sales".orders)',
         ),
         (
             "Operations without type",

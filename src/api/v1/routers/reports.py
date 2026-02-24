@@ -114,13 +114,16 @@ async def report_customers(
         SELECT rc.id, rc.name_client, rc.firm_name, rc.login_agent, c.login_expeditor,
                rc.total_visits, rc.completed_visits, rc.last_visit_date,
                ua.fio AS agent_fio, ue.fio AS expeditor_fio,
-               COALESCE(o.cnt, 0)::int AS orders_count, COALESCE(o.amt, 0) AS orders_amount
+               COALESCE(o.cnt, 0)::int AS orders_count, COALESCE(o.amt, 0) AS orders_amount,
+               COALESCE(o.completed_cnt, 0)::int AS orders_completed_count, COALESCE(o.completed_amt, 0) AS orders_completed_amount
         FROM "Sales".v_report_customers rc
         JOIN "Sales".customers c ON c.id = rc.id
         LEFT JOIN "Sales".users ua ON rc.login_agent = ua.login
         LEFT JOIN "Sales".users ue ON c.login_expeditor = ue.login
         LEFT JOIN (
-          SELECT customer_id, COUNT(*)::int AS cnt, SUM(total_amount) AS amt
+          SELECT customer_id, COUNT(*)::int AS cnt, SUM(total_amount) AS amt,
+                 SUM(CASE WHEN status_code = 'completed' THEN 1 ELSE 0 END)::int AS completed_cnt,
+                 SUM(CASE WHEN status_code = 'completed' THEN total_amount ELSE 0 END) AS completed_amt
           FROM "Sales".orders
           WHERE status_code IS NOT NULL AND status_code NOT IN ('cancelled', 'canceled')
           GROUP BY customer_id
@@ -166,7 +169,7 @@ async def report_customers_export(
         if f and f != n:
             return f"{n} ({f})" if n else f
         return n or f or ""
-    headers = ["Клиент", "ФИО Агента", "ФИО Экспедитора", "Кол-во визитов агентом", "Кол-во завершённых визитов агентом", "Кол-во заказов", "Сумма заказов"]
+    headers = ["Клиент", "ФИО Агента", "ФИО Экспедитора", "Кол-во визитов агентом", "Кол-во завершённых визитов агентом", "Кол-во заказов", "Кол-во завершенных заказов", "Сумма заказов", "Сумма завершенных заказов"]
     for col, h in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.alignment = center_align
@@ -178,7 +181,9 @@ async def report_customers_export(
             r.get("total_visits") or 0,
             r.get("completed_visits") or 0,
             r.get("orders_count") or 0,
+            r.get("orders_completed_count") or 0,
             float(r.get("orders_amount") or 0),
+            float(r.get("orders_completed_amount") or 0),
         ]
         for col_idx, v in enumerate(vals, start=1):
             cell = ws.cell(row=row_idx, column=col_idx, value=v)
@@ -240,7 +245,10 @@ async def report_agents(
                  WHERE o.status_code IS NOT NULL AND o.status_code NOT IN ('canceled', 'cancelled'){date_filter_orders}), 0) AS orders_count,
                COALESCE((SELECT COUNT(*)::int FROM "Sales".orders o
                  JOIN "Sales".customers c ON o.customer_id = c.id AND c.login_agent = u.login
-                 WHERE o.status_code = 'completed'{date_filter_orders}), 0) AS orders_completed
+                 WHERE o.status_code = 'completed'{date_filter_orders}), 0) AS orders_completed,
+               COALESCE((SELECT SUM(o.total_amount) FROM "Sales".orders o
+                 JOIN "Sales".customers c ON o.customer_id = c.id AND c.login_agent = u.login
+                 WHERE o.status_code = 'completed'{date_filter_orders}), 0) AS orders_completed_amount
         FROM "Sales".users u
         LEFT JOIN "Sales".customers_visits cv ON u.login = cv.responsible_login {date_filter}
         WHERE LOWER(u.role::text) IN ('agent', 'expeditor', 'admin')
@@ -279,7 +287,7 @@ async def report_agents_export(
     ws = wb.active
     ws.title = "Агенты"
     center_align = Alignment(horizontal='center', vertical='center')
-    headers = ["Логин", "ФИО", "Клиентов", "Визитов", "Завершено", "% завершённости визитов", "Сумма заказов", "Кол-во заказов", "% завершённости заказов"]
+    headers = ["Логин", "ФИО", "Клиентов", "Визитов", "Завершено", "% завершённости визитов", "Сумма заказов", "Сумма завершенных заказов", "Кол-во заказов", "Кол-во завершенных заказов", "% завершённости заказов"]
     for col, h in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.alignment = center_align
@@ -294,7 +302,9 @@ async def report_agents_export(
             r.get("completed_visits") or 0,
             visit_rate,
             float(r.get("orders_amount") or 0),
+            float(r.get("orders_completed_amount") or 0),
             r.get("orders_count") or 0,
+            r.get("orders_completed") or 0,
             order_rate,
         ]
         for col_idx, v in enumerate(vals, start=1):

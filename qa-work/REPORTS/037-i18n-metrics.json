@@ -1,0 +1,319 @@
+{
+  "all_by_language": {
+    "en": 425,
+    "ru": 425,
+    "uz": 425
+  },
+  "all_keys": 425,
+  "telegram_by_language": {
+    "en": 158,
+    "ru": 158,
+    "uz": 158
+  },
+  "telegram_keys": 158,
+  "missing_any_language_keys_count": 0,
+  "missing_any_language_keys": [],
+  "suspicious_text_rows_count": 60,
+  "suspicious_text_rows": [
+    {
+      "key": "telegram.agent.back_to_fields",
+      "lang": "en",
+      "text": "?? Back to fields menu"
+    },
+    {
+      "key": "telegram.agent.back_to_fields",
+      "lang": "ru",
+      "text": "?? ????? ? ???? ?????"
+    },
+    {
+      "key": "telegram.agent.back_to_fields",
+      "lang": "uz",
+      "text": "?? Maydonlar menyusiga qaytish"
+    },
+    {
+      "key": "telegram.agent.confirm",
+      "lang": "en",
+      "text": "? Confirm"
+    },
+    {
+      "key": "telegram.agent.confirm",
+      "lang": "ru",
+      "text": "? ???????????"
+    },
+    {
+      "key": "telegram.agent.confirm",
+      "lang": "uz",
+      "text": "? Tasdiqlash"
+    },
+    {
+      "key": "telegram.agent.customer_finish",
+      "lang": "en",
+      "text": "? Finish customer creation"
+    },
+    {
+      "key": "telegram.agent.customer_finish",
+      "lang": "ru",
+      "text": "? ????????? ????????? ???????"
+    },
+    {
+      "key": "telegram.agent.customer_finish",
+      "lang": "uz",
+      "text": "? Mijoz yaratishni yakunlash"
+    },
+    {
+      "key": "telegram.agent.order_add_more",
+      "lang": "en",
+      "text": "? Add more"
+    },
+    {
+      "key": "telegram.agent.order_add_more",
+      "lang": "ru",
+      "text": "? ???????? ???"
+    },
+    {
+      "key": "telegram.agent.order_add_more",
+      "lang": "uz",
+      "text": "? Yana qo'shish"
+    },
+    {
+      "key": "telegram.agent.order_checkout",
+      "lang": "en",
+      "text": "? Checkout order"
+    },
+    {
+      "key": "telegram.agent.order_checkout",
+      "lang": "ru",
+      "text": "? ???????? ?????"
+    },
+    {
+      "key": "telegram.agent.order_checkout",
+      "lang": "uz",
+      "text": "? Buyurtmani rasmiylashtirish"
+    },
+    {
+      "key": "telegram.agent.order_checkout_cart",
+      "lang": "en",
+      "text": "?? Place order"
+    },
+    {
+      "key": "telegram.agent.order_checkout_cart",
+      "lang": "ru",
+      "text": "?? ???????? ?????"
+    },
+    {
+      "key": "telegram.agent.order_checkout_cart",
+      "lang": "uz",
+      "text": "?? Buyurtma berish"
+    },
+    {
+      "key": "telegram.agent.photos",
+      "lang": "en",
+      "text": "?? Photos"
+    },
+    {
+      "key": "telegram.agent.photos",
+      "lang": "ru",
+      "text": "?? ??????????"
+    },
+    {
+      "key": "telegram.agent.photos",
+      "lang": "uz",
+      "text": "?? Suratlar"
+    },
+    {
+      "key": "telegram.agent.visit_mark_done",
+      "lang": "en",
+      "text": "? Mark as completed"
+    },
+    {
+      "key": "telegram.agent.visit_mark_done",
+      "lang": "ru",
+      "text": "? ???????? ?????????"
+    },
+    {
+      "key": "telegram.agent.visit_mark_done",
+      "lang": "uz",
+      "text": "? Bajarildi deb belgilash"
+    },
+    {
+      "key": "telegram.auth.logout_confirm",
+      "lang": "en",
+      "text": "Do you really want to logout?"
+    },
+    {
+      "key": "telegram.auth.logout_confirm",
+      "lang": "ru",
+      "text": "Вы действительно хотите выйти?"
+    },
+    {
+      "key": "telegram.auth.logout_confirm",
+      "lang": "uz",
+      "text": "Rostdan ham chiqmoqchimisiz?"
+    },
+    {
+      "key": "telegram.customer_create.all_correct",
+      "lang": "en",
+      "text": "Is everything correct?"
+    },
+    {
+      "key": "telegram.customer_create.all_correct",
+      "lang": "ru",
+      "text": "Всё верно?"
+    },
+    {
+      "key": "telegram.customer_create.all_correct",
+      "lang": "uz",
+      "text": "Hammasi to'g'rimi?"
+    },
+    {
+      "key": "telegram.expeditor.build_route",
+      "lang": "en",
+      "text": "?? Build route"
+    },
+    {
+      "key": "telegram.expeditor.build_route",
+      "lang": "ru",
+      "text": "?? ????????? ???????"
+    },
+    {
+      "key": "telegram.expeditor.build_route",
+      "lang": "uz",
+      "text": "?? Marshrutni qurish"
+    },
+    {
+      "key": "telegram.expeditor.confirm_delivered_no_back",
+      "lang": "en",
+      "text": "?? No, back"
+    },
+    {
+      "key": "telegram.expeditor.confirm_delivered_no_back",
+      "lang": "ru",
+      "text": "?? ???, ?????"
+    },
+    {
+      "key": "telegram.expeditor.confirm_delivered_no_back",
+      "lang": "uz",
+      "text": "?? Yo'q, ortga"
+    },
+    {
+      "key": "telegram.expeditor.confirm_delivered_yes",
+      "lang": "en",
+      "text": "? Yes, delivered"
+    },
+    {
+      "key": "telegram.expeditor.confirm_delivered_yes",
+      "lang": "ru",
+      "text": "? ??, ????? ?????????"
+    },
+    {
+      "key": "telegram.expeditor.confirm_delivered_yes",
+      "lang": "uz",
+      "text": "? Ha, tovar yetkazildi"
+    },
+    {
+      "key": "telegram.expeditor.delivered",
+      "lang": "en",
+      "text": "? Delivered"
+    },
+    {
+      "key": "telegram.expeditor.delivered",
+      "lang": "ru",
+      "text": "? ?????????"
+    },
+    {
+      "key": "telegram.expeditor.delivered",
+      "lang": "uz",
+      "text": "? Yetkazildi"
+    },
+    {
+      "key": "telegram.expeditor.deliver_order",
+      "lang": "en",
+      "text": "?? Deliver order"
+    },
+    {
+      "key": "telegram.expeditor.deliver_order",
+      "lang": "ru",
+      "text": "?? ????????? ?????"
+    },
+    {
+      "key": "telegram.expeditor.deliver_order",
+      "lang": "uz",
+      "text": "?? Buyurtmani yetkazish"
+    },
+    {
+      "key": "telegram.expeditor.open_in_yandex",
+      "lang": "en",
+      "text": "?? Open in Yandex Maps"
+    },
+    {
+      "key": "telegram.expeditor.open_in_yandex",
+      "lang": "ru",
+      "text": "?? ??????? ? ??????.??????"
+    },
+    {
+      "key": "telegram.expeditor.open_in_yandex",
+      "lang": "uz",
+      "text": "?? Yandex xaritalarda ochish"
+    },
+    {
+      "key": "telegram.expeditor.open_point_in_yandex",
+      "lang": "en",
+      "text": "?? Open in Yandex Maps"
+    },
+    {
+      "key": "telegram.expeditor.open_point_in_yandex",
+      "lang": "ru",
+      "text": "?? ??????? ? ??????.??????"
+    },
+    {
+      "key": "telegram.expeditor.open_point_in_yandex",
+      "lang": "uz",
+      "text": "?? Yandex xaritalarda ochish"
+    },
+    {
+      "key": "telegram.expeditor.other_amount",
+      "lang": "en",
+      "text": "?? Other amount"
+    },
+    {
+      "key": "telegram.expeditor.other_amount",
+      "lang": "ru",
+      "text": "?? ?????? ?????"
+    },
+    {
+      "key": "telegram.expeditor.other_amount",
+      "lang": "uz",
+      "text": "?? Boshqa summa"
+    },
+    {
+      "key": "telegram.visit_create.all_correct",
+      "lang": "en",
+      "text": "Is everything correct?"
+    },
+    {
+      "key": "telegram.visit_create.all_correct",
+      "lang": "ru",
+      "text": "Всё верно?"
+    },
+    {
+      "key": "telegram.visit_create.all_correct",
+      "lang": "uz",
+      "text": "Hammasi togri?"
+    },
+    {
+      "key": "ui.translations.delete_confirm",
+      "lang": "en",
+      "text": "Delete translation?"
+    },
+    {
+      "key": "ui.translations.delete_confirm",
+      "lang": "ru",
+      "text": "Удалить перевод?"
+    },
+    {
+      "key": "ui.translations.delete_confirm",
+      "lang": "uz",
+      "text": "Tarjimani o'chirasizmi?"
+    }
+  ]
+}

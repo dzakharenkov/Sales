@@ -66,10 +66,10 @@ class OperationService:
                 customer_names[cid] = (name_client or firm_name or "")
 
         status_ru = {
-            "pending": "? ????????",
-            "completed": "?????????",
-            "cancelled": "????????",
-            "canceled": "????????",
+            "pending": "В ожидании",
+            "completed": "Выполнено",
+            "cancelled": "Отменено",
+            "canceled": "Отменено",
         }
 
         data = []

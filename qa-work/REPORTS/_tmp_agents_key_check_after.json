@@ -1,0 +1,67 @@
+{
+  "ui.report.agents.title": {
+    "en": "Report: Agent performance",
+    "ru": "Отчёт: Эффективность агентов",
+    "uz": "Hisobot: Agentlar samaradorligi"
+  },
+  "ui.common.export_excel": {
+    "en": "Export to Excel",
+    "ru": "Выгрузить в Excel",
+    "uz": "Excelga eksport"
+  },
+  "field.to": {
+    "en": "to",
+    "ru": "по",
+    "uz": "gacha"
+  },
+  "field.fio": {
+    "en": "Full name",
+    "ru": "ФИО",
+    "uz": "F.I.Sh."
+  },
+  "field.login": {
+    "en": "Login",
+    "ru": "Логин",
+    "uz": "Login"
+  },
+  "ui.report.agents.total_agents": {
+    "en": "Total agents",
+    "ru": "Итого агентов",
+    "uz": "Jami agentlar"
+  },
+  "ui.report.agents.col.customers": {
+    "en": "Customers",
+    "ru": "Клиентов",
+    "uz": "Mijozlar"
+  },
+  "ui.report.agents.col.visits": {
+    "en": "Visits",
+    "ru": "Визитов",
+    "uz": "Tashriflar"
+  },
+  "ui.report.agents.col.completed": {
+    "en": "Completed",
+    "ru": "Завершено",
+    "uz": "Yakunlangan"
+  },
+  "ui.report.agents.col.visit_completion_pct": {
+    "en": "Visit completion %",
+    "ru": "% завершённости визитов",
+    "uz": "Tashriflar yakunlanish %"
+  },
+  "ui.report.agents.col.order_amount": {
+    "en": "Order amount",
+    "ru": "Сумма заказов",
+    "uz": "Buyurtmalar summasi"
+  },
+  "ui.report.agents.col.orders_count": {
+    "en": "Orders count",
+    "ru": "Кол-во заказов",
+    "uz": "Buyurtmalar soni"
+  },
+  "ui.report.agents.col.order_completion_pct": {
+    "en": "Order completion %",
+    "ru": "% завершённости заказов",
+    "uz": "Buyurtmalar yakunlanish %"
+  }
+}

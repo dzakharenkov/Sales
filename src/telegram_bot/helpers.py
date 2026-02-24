@@ -97,15 +97,21 @@ def back_button(callback_data: str = "main_menu") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data=callback_data)]])
 
 
-def date_picker_keyboard(prefix: str) -> InlineKeyboardMarkup:
+def date_picker_keyboard(
+    prefix: str,
+    text_today: str = "Сегодня",
+    text_tomorrow: str = "Завтра",
+    text_choose: str = "Выбрать дату",
+    text_back: str = "◀️ Назад"
+) -> InlineKeyboardMarkup:
     """Кнопки: Сегодня, Завтра, Календарь."""
     today = date.today()
     tomorrow = today + timedelta(days=1)
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"📅 Сегодня ({fmt_date(today)})", callback_data=f"{prefix}_date_{today.isoformat()}")],
-        [InlineKeyboardButton(f"📅 Завтра ({fmt_date(tomorrow)})", callback_data=f"{prefix}_date_{tomorrow.isoformat()}")],
-        [InlineKeyboardButton("🗓 Выбрать дату", callback_data=f"{prefix}_calendar_0")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="main_menu")],
+        [InlineKeyboardButton(f"📅 {text_today} ({fmt_date(today)})", callback_data=f"{prefix}_date_{today.isoformat()}")],
+        [InlineKeyboardButton(f"📅 {text_tomorrow} ({fmt_date(tomorrow)})", callback_data=f"{prefix}_date_{tomorrow.isoformat()}")],
+        [InlineKeyboardButton(f"🗓 {text_choose}", callback_data=f"{prefix}_calendar_0")],
+        [InlineKeyboardButton(text_back, callback_data="main_menu")],
     ])
 
 

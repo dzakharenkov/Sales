@@ -1,0 +1,17 @@
+{
+  "app_keys_total": 105,
+  "app_keys_missing_any_lang": 0,
+  "telegram_literals_total": 32,
+  "telegram_literals_resolved_runtime": 24,
+  "telegram_literals_unresolved_runtime": 8,
+  "telegram_unresolved_sample": [
+    "✅ Создать клиента",
+    "➡️",
+    "⬅️",
+    "🇬🇧 EN",
+    "🇷🇺 RU",
+    "🇺🇿 UZ",
+    "💰 Получить оплату",
+    "🔄 Обновить"
+  ]
+}

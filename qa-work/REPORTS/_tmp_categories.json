@@ -1,0 +1,22 @@
+{
+  "translations_categories": [
+    "buttons",
+    "fields",
+    "menu",
+    "messages",
+    "operation_types",
+    "payment_types",
+    "statuses",
+    "telegram"
+  ],
+  "dictionary_codes": [
+    "buttons",
+    "fields",
+    "menu",
+    "messages",
+    "operation_types",
+    "payment_types",
+    "statuses",
+    "telegram"
+  ]
+}

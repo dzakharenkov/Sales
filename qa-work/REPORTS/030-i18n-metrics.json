@@ -1,0 +1,19 @@
+{
+  "by_language": {
+    "en": 364,
+    "ru": 364,
+    "uz": 364
+  },
+  "total_distinct_keys": 364,
+  "missing_any_of_ru_uz_en": 0,
+  "telegram": {
+    "keys": 127,
+    "by_language": {
+      "en": 127,
+      "ru": 127,
+      "uz": 127
+    }
+  },
+  "telegram_customer_create_keys": 48,
+  "telegram_customer_create_missing": 0
+}

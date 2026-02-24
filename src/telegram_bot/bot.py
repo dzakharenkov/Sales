@@ -1,18 +1,15 @@
-"""Entry point for SDS Telegram bot.
+"""
+Entry point for SDS Telegram bot.
 Run: python -m src.telegram_bot.bot
 """
-
+import logging
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from loguru import logger
 from telegram.error import Conflict
 from telegram.ext import Application
 
-from src.core.config import settings
-from src.core.env import get_required_env, validate_required_env_vars
-from src.core.logging_setup import setup_logging
 from src.core.sentry_setup import init_sentry
 from .config import BOT_TOKEN
 from .handlers_agent import register_agent_handlers
@@ -23,23 +20,42 @@ from .session import close_pool, init_pool
 
 load_dotenv()
 init_sentry("sales-telegram-bot")
-setup_logging(
-    service_name="sales-telegram-bot",
-    log_level=settings.log_level,
-    log_file=settings.bot_log_file,
-)
+
+logger = logging.getLogger(__name__)
+
+BOT_DB_DSN: str | None = None
 
 _LOCK_FH = None
 _LOCK_PATH = Path(".telegram_bot.lock")
 
 
-def _get_bot_db_dsn() -> str:
-    raw_url = get_required_env("DATABASE_URL")
-    if "+asyncpg" in raw_url:
-        return raw_url.replace("postgresql+asyncpg://", "postgresql://", 1)
-    if "+psycopg" in raw_url:
-        return raw_url.replace("postgresql+psycopg://", "postgresql://", 1)
-    return raw_url
+def _build_bot_dsn() -> str:
+    """Build DB DSN for bot session storage from environment only."""
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if database_url:
+        # asyncpg expects standard PostgreSQL DSN without SQLAlchemy driver suffix.
+        return database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+    required = [
+        "DATABASE_HOST",
+        "DATABASE_PORT",
+        "DATABASE_NAME",
+        "DATABASE_USER",
+        "DATABASE_PASSWORD",
+    ]
+    missing = [var for var in required if not os.getenv(var)]
+    if missing:
+        raise RuntimeError(
+            "Missing required environment variables for bot DB: "
+            + ", ".join(sorted(missing))
+        )
+
+    host = os.environ["DATABASE_HOST"]
+    port = os.environ["DATABASE_PORT"]
+    name = os.environ["DATABASE_NAME"]
+    user = os.environ["DATABASE_USER"]
+    password = os.environ["DATABASE_PASSWORD"]
+    return f"postgresql://{user}:{password}@{host}:{port}/{name}"
 
 
 def _acquire_single_instance_lock() -> bool:
@@ -58,7 +74,8 @@ def _acquire_single_instance_lock() -> bool:
             import fcntl
             fcntl.flock(_LOCK_FH.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         return True
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to acquire single-instance lock: %s", exc)
         return False
 
 
@@ -74,14 +91,16 @@ def _release_single_instance_lock() -> None:
                 import fcntl
                 fcntl.flock(_LOCK_FH.fileno(), fcntl.LOCK_UN)
             _LOCK_FH.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Failed to release single-instance lock: %s", exc)
     finally:
         _LOCK_FH = None
 
 
 async def post_init(application: Application):
-    await init_pool(_get_bot_db_dsn())
+    if not BOT_DB_DSN:
+        raise RuntimeError("Bot DB DSN is not configured")
+    await init_pool(BOT_DB_DSN)
     logger.info("Telegram bot initialized, DB pool ready")
 
 
@@ -94,40 +113,36 @@ async def post_shutdown(application: Application):
 
 async def on_bot_error(update, context):
     err = context.error
-    user_id = None
-    handler_name = "unknown"
-    if update is not None and getattr(update, "effective_user", None):
-        user_id = update.effective_user.id
-    if context is not None and getattr(context, "handler", None):
-        handler_name = context.handler.__class__.__name__
     if isinstance(err, Conflict) or "terminated by other getUpdates request" in str(err):
-        logger.error(
-            "bot_error type=conflict user_id={} handler={} message={}",
-            user_id,
-            handler_name,
-            "Telegram polling conflict (409)",
-        )
+        logger.error("Telegram polling conflict (409): another bot instance is running. Stopping this instance.")
         try:
             context.application.stop_running()
-        except Exception:
+        except Exception as stop_running_error:
+            logger.debug("stop_running failed: %s", stop_running_error)
             try:
                 await context.application.stop()
-            except Exception:
-                pass
+            except Exception as stop_error:
+                logger.debug("application.stop failed: %s", stop_error)
         return
-    logger.exception(
-        "bot_error type=unhandled user_id={} handler={} message={}",
-        user_id,
-        handler_name,
-        str(err),
-    )
+    logger.exception("Unhandled bot error", exc_info=err)
 
 
 def run_bot():
-    validate_required_env_vars(["DATABASE_URL", "TELEGRAM_BOT_TOKEN"])
+    global BOT_DB_DSN
+
     if not BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not set! Cannot start bot.")
         return
+    try:
+        BOT_DB_DSN = _build_bot_dsn()
+    except RuntimeError as exc:
+        logger.error("%s", exc)
+        return
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
 
     if not _acquire_single_instance_lock():
         logger.error("Telegram bot is already running locally (instance lock is active).")

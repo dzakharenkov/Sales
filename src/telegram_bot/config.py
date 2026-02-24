@@ -1,11 +1,26 @@
-﻿"""Telegram bot configuration constants."""
+"""
+Конфигурация Telegram-бота SDS.
+"""
+import os
+from dotenv import load_dotenv
 
-from src.core.config import settings
+load_dotenv()
 
-BOT_TOKEN = settings.telegram_bot_token.strip()
-SDS_API_URL = settings.sds_api_url.strip()
-API_TIMEOUT = settings.api_timeout
-CACHE_TTL = settings.cache_ttl
-TIMEZONE = settings.timezone.strip()
-MAX_LOGIN_ATTEMPTS = settings.max_login_attempts
-LOGIN_BLOCK_MINUTES = settings.login_block_minutes
+# Telegram Bot Token (получить у @BotFather)
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+# SDS API base URL (бот ходит в API)
+SDS_API_URL = os.getenv("SDS_API_URL", "http://127.0.0.1:8000").strip()
+
+# Таймаут запросов к API (сек)
+API_TIMEOUT = int(os.getenv("API_TIMEOUT", "30"))
+
+# Кэш справочников (сек)
+CACHE_TTL = int(os.getenv("CACHE_TTL", "3600"))  # 1 час
+
+# Часовой пояс
+TIMEZONE = os.getenv("TIMEZONE", "Asia/Tashkent").strip()
+
+# Блокировка после N неудачных попыток
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_BLOCK_MINUTES = 10

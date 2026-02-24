@@ -150,6 +150,7 @@ from src.api.v1.routers import (
     orders,
     reports,
     stock,
+    translations,
     users,
     visits,
     warehouse,
@@ -169,3 +170,4 @@ app.include_router(finances.router, prefix="/api/v1/finances", tags=["finances"]
 app.include_router(customer_photos.router, prefix="/api/v1", tags=["customer-photos"])
 app.include_router(visits.router, prefix="/api/v1", tags=["visits"])
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["reports"])
+app.include_router(translations.router, prefix="/api/v1", tags=["translations"])

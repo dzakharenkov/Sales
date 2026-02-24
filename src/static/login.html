@@ -157,7 +157,8 @@
           return;
         }
         if (data.access_token) {
-          localStorage.setItem('sds_token', data.access_token);
+          // Cookie-based auth is primary; keep a non-secret marker for legacy UI checks.
+          localStorage.setItem('sds_token', 'cookie');
           window.location.href = '/app';
         } else {
           errEl.textContent = 'Ошибка входа';

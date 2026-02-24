@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     sds_api_url: str = Field(default="http://127.0.0.1:8000", validation_alias="SDS_API_URL")
     api_timeout: int = Field(default=30, validation_alias="API_TIMEOUT")
 
-    api_host: str = Field(default="0.0.0.0", validation_alias="API_HOST")
+    api_host: str = Field(default="0.0.0.0", validation_alias="API_HOST")  # nosec B104
     api_port: int = Field(default=8000, validation_alias="API_PORT")
     api_debug: bool = Field(default=False, validation_alias="API_DEBUG")
     cors_allowed_origins: str = Field(
@@ -57,11 +57,26 @@ class Settings(BaseSettings):
     max_login_attempts: int = Field(default=5, validation_alias="MAX_LOGIN_ATTEMPTS")
     login_block_minutes: int = Field(default=10, validation_alias="LOGIN_BLOCK_MINUTES")
     timezone: str = Field(default="Asia/Tashkent", validation_alias="TIMEZONE")
+    enabled_languages: str = Field(default="ru,uz,en", validation_alias="ENABLED_LANGUAGES")
+    default_language: str = Field(default="ru", validation_alias="DEFAULT_LANGUAGE")
 
     @property
     def cors_origins(self) -> list[str]:
         values = [origin.strip() for origin in self.cors_allowed_origins.split(",")]
         return [origin for origin in values if origin]
+
+    @property
+    def enabled_languages_list(self) -> list[str]:
+        values = [lang.strip().lower() for lang in self.enabled_languages.split(",")]
+        langs = [lang for lang in values if lang]
+        return langs or ["ru"]
+
+    @property
+    def effective_default_language(self) -> str:
+        default_lang = (self.default_language or "").strip().lower() or "ru"
+        if default_lang in self.enabled_languages_list:
+            return default_lang
+        return self.enabled_languages_list[0]
 
 
 settings = Settings()

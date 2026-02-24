@@ -1,177 +1,281 @@
-﻿"""
-ÐÐ²Ñ‚Ð¾Ñ€Ð¸Ð·Ð°Ñ†Ð¸Ñ: /start, Ð²Ð²Ð¾Ð´ Ð»Ð¾Ð³Ð¸Ð½Ð°/Ð¿Ð°Ñ€Ð¾Ð»Ñ, Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ° Ñ‚Ð¾ÐºÐµÐ½Ð°, Ð²Ñ‹Ñ…Ð¾Ð´.
-"""
+"""Authentication and top-level menu handlers for Telegram bot."""
+
+from __future__ import annotations
+
 import logging
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    Update,
+)
 from telegram.ext import (
-    ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    filters,
 )
 
-from .sds_api import api, SDSApiError
+from .config import LOGIN_BLOCK_MINUTES, MAX_LOGIN_ATTEMPTS
+from .i18n import detect_language, set_user_language, t
+from .sds_api import SDSApiError, api
 from .session import (
-    get_session, save_session, delete_session, touch_session,
-    count_recent_failures, record_attempt, log_action, UserSession,
+    UserSession,
+    count_recent_failures,
+    delete_session,
+    get_session,
+    log_action,
+    record_attempt,
+    save_session,
+    touch_session,
 )
-from .config import MAX_LOGIN_ATTEMPTS, LOGIN_BLOCK_MINUTES
-from .helpers import ROLE_RU
 
 logger = logging.getLogger(__name__)
 
-# States
-ASK_LOGIN, ASK_PASSWORD = range(2)
+ASK_LANGUAGE, ASK_LOGIN, ASK_PASSWORD = range(3)
 
 
-# ---------- Main menu ----------
+async def _role_label(update: Update, context: ContextTypes.DEFAULT_TYPE, role: str) -> str:
+    return await t(update, context, f"role.{(role or '').strip().lower() or 'agent'}")
 
-def main_menu_keyboard(role: str) -> InlineKeyboardMarkup:
+
+async def _menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str) -> InlineKeyboardButton:
+    return InlineKeyboardButton(await t(update, context, key), callback_data=key)
+
+
+def _language_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("🇷🇺 RU", callback_data="setlang_ru"),
+                InlineKeyboardButton("🇺🇿 UZ", callback_data="setlang_uz"),
+                InlineKeyboardButton("🇬🇧 EN", callback_data="setlang_en"),
+            ]
+        ]
+    )
+
+
+async def main_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE, role: str) -> InlineKeyboardMarkup:
     role_lower = (role or "").lower()
-    buttons = []
+    buttons: list[list[InlineKeyboardButton]] = []
+
     if role_lower == "expeditor":
-        buttons.append([InlineKeyboardButton("ðŸ—º ÐœÐ¾Ð¹ Ð¼Ð°Ñ€ÑˆÑ€ÑƒÑ‚", callback_data="exp_orders")])
-        buttons.append([InlineKeyboardButton("ðŸ“¦ ÐœÐ¾Ð¸ Ð·Ð°ÐºÐ°Ð·Ñ‹ Ð½Ð° ÑÐµÐ³Ð¾Ð´Ð½Ñ", callback_data="exp_orders_today")])
-        buttons.append([InlineKeyboardButton("âœ… Ð’Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð½Ñ‹Ðµ ÑÐµÐ³Ð¾Ð´Ð½Ñ", callback_data="exp_orders_done_today")])
-        buttons.append([InlineKeyboardButton("âš™ï¸ Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ", callback_data="exp_create_operation")])
-        buttons.append([InlineKeyboardButton("ðŸ“Š ÐœÐ¾Ð¸ Ð¾ÑÑ‚Ð°Ñ‚ÐºÐ¸", callback_data="exp_my_stock")])
-        buttons.append([InlineKeyboardButton("ðŸ†• Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð²Ð¸Ð·Ð¸Ñ‚", callback_data="agent_create_visit")])
-        buttons.append([InlineKeyboardButton("ðŸ“‹ Ð’Ð¸Ð·Ð¸Ñ‚Ñ‹", callback_data="agent_visits")])
-        buttons.append([InlineKeyboardButton("ðŸ’° ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ð¾Ð¿Ð»Ð°Ñ‚Ñƒ", callback_data="exp_payment")])
-        buttons.append([InlineKeyboardButton("ðŸ’µ ÐŸÐ¾Ð»ÑƒÑ‡ÐµÐ½Ð½Ð°Ñ Ð¾Ð¿Ð»Ð°Ñ‚Ð°", callback_data="exp_received_payments")])
+        buttons.extend(
+            [
+                [InlineKeyboardButton(await t(update, context, "telegram.button.route"), callback_data="exp_orders")],
+                [
+                    InlineKeyboardButton(
+                        await t(update, context, "telegram.button.my_orders_today"),
+                        callback_data="exp_orders_today",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        await t(update, context, "telegram.button.done_today"),
+                        callback_data="exp_orders_done_today",
+                    )
+                ],
+                [InlineKeyboardButton(await t(update, context, "telegram.button.my_stock"), callback_data="exp_my_stock")],
+                [InlineKeyboardButton(await t(update, context, "telegram.button.get_payment"), callback_data="exp_payment")],
+                [
+                    InlineKeyboardButton(
+                        await t(update, context, "telegram.button.received_payments"),
+                        callback_data="exp_received_payments",
+                    )
+                ],
+            ]
+        )
     elif role_lower == "agent":
-        buttons.append([InlineKeyboardButton("ðŸ†• Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð²Ð¸Ð·Ð¸Ñ‚", callback_data="agent_create_visit")])
-        buttons.append([InlineKeyboardButton("ðŸ“‹ ÐœÐ¾Ð¸ Ð²Ð¸Ð·Ð¸Ñ‚Ñ‹", callback_data="agent_visits")])
-        buttons.append([InlineKeyboardButton("âž• Ð”Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ ÐºÐ»Ð¸ÐµÐ½Ñ‚Ð°", callback_data="agent_add_customer_v3")])
-        buttons.append([InlineKeyboardButton("ðŸ“ ÐžÐ±Ð½Ð¾Ð²Ð¸Ñ‚ÑŒ Ð»Ð¾ÐºÐ°Ñ†Ð¸ÑŽ ÐºÐ»Ð¸ÐµÐ½Ñ‚Ð°", callback_data="agent_update_location")])
-        buttons.append([InlineKeyboardButton("ðŸ“¸ Ð—Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ Ñ„Ð¾Ñ‚Ð¾ ÐºÐ»Ð¸ÐµÐ½Ñ‚Ð°", callback_data="agent_photo")])
-        buttons.append([InlineKeyboardButton("ðŸ›’ Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð·Ð°ÐºÐ°Ð·", callback_data="agent_order")])
+        buttons.extend(
+            [
+                [InlineKeyboardButton(await t(update, context, "telegram.button.create_visit"), callback_data="agent_create_visit")],
+                [InlineKeyboardButton(await t(update, context, "telegram.button.my_visits"), callback_data="agent_visits")],
+                [InlineKeyboardButton(await t(update, context, "telegram.button.add_customer"), callback_data="agent_add_customer_v3")],
+                [
+                    InlineKeyboardButton(
+                        await t(update, context, "telegram.button.update_customer_location"),
+                        callback_data="agent_update_location",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        await t(update, context, "telegram.button.upload_customer_photo"),
+                        callback_data="agent_photo",
+                    )
+                ],
+                [InlineKeyboardButton(await t(update, context, "telegram.button.create_order"), callback_data="agent_order")],
+            ]
+        )
     else:
-        # admin Ð¸ Ð´Ñ€. â€” Ð²ÑÐµ ÐºÐ½Ð¾Ð¿ÐºÐ¸
-        buttons.append([InlineKeyboardButton("ðŸ—º ÐœÐ¾Ð¹ Ð¼Ð°Ñ€ÑˆÑ€ÑƒÑ‚", callback_data="exp_orders")])
-        buttons.append([InlineKeyboardButton("ðŸ’° ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ð¾Ð¿Ð»Ð°Ñ‚Ñƒ", callback_data="exp_payment")])
-        buttons.append([InlineKeyboardButton("ðŸ’µ ÐŸÐ¾Ð»ÑƒÑ‡ÐµÐ½Ð½Ð°Ñ Ð¾Ð¿Ð»Ð°Ñ‚Ð°", callback_data="exp_received_payments")])
-        buttons.append([InlineKeyboardButton("ðŸ†• Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð²Ð¸Ð·Ð¸Ñ‚", callback_data="agent_create_visit")])
-        buttons.append([InlineKeyboardButton("ðŸ“‹ ÐœÐ¾Ð¸ Ð²Ð¸Ð·Ð¸Ñ‚Ñ‹", callback_data="agent_visits")])
-        buttons.append([InlineKeyboardButton("âž• Ð”Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ ÐºÐ»Ð¸ÐµÐ½Ñ‚Ð°", callback_data="agent_add_customer")])
-        buttons.append([InlineKeyboardButton("ðŸ“¸ Ð—Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ Ñ„Ð¾Ñ‚Ð¾ ÐºÐ»Ð¸ÐµÐ½Ñ‚Ð°", callback_data="agent_photo")])
-        buttons.append([InlineKeyboardButton("ðŸ›’ Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð·Ð°ÐºÐ°Ð·", callback_data="agent_order")])
-    buttons.append([InlineKeyboardButton("ðŸ‘¤ ÐŸÑ€Ð¾Ñ„Ð¸Ð»ÑŒ", callback_data="profile")])
-    buttons.append([InlineKeyboardButton("ðŸšª Ð’Ñ‹Ñ…Ð¾Ð´", callback_data="logout")])
+        buttons.extend(
+            [
+                [InlineKeyboardButton(await t(update, context, "telegram.button.route"), callback_data="exp_orders")],
+                [InlineKeyboardButton(await t(update, context, "telegram.button.get_payment"), callback_data="exp_payment")],
+                [
+                    InlineKeyboardButton(
+                        await t(update, context, "telegram.button.received_payments"),
+                        callback_data="exp_received_payments",
+                    )
+                ],
+                [InlineKeyboardButton(await t(update, context, "telegram.button.create_visit"), callback_data="agent_create_visit")],
+                [InlineKeyboardButton(await t(update, context, "telegram.button.my_visits"), callback_data="agent_visits")],
+                [InlineKeyboardButton(await t(update, context, "telegram.button.add_customer"), callback_data="agent_add_customer_v3")],
+                [
+                    InlineKeyboardButton(
+                        await t(update, context, "telegram.button.upload_customer_photo"),
+                        callback_data="agent_photo",
+                    )
+                ],
+                [InlineKeyboardButton(await t(update, context, "telegram.button.create_order"), callback_data="agent_order")],
+            ]
+        )
+
+    buttons.append([InlineKeyboardButton(await t(update, context, "telegram.button.profile"), callback_data="profile")])
+    buttons.append([InlineKeyboardButton(await t(update, context, "telegram.button.logout"), callback_data="logout")])
     return InlineKeyboardMarkup(buttons)
 
 
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, session: UserSession):
-    role_ru = ROLE_RU.get(session.role, session.role)
-    text = f"ðŸ  *Ð“Ð»Ð°Ð²Ð½Ð¾Ðµ Ð¼ÐµÐ½ÑŽ*\n\n{session.fio} ({role_ru})"
-    kb = main_menu_keyboard(session.role)
-    # Ð£Ð±Ð¸Ñ€Ð°ÐµÐ¼ reply-ÐºÐ»Ð°Ð²Ð¸Ð°Ñ‚ÑƒÑ€Ñƒ ÐµÑÐ»Ð¸ Ð±Ñ‹Ð»Ð°
+async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, session: UserSession) -> None:
+    role_label = await _role_label(update, context, session.role)
+    title = await t(update, context, "telegram.menu.main")
+    text = await t(
+        update,
+        context,
+        "telegram.menu.main_text",
+        title=title,
+        fio=session.fio,
+        role=role_label,
+    )
+    kb = await main_menu_keyboard(update, context, session.role)
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
     else:
         await update.effective_message.reply_text(text, reply_markup=kb, parse_mode="Markdown")
 
 
-# ---------- /start ----------
+async def _auth_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> ReplyKeyboardMarkup:
+    edit_text = await t(update, context, "telegram.button.edit_login")
+    cancel_text = await t(update, context, "telegram.button.cancel")
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton(f"✏️ {edit_text}"), KeyboardButton(f"❌ {cancel_text}")]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
 
-async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def _is_cancel_pressed(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> bool:
+    cancel = await t(update, context, "telegram.button.cancel")
+    return text.startswith("❌") or text.strip().lower() == cancel.strip().lower()
+
+
+async def _is_edit_login_pressed(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> bool:
+    edit = await t(update, context, "telegram.button.edit_login")
+    return text.startswith("✏️") or text.strip().lower() == edit.strip().lower()
+
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     tg_id = update.effective_user.id
+    current_lang = context.user_data.get("language")
     context.user_data.clear()
+    
+    # Restore language if it was previously set, else detect it
+    if current_lang:
+        set_user_language(context, current_lang)
+    else:
+        set_user_language(context, detect_language(update, context))
+
     session = await get_session(tg_id)
 
     if session:
-        # ÐŸÑ€Ð¾Ð²ÐµÑ€ÑÐµÐ¼ Ñ‚Ð¾ÐºÐµÐ½
         try:
             user_data = await api.me(session.jwt_token)
-            # ÐžÐ±Ð½Ð¾Ð²Ð¸Ñ‚ÑŒ Ñ€Ð¾Ð»ÑŒ ÐµÑÐ»Ð¸ Ð¸Ð·Ð¼ÐµÐ½Ð¸Ð»Ð°ÑÑŒ
             new_role = user_data.get("role", session.role)
             if new_role != session.role:
                 session.role = new_role
                 session.fio = user_data.get("fio", session.fio)
                 await save_session(session)
-                await update.message.reply_text(
-                    f"âš ï¸ Ð’Ð°ÑˆÐ° Ñ€Ð¾Ð»ÑŒ Ð¸Ð·Ð¼ÐµÐ½ÐµÐ½Ð° Ð½Ð°: {ROLE_RU.get(new_role, new_role)}"
-                )
+                role_label = await _role_label(update, context, new_role)
+                await update.message.reply_text(await t(update, context, "telegram.auth.role_changed_to", role=role_label))
             await touch_session(tg_id)
             await show_main_menu(update, context, session)
             return ConversationHandler.END
-        except SDSApiError as e:
-            if e.status == 401:
+        except SDSApiError as exc:
+            if exc.status == 401:
                 await delete_session(tg_id)
-                await update.message.reply_text("Ð¡ÐµÑÑÐ¸Ñ Ð¸ÑÑ‚ÐµÐºÐ»Ð°. ÐÐ°Ð¶Ð¼Ð¸Ñ‚Ðµ /start Ð´Ð»Ñ Ð¿Ð¾Ð²Ñ‚Ð¾Ñ€Ð½Ð¾Ð¹ Ð°Ð²Ñ‚Ð¾Ñ€Ð¸Ð·Ð°Ñ†Ð¸Ð¸.")
+                await update.message.reply_text(await t(update, context, "telegram.auth.session_expired"))
                 return ConversationHandler.END
-            else:
-                logger.warning("Token check failed: %s", e)
-                await delete_session(tg_id)
+            logger.warning("Token check failed: %s", exc)
+            await delete_session(tg_id)
 
-    # ÐŸÑ€Ð¾Ð²ÐµÑ€ÐºÐ° Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸
     failures = await count_recent_failures(tg_id)
     if failures >= MAX_LOGIN_ATTEMPTS:
         await update.message.reply_text(
-            f"â›” Ð¡Ð»Ð¸ÑˆÐºÐ¾Ð¼ Ð¼Ð½Ð¾Ð³Ð¾ Ð½ÐµÑƒÐ´Ð°Ñ‡Ð½Ñ‹Ñ… Ð¿Ð¾Ð¿Ñ‹Ñ‚Ð¾Ðº Ð²Ñ…Ð¾Ð´Ð°.\n"
-            f"ÐŸÐ¾Ð´Ð¾Ð¶Ð´Ð¸Ñ‚Ðµ {LOGIN_BLOCK_MINUTES} Ð¼Ð¸Ð½ÑƒÑ‚ Ð¸ Ð¿Ð¾Ð¿Ñ€Ð¾Ð±ÑƒÐ¹Ñ‚Ðµ ÑÐ½Ð¾Ð²Ð°."
+            await t(update, context, "telegram.auth.too_many_attempts", minutes=LOGIN_BLOCK_MINUTES)
         )
         return ConversationHandler.END
 
-    # ÐÐµ Ð°Ð²Ñ‚Ð¾Ñ€Ð¸Ð·Ð¾Ð²Ð°Ð½
-    await update.message.reply_text(
-        "ðŸ‘‹ Ð”Ð¾Ð±Ñ€Ð¾ Ð¿Ð¾Ð¶Ð°Ð»Ð¾Ð²Ð°Ñ‚ÑŒ Ð² *Ð±Ð¾Ñ‚ ÑÐ¸ÑÑ‚ÐµÐ¼Ñ‹ ÑƒÐ¿Ñ€Ð°Ð²Ð»ÐµÐ½Ð¸Ñ Ð¿Ñ€Ð¾Ð´Ð°Ð¶Ð°Ð¼Ð¸ Ð¸ Ð´Ð¸ÑÑ‚Ñ€Ð¸Ð±ÑƒÑ†Ð¸ÐµÐ¹*!\n\n"
-        "Ð”Ð»Ñ Ð½Ð°Ñ‡Ð°Ð»Ð° Ñ€Ð°Ð±Ð¾Ñ‚Ñ‹ Ð½ÐµÐ¾Ð±Ñ…Ð¾Ð´Ð¸Ð¼Ð¾ Ð°Ð²Ñ‚Ð¾Ñ€Ð¸Ð·Ð¾Ð²Ð°Ñ‚ÑŒÑÑ.\n\n"
-        "Ð’Ð²ÐµÐ´Ð¸Ñ‚Ðµ Ð²Ð°Ñˆ *Ð»Ð¾Ð³Ð¸Ð½*:",
-        parse_mode="Markdown",
-    )
+    await update.message.reply_text(await t(update, context, "telegram.lang.choose"), reply_markup=_language_keyboard())
+    return ASK_LANGUAGE
+
+async def cb_set_language_auth(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    q = update.callback_query
+    await q.answer()
+    selected = (q.data or "").replace("setlang_", "").strip().lower()
+    lang = set_user_language(context, selected)
+    await q.edit_message_text(await t(update, context, "telegram.lang.updated", lang=lang.upper()))
+    await q.message.reply_text(await t(update, context, "telegram.auth.welcome_prompt"), parse_mode="Markdown")
     return ASK_LOGIN
 
+async def ask_language_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text(await t(update, context, "telegram.lang.choose"), reply_markup=_language_keyboard())
+    return ASK_LANGUAGE
 
-async def ask_login(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ÐžÐ±Ñ€Ð°Ð±Ð¾Ñ‚ÐºÐ° ÐºÐ½Ð¾Ð¿ÐºÐ¸ Â«ÐžÑ‚Ð¼ÐµÐ½Ð°Â»
-    if update.message.text.strip() == "âŒ ÐžÑ‚Ð¼ÐµÐ½Ð°":
-        await update.message.reply_text(
-            "ÐÐ²Ñ‚Ð¾Ñ€Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð¾Ñ‚Ð¼ÐµÐ½ÐµÐ½Ð°. ÐÐ°Ð¶Ð¼Ð¸Ñ‚Ðµ /start Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð½Ð°Ñ‡Ð°Ñ‚ÑŒ.",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+
+async def ask_login(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = (update.message.text or "").strip()
+    if await _is_cancel_pressed(update, context, text):
+        await update.message.reply_text(await t(update, context, "telegram.auth.canceled"), reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
-    login = update.message.text.strip()
-    if not login:
-        await update.message.reply_text("Ð’Ð²ÐµÐ´Ð¸Ñ‚Ðµ Ð»Ð¾Ð³Ð¸Ð½:")
+    if not text:
+        await update.message.reply_text(await t(update, context, "telegram.auth.enter_login"))
         return ASK_LOGIN
 
-    context.user_data["login"] = login
-
-    # Без промежуточного системного сообщения — сразу ожидаем пароль следующим сообщением.
+    context.user_data["login"] = text
+    kb = await _auth_keyboard(update, context)
+    await update.message.reply_text(
+        await t(update, context, "telegram.auth.login_saved_enter_password", login=text),
+        reply_markup=kb,
+    )
     return ASK_PASSWORD
 
 
-async def ask_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def ask_password(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     tg_id = update.effective_user.id
-    text = update.message.text.strip()
+    text = (update.message.text or "").strip()
 
-    # ÐšÐ½Ð¾Ð¿ÐºÐ° Â«Ð˜Ð·Ð¼ÐµÐ½Ð¸Ñ‚ÑŒ Ð»Ð¾Ð³Ð¸Ð½Â»
-    if text == "âœï¸ Ð˜Ð·Ð¼ÐµÐ½Ð¸Ñ‚ÑŒ Ð»Ð¾Ð³Ð¸Ð½":
+    if await _is_edit_login_pressed(update, context, text):
         context.user_data.pop("login", None)
-        await update.message.reply_text(
-            "Ð’Ð²ÐµÐ´Ð¸Ñ‚Ðµ *Ð»Ð¾Ð³Ð¸Ð½*:",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+        await update.message.reply_text(await t(update, context, "telegram.auth.enter_login"), reply_markup=ReplyKeyboardRemove())
         return ASK_LOGIN
 
-    # ÐšÐ½Ð¾Ð¿ÐºÐ° Â«ÐžÑ‚Ð¼ÐµÐ½Ð°Â»
-    if text == "âŒ ÐžÑ‚Ð¼ÐµÐ½Ð°":
+    if await _is_cancel_pressed(update, context, text):
         context.user_data.clear()
-        await update.message.reply_text(
-            "ÐÐ²Ñ‚Ð¾Ñ€Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð¾Ñ‚Ð¼ÐµÐ½ÐµÐ½Ð°. ÐÐ°Ð¶Ð¼Ð¸Ñ‚Ðµ /start Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð½Ð°Ñ‡Ð°Ñ‚ÑŒ.",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+        await update.message.reply_text(await t(update, context, "telegram.auth.canceled"), reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
-    password = text
     login = context.user_data.get("login", "")
+    password = text
 
-    # ÐŸÑ€Ð¾Ð²ÐµÑ€ÐºÐ° Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸
     failures = await count_recent_failures(tg_id)
     if failures >= MAX_LOGIN_ATTEMPTS:
         await update.message.reply_text(
-            f"â›” Ð¡Ð»Ð¸ÑˆÐºÐ¾Ð¼ Ð¼Ð½Ð¾Ð³Ð¾ Ð¿Ð¾Ð¿Ñ‹Ñ‚Ð¾Ðº. ÐŸÐ¾Ð´Ð¾Ð¶Ð´Ð¸Ñ‚Ðµ {LOGIN_BLOCK_MINUTES} Ð¼Ð¸Ð½ÑƒÑ‚.",
+            await t(update, context, "telegram.auth.too_many_attempts_short", minutes=LOGIN_BLOCK_MINUTES),
             reply_markup=ReplyKeyboardRemove(),
         )
         await log_action(tg_id, login, None, "login_blocked", f"failures={failures}")
@@ -179,41 +283,31 @@ async def ask_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         result = await api.login(login, password)
-    except SDSApiError as e:
+    except SDSApiError as exc:
         await record_attempt(tg_id, False)
-        await log_action(tg_id, login, None, "login_fail", e.detail, "error", e.detail)
+        await log_action(tg_id, login, None, "login_fail", exc.detail, "error", exc.detail)
         failures += 1
         remaining = MAX_LOGIN_ATTEMPTS - failures
-
-        # Ð£Ð´Ð°Ð»Ð¸Ñ‚ÑŒ ÑÐ¾Ð¾Ð±Ñ‰ÐµÐ½Ð¸Ðµ Ñ Ð¿Ð°Ñ€Ð¾Ð»ÐµÐ¼
         try:
             await update.message.delete()
-        except Exception:
-            pass
+        except Exception as delete_error:
+            logger.debug("Failed to delete password message: %s", delete_error)
 
         if remaining <= 0:
             await update.effective_chat.send_message(
-                f"âŒ ÐÐµÐ²ÐµÑ€Ð½Ñ‹Ðµ Ð´Ð°Ð½Ð½Ñ‹Ðµ. Ð’Ñ…Ð¾Ð´ Ð·Ð°Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½ Ð½Ð° {LOGIN_BLOCK_MINUTES} Ð¼Ð¸Ð½.",
+                await t(update, context, "telegram.auth.blocked_now", minutes=LOGIN_BLOCK_MINUTES),
                 reply_markup=ReplyKeyboardRemove(),
             )
             return ConversationHandler.END
 
-        kb = ReplyKeyboardMarkup(
-            [[KeyboardButton("âœï¸ Ð˜Ð·Ð¼ÐµÐ½Ð¸Ñ‚ÑŒ Ð»Ð¾Ð³Ð¸Ð½"), KeyboardButton("âŒ ÐžÑ‚Ð¼ÐµÐ½Ð°")]],
-            resize_keyboard=True,
-            one_time_keyboard=True,
-        )
+        kb = await _auth_keyboard(update, context)
         await update.effective_chat.send_message(
-            f"âŒ ÐÐµÐ²ÐµÑ€Ð½Ñ‹Ð¹ Ð»Ð¾Ð³Ð¸Ð½ Ð¸Ð»Ð¸ Ð¿Ð°Ñ€Ð¾Ð»ÑŒ.\n"
-            f"ÐžÑÑ‚Ð°Ð»Ð¾ÑÑŒ Ð¿Ð¾Ð¿Ñ‹Ñ‚Ð¾Ðº: *{remaining}* Ð¸Ð· {MAX_LOGIN_ATTEMPTS}\n\n"
-            f"Ð›Ð¾Ð³Ð¸Ð½: *{login}*\n"
-            f"Ð’Ð²ÐµÐ´Ð¸Ñ‚Ðµ *Ð¿Ð°Ñ€Ð¾Ð»ÑŒ* Ð¸Ð»Ð¸ Ð½Ð°Ð¶Ð¼Ð¸Ñ‚Ðµ Â«âœï¸ Ð˜Ð·Ð¼ÐµÐ½Ð¸Ñ‚ÑŒ Ð»Ð¾Ð³Ð¸Ð½Â»:",
+            await t(update, context, "telegram.auth.invalid_credentials_retry", remaining=remaining, max_attempts=MAX_LOGIN_ATTEMPTS, login=login),
             parse_mode="Markdown",
             reply_markup=kb,
         )
         return ASK_PASSWORD
 
-    # Ð£ÑÐ¿ÐµÑˆÐ½Ñ‹Ð¹ Ð²Ñ…Ð¾Ð´
     token = result.get("access_token", "")
     user = result.get("user", {})
     role = user.get("role", "agent")
@@ -230,86 +324,113 @@ async def ask_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await record_attempt(tg_id, True)
     await log_action(tg_id, login, role, "login_success", f"fio={fio}")
 
-    # Ð£Ð´Ð°Ð»Ð¸Ñ‚ÑŒ ÑÐ¾Ð¾Ð±Ñ‰ÐµÐ½Ð¸Ðµ Ñ Ð¿Ð°Ñ€Ð¾Ð»ÐµÐ¼ (Ð±ÐµÐ·Ð¾Ð¿Ð°ÑÐ½Ð¾ÑÑ‚ÑŒ)
     try:
         await update.message.delete()
-    except Exception:
-        pass
+    except Exception as delete_error:
+        logger.debug("Failed to delete password message: %s", delete_error)
 
-    # Ð£Ð±Ð¸Ñ€Ð°ÐµÐ¼ reply-ÐºÐ»Ð°Ð²Ð¸Ð°Ñ‚ÑƒÑ€Ñƒ Ð¸ Ð¿Ð¾ÐºÐ°Ð·Ñ‹Ð²Ð°ÐµÐ¼ Ð¼ÐµÐ½ÑŽ
     await update.effective_chat.send_message(
-        f"✅ Вход в систему SDS выполнен: {login}",
+        await t(update, context, "telegram.auth.login_success", login=login),
         reply_markup=ReplyKeyboardRemove(),
     )
     await show_main_menu(update, context, session)
     return ConversationHandler.END
 
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
-    await update.message.reply_text(
-        "ÐÐ²Ñ‚Ð¾Ñ€Ð¸Ð·Ð°Ñ†Ð¸Ñ Ð¾Ñ‚Ð¼ÐµÐ½ÐµÐ½Ð°. ÐÐ°Ð¶Ð¼Ð¸Ñ‚Ðµ /start Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð½Ð°Ñ‡Ð°Ñ‚ÑŒ.",
-        reply_markup=ReplyKeyboardRemove(),
-    )
+    await update.message.reply_text(await t(update, context, "telegram.auth.canceled"), reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 
-# ---------- Callbacks ----------
+async def cmd_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(await t(update, context, "telegram.lang.choose"), reply_markup=_language_keyboard())
 
-async def cb_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def cb_set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    await q.answer()
+    selected = (q.data or "").replace("setlang_", "").strip().lower()
+    lang = set_user_language(context, selected)
+    await q.edit_message_text(await t(update, context, "telegram.lang.updated", lang=lang.upper()))
+
+    session = await get_session(q.from_user.id)
+    if session:
+        await show_main_menu(update, context, session)
+    else:
+        await q.message.reply_text(await t(update, context, "telegram.auth.welcome_prompt"), parse_mode="Markdown")
+
+
+async def cb_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
     session = await get_session(q.from_user.id)
     if not session:
-        await q.edit_message_text("Ð¡ÐµÑÑÐ¸Ñ Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½Ð°. ÐÐ°Ð¶Ð¼Ð¸Ñ‚Ðµ /start.")
+        await q.edit_message_text(await t(update, context, "telegram.auth.session_not_found"))
         return
     await touch_session(q.from_user.id)
     await show_main_menu(update, context, session)
 
 
-async def cb_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cb_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
     session = await get_session(q.from_user.id)
     if not session:
-        await q.edit_message_text("Ð¡ÐµÑÑÐ¸Ñ Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½Ð°. ÐÐ°Ð¶Ð¼Ð¸Ñ‚Ðµ /start.")
+        await q.edit_message_text(await t(update, context, "telegram.auth.session_not_found"))
         return
-    role_ru = ROLE_RU.get(session.role, session.role)
 
-    # ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ñ€Ð°ÑÑˆÐ¸Ñ€ÐµÐ½Ð½ÑƒÑŽ Ð¸Ð½Ñ„Ð¾Ñ€Ð¼Ð°Ñ†Ð¸ÑŽ Ð¾ Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»Ðµ
-    phone = "â€”"
-    email = "â€”"
+    phone = "-"
+    email = "-"
     try:
-        from .sds_api import api
         user_info = await api.get_current_user(session.jwt_token)
-        phone = user_info.get("phone", "â€”") or "â€”"
-        email = user_info.get("email", "â€”") or "â€”"
-    except Exception:
-        pass
+        phone = user_info.get("phone", "-") or "-"
+        email = user_info.get("email", "-") or "-"
+    except Exception as profile_error:
+        logger.debug("Failed to load extended profile data: %s", profile_error)
 
-    text = (
-        f"ðŸ‘¤ *ÐŸÑ€Ð¾Ñ„Ð¸Ð»ÑŒ Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»Ñ*\n\n"
-        f"*Ð¤Ð˜Ðž:* {session.fio}\n"
-        f"*Ð›Ð¾Ð³Ð¸Ð½:* {session.login}\n"
-        f"*Ð Ð¾Ð»ÑŒ:* {role_ru}\n"
-        f"*Ð¢ÐµÐ»ÐµÑ„Ð¾Ð½:* {phone}\n"
-        f"*Email:* {email}\n"
+    role_label = await _role_label(update, context, session.role)
+    text = await t(
+        update,
+        context,
+        "telegram.profile.card",
+        fio_label=await t(update, context, "telegram.profile.fio"),
+        fio=session.fio,
+        login_label=await t(update, context, "telegram.profile.login"),
+        login=session.login,
+        role_label=await t(update, context, "telegram.profile.role"),
+        role=role_label,
+        phone_label=await t(update, context, "telegram.profile.phone"),
+        phone=phone,
+        email_label=await t(update, context, "telegram.profile.email"),
+        email=email,
+        title=await t(update, context, "telegram.profile.title"),
     )
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("â—€ï¸ ÐÐ°Ð·Ð°Ð´", callback_data="main_menu")]])
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton(await t(update, context, "telegram.lang.choose"), callback_data="change_lang")],
+        [InlineKeyboardButton(await t(update, context, "telegram.button.back"), callback_data="main_menu")]
+    ])
     await q.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
 
-
-async def cb_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cb_change_lang_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("âœ… Ð”Ð°, Ð²Ñ‹Ð¹Ñ‚Ð¸", callback_data="logout_confirm")],
-        [InlineKeyboardButton("â—€ï¸ ÐÐ°Ð·Ð°Ð´", callback_data="main_menu")],
-    ])
-    await q.edit_message_text("Ð’Ñ‹ Ð´ÐµÐ¹ÑÑ‚Ð²Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ Ñ…Ð¾Ñ‚Ð¸Ñ‚Ðµ Ð²Ñ‹Ð¹Ñ‚Ð¸?", reply_markup=kb)
+    await q.edit_message_text(await t(update, context, "telegram.lang.choose"), reply_markup=_language_keyboard())
 
 
-async def cb_logout_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cb_logout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    await q.answer()
+    kb = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(await t(update, context, "telegram.button.yes_logout"), callback_data="logout_confirm")],
+            [InlineKeyboardButton(await t(update, context, "telegram.button.back"), callback_data="main_menu")],
+        ]
+    )
+    await q.edit_message_text(await t(update, context, "telegram.auth.logout_confirm"), reply_markup=kb)
+
+
+async def cb_logout_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
     tg_id = q.from_user.id
@@ -318,22 +439,28 @@ async def cb_logout_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await log_action(tg_id, session.login, session.role, "logout")
     await delete_session(tg_id)
     context.user_data.clear()
-    await q.edit_message_text("ðŸ‘‹ Ð”Ð¾ ÑÐ²Ð¸Ð´Ð°Ð½Ð¸Ñ!\n\nÐ”Ð»Ñ Ð²Ñ…Ð¾Ð´Ð° Ð½Ð°Ð¶Ð¼Ð¸Ñ‚Ðµ /start.")
+    await q.edit_message_text(await t(update, context, "telegram.auth.goodbye"))
 
 
-# ---------- Register ----------
-
-def register_auth_handlers(app):
+def register_auth_handlers(app) -> None:
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", cmd_start)],
         states={
+            ASK_LANGUAGE: [
+                CallbackQueryHandler(cb_set_language_auth, pattern=r"^setlang_(ru|uz|en)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_language_fallback),
+            ],
             ASK_LOGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_login)],
             ASK_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_password)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     app.add_handler(conv)
+    app.add_handler(CommandHandler("lang", cmd_lang))
+    app.add_handler(CallbackQueryHandler(cb_set_language, pattern=r"^setlang_(ru|uz|en)$"))
     app.add_handler(CallbackQueryHandler(cb_main_menu, pattern="^main_menu$"))
     app.add_handler(CallbackQueryHandler(cb_profile, pattern="^profile$"))
+    app.add_handler(CallbackQueryHandler(cb_change_lang_menu, pattern="^change_lang$"))
     app.add_handler(CallbackQueryHandler(cb_logout, pattern="^logout$"))
     app.add_handler(CallbackQueryHandler(cb_logout_confirm, pattern="^logout_confirm$"))
+

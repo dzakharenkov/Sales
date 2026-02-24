@@ -1,0 +1,301 @@
+{
+  "by_language": {
+    "en": 426,
+    "ru": 426,
+    "uz": 426
+  },
+  "by_category_lang": [
+    {
+      "category": "buttons",
+      "language_code": "en",
+      "count": 26
+    },
+    {
+      "category": "buttons",
+      "language_code": "ru",
+      "count": 26
+    },
+    {
+      "category": "buttons",
+      "language_code": "uz",
+      "count": 26
+    },
+    {
+      "category": "fields",
+      "language_code": "en",
+      "count": 143
+    },
+    {
+      "category": "fields",
+      "language_code": "ru",
+      "count": 145
+    },
+    {
+      "category": "fields",
+      "language_code": "uz",
+      "count": 144
+    },
+    {
+      "category": "menu",
+      "language_code": "en",
+      "count": 38
+    },
+    {
+      "category": "menu",
+      "language_code": "ru",
+      "count": 39
+    },
+    {
+      "category": "menu",
+      "language_code": "uz",
+      "count": 38
+    },
+    {
+      "category": "messages",
+      "language_code": "en",
+      "count": 39
+    },
+    {
+      "category": "messages",
+      "language_code": "ru",
+      "count": 36
+    },
+    {
+      "category": "messages",
+      "language_code": "uz",
+      "count": 38
+    },
+    {
+      "category": "operation_types",
+      "language_code": "en",
+      "count": 13
+    },
+    {
+      "category": "operation_types",
+      "language_code": "ru",
+      "count": 13
+    },
+    {
+      "category": "operation_types",
+      "language_code": "uz",
+      "count": 13
+    },
+    {
+      "category": "payment_types",
+      "language_code": "en",
+      "count": 3
+    },
+    {
+      "category": "payment_types",
+      "language_code": "ru",
+      "count": 3
+    },
+    {
+      "category": "payment_types",
+      "language_code": "uz",
+      "count": 3
+    },
+    {
+      "category": "statuses",
+      "language_code": "en",
+      "count": 5
+    },
+    {
+      "category": "statuses",
+      "language_code": "ru",
+      "count": 5
+    },
+    {
+      "category": "statuses",
+      "language_code": "uz",
+      "count": 5
+    },
+    {
+      "category": "telegram",
+      "language_code": "en",
+      "count": 159
+    },
+    {
+      "category": "telegram",
+      "language_code": "ru",
+      "count": 159
+    },
+    {
+      "category": "telegram",
+      "language_code": "uz",
+      "count": 159
+    }
+  ],
+  "by_namespace_lang": [
+    {
+      "namespace": "app",
+      "language_code": "en",
+      "count": 3
+    },
+    {
+      "namespace": "app",
+      "language_code": "ru",
+      "count": 3
+    },
+    {
+      "namespace": "app",
+      "language_code": "uz",
+      "count": 3
+    },
+    {
+      "namespace": "button",
+      "language_code": "en",
+      "count": 13
+    },
+    {
+      "namespace": "button",
+      "language_code": "ru",
+      "count": 13
+    },
+    {
+      "namespace": "button",
+      "language_code": "uz",
+      "count": 13
+    },
+    {
+      "namespace": "field",
+      "language_code": "en",
+      "count": 51
+    },
+    {
+      "namespace": "field",
+      "language_code": "ru",
+      "count": 51
+    },
+    {
+      "namespace": "field",
+      "language_code": "uz",
+      "count": 51
+    },
+    {
+      "namespace": "label",
+      "language_code": "en",
+      "count": 21
+    },
+    {
+      "namespace": "label",
+      "language_code": "ru",
+      "count": 21
+    },
+    {
+      "namespace": "label",
+      "language_code": "uz",
+      "count": 21
+    },
+    {
+      "namespace": "menu",
+      "language_code": "en",
+      "count": 36
+    },
+    {
+      "namespace": "menu",
+      "language_code": "ru",
+      "count": 36
+    },
+    {
+      "namespace": "menu",
+      "language_code": "uz",
+      "count": 36
+    },
+    {
+      "namespace": "message",
+      "language_code": "en",
+      "count": 3
+    },
+    {
+      "namespace": "message",
+      "language_code": "ru",
+      "count": 3
+    },
+    {
+      "namespace": "message",
+      "language_code": "uz",
+      "count": 3
+    },
+    {
+      "namespace": "operation_type",
+      "language_code": "en",
+      "count": 13
+    },
+    {
+      "namespace": "operation_type",
+      "language_code": "ru",
+      "count": 13
+    },
+    {
+      "namespace": "operation_type",
+      "language_code": "uz",
+      "count": 13
+    },
+    {
+      "namespace": "payment_type",
+      "language_code": "en",
+      "count": 3
+    },
+    {
+      "namespace": "payment_type",
+      "language_code": "ru",
+      "count": 3
+    },
+    {
+      "namespace": "payment_type",
+      "language_code": "uz",
+      "count": 3
+    },
+    {
+      "namespace": "status",
+      "language_code": "en",
+      "count": 5
+    },
+    {
+      "namespace": "status",
+      "language_code": "ru",
+      "count": 5
+    },
+    {
+      "namespace": "status",
+      "language_code": "uz",
+      "count": 5
+    },
+    {
+      "namespace": "telegram",
+      "language_code": "en",
+      "count": 159
+    },
+    {
+      "namespace": "telegram",
+      "language_code": "ru",
+      "count": 159
+    },
+    {
+      "namespace": "telegram",
+      "language_code": "uz",
+      "count": 159
+    },
+    {
+      "namespace": "ui",
+      "language_code": "en",
+      "count": 119
+    },
+    {
+      "namespace": "ui",
+      "language_code": "ru",
+      "count": 119
+    },
+    {
+      "namespace": "ui",
+      "language_code": "uz",
+      "count": 119
+    }
+  ],
+  "totals": {
+    "keys_total": 426,
+    "tg_keys_total": 159,
+    "missing_any_language": 0
+  }
+}

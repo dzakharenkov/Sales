@@ -20,6 +20,8 @@ from sqlalchemy import (
     Enum as SAEnum,
     func,
     text,
+    Index,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB, INET
 from sqlalchemy.orm import declarative_base, relationship
@@ -321,3 +323,41 @@ class Operation(Base):
     comment = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class TranslationCategory(Base):
+    __tablename__ = "translation_categories"
+    __table_args__ = {"schema": "Sales"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(100), nullable=False, unique=True)
+    name_ru = Column(String(255), nullable=False)
+    name_uz = Column(String(255), nullable=False)
+    name_en = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class Translation(Base):
+    __tablename__ = "translations"
+    __table_args__ = (
+        UniqueConstraint("translation_key", "language_code", name="uq_translations_key_lang"),
+        Index("idx_translations_key", "translation_key"),
+        Index("idx_translations_language", "language_code"),
+        Index("idx_translations_category", "category"),
+        Index("idx_translations_updated_at", "updated_at"),
+        {"schema": "Sales"},
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    translation_key = Column(String(255), nullable=False)
+    language_code = Column(String(5), nullable=False)
+    translation_text = Column(Text, nullable=False)
+    category = Column(String(100), ForeignKey("Sales.translation_categories.code"), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_by = Column(String(100), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    updated_by = Column(String(100), nullable=True)
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

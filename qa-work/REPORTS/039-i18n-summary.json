@@ -1,0 +1,15 @@
+{
+  "all_by_language": {
+    "en": 426,
+    "ru": 426,
+    "uz": 426
+  },
+  "all_keys": 426,
+  "telegram_by_language": {
+    "en": 159,
+    "ru": 159,
+    "uz": 159
+  },
+  "telegram_keys": 159,
+  "missing_any_language_keys_count": 0
+}

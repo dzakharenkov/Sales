@@ -106,7 +106,6 @@ def main():
             for i, sec in enumerate(sections):
                 idx = i + 2
                 log(f"[{idx}/5] Открываем «{sec['name']}»...")
-                t_sec = time.time()
                 selector = sec.get("selector")
                 ok = True
                 err_msg = None
@@ -181,7 +180,7 @@ def main():
         ".ok{color:#059669}.fail{color:#dc2626}",
         "img{max-width:100%;height:auto;border:1px solid #eee;margin:12px 0}",
         "h2{margin-top:24px;border-bottom:2px solid #0d9488}</style></head><body>",
-        f"<h1>Отчёт тестирования SDS</h1>",
+        "<h1>Отчёт тестирования SDS</h1>",
         f"<p><strong>Дата:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
         f"<p><strong>Время выполнения:</strong> {total_elapsed:.1f} сек</p>",
         "<h2>Результаты</h2>",

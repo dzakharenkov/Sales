@@ -139,7 +139,7 @@ async def upload_photo(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """????????? ???? ???????. ???: ???_????????_??????.ext ? photo/."""
+    """Загрузить фото клиента. Формат имени: КОД_ДДММГГГГ_ЧЧММСС.ext в photo/."""
     logger.info("upload_photo: customer_id=%s, filename=%s, user=%s", customer_id, file.filename, getattr(user, "login", ""))
     full_path: Path | None = None
     try:
@@ -151,7 +151,7 @@ async def upload_photo(
 
         ext = (file.filename.rsplit(".", 1)[-1] or "").lower()
         if ext not in ALLOWED_EXTENSIONS:
-            raise HTTPException(status_code=400, detail=f"?????????: {', '.join(ALLOWED_EXTENSIONS)}")
+            raise HTTPException(status_code=400, detail=f"Разрешены: {', '.join(ALLOWED_EXTENSIONS)}")
 
         full_path, filename = _resolve_save_path(customer_id, ext)
         logger.info("upload_photo: saving to %s", full_path)

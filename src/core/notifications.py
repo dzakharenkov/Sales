@@ -171,15 +171,52 @@ async def notify_order_status_changed(
     return await send_notification(agent_login, message)
 
 
+async def _get_user_language(login: str) -> str:
+    from src.database.connection import async_session
+    from sqlalchemy import text
+    async with async_session() as session:
+        row = await session.execute(
+            text('SELECT language_code FROM "Sales".users WHERE login = :login'),
+            {"login": login},
+        )
+        lang = row.scalar()
+        if not lang or lang not in ["ru", "en", "uz"]:
+            return "ru"
+        return lang
+
+
+async def _translate(key: str, lang: str, fallback: str, **kwargs) -> str:
+    from src.database.connection import async_session
+    from sqlalchemy import text
+    async with async_session() as session:
+        val = await session.scalar(
+            text('SELECT translation_text FROM "Sales".translations WHERE translation_key = :k AND language_code = :l LIMIT 1'),
+            {"k": key, "l": lang}
+        )
+    text_val = val if val else fallback
+    if kwargs:
+        try:
+            return text_val.format(**kwargs)
+        except Exception:
+            pass
+    return text_val
+
+
 async def notify_new_visit(
     visit_id: int,
     customer_name: str,
     visit_date: date | datetime | str | None,
     responsible_login: str | None,
 ) -> bool:
+    lang = await _get_user_language(responsible_login) if responsible_login else "ru"
+    
+    t_new = await _translate("telegram.visit_notify.new_visit", lang, f"📅 <b>Новый визит #{visit_id}</b>", id=visit_id)
+    t_client = await _translate("telegram.visit_notify.client", lang, f"👤 Клиент: {customer_name or '—'}", client=customer_name or '—')
+    t_date = await _translate("telegram.visit_notify.date", lang, f"🕒 Дата: {_format_date(visit_date)}", date=_format_date(visit_date))
+    
     message = (
-        f"📅 <b>Новый визит #{visit_id}</b>\n"
-        f"👤 Клиент: {customer_name or '—'}\n"
-        f"🕒 Дата: {_format_date(visit_date)}"
+        f"{t_new}\n"
+        f"{t_client}\n"
+        f"{t_date}"
     )
     return await send_notification(responsible_login, message)

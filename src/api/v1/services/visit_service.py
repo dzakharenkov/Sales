@@ -19,7 +19,7 @@ class VisitService:
         customer_result = await self.db.execute(select(Customer).where(Customer.id == payload["customer_id"]))
         customer = customer_result.scalar_one_or_none()
         if not customer:
-            raise HTTPException(status_code=404, detail="?????? ?? ??????")
+            raise HTTPException(status_code=404, detail="Клиент не найден")
 
         visit = CustomerVisit(
             customer_id=payload["customer_id"],
@@ -45,7 +45,7 @@ class VisitService:
         await self.db.commit()
         await self.db.refresh(visit)
 
-        customer_name = (customer.name_client or customer.firm_name or "").strip() or f"?????? #{customer.id}"
+        customer_name = (customer.name_client or customer.firm_name or "").strip() or f"Клиент #{customer.id}"
         notify_payload = {
             "visit_id": visit.id,
             "customer_name": customer_name,
