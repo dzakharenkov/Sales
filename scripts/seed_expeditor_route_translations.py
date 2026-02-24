@@ -11,6 +11,16 @@ from src.database.connection import async_session
 from src.database.models import Translation
 
 KEYS = {
+    "telegram.expeditor.route_title": {
+        "ru": "Мой маршрут",
+        "en": "My Route",
+        "uz": "Mening yo'nalishim"
+    },
+    "telegram.expeditor.choose_date": {
+        "ru": "Выберите дату:",
+        "en": "Choose a date:",
+        "uz": "Sanani tanlang:"
+    },
     "telegram.expeditor.route_for": {
         "ru": "Маршрут на",
         "en": "Route for",

@@ -125,8 +125,15 @@ async def cb_exp_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session, _ = await _get_auth(update)
     if not session:
         return
-    kb = date_picker_keyboard("exp_orders")
-    await _edit_loc(q, update, context, "🗺 *Мой маршрут*\n\nВыберите дату:", reply_markup=kb, parse_mode="Markdown")
+    lbl_route = await t(update, context, "telegram.expeditor.route_title", fallback="Мой маршрут")
+    lbl_choose_date = await t(update, context, "telegram.expeditor.choose_date", fallback="Выберите дату:")
+    lbl_today = await t(update, context, "telegram.button.today", fallback="Сегодня")
+    lbl_tomorrow = await t(update, context, "telegram.button.tomorrow", fallback="Завтра")
+    lbl_pick_date = await t(update, context, "telegram.button.pick_date", fallback="Выбрать дату")
+    lbl_back = await t(update, context, "telegram.button.back", fallback="◀️ Назад")
+
+    kb = date_picker_keyboard("exp_orders", lbl_today, lbl_tomorrow, lbl_pick_date, lbl_back)
+    await _edit_loc(q, update, context, f"🗺 *{lbl_route}*\n\n{lbl_choose_date}", reply_markup=kb, parse_mode="Markdown")
 
 
 async def _exp_orders_list_today(update: Update, context: ContextTypes.DEFAULT_TYPE, completed_only: bool):
