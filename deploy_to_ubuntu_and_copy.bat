@@ -34,4 +34,50 @@ echo ========================================
 echo   Деплой и перезапуск сервисов завершены!
 echo ========================================
 echo.
+
+echo ========================================
+echo   Сохранение изменений на GitHub
+echo ========================================
+echo.
+
+REM Проверка наличия git
+git --version >nul 2>&1
+if errorlevel 1 (
+    echo [ОШИБКА] Git не найден! Установите Git с https://git-scm.com
+    pause
+    exit /b 1
+)
+
+echo [1/3] Проверка изменений...
+git status --short
+echo.
+
+echo [2/3] Добавление всех изменений...
+git add .
+if errorlevel 1 (
+    echo [ОШИБКА] Не удалось добавить файлы
+    pause
+    exit /b 1
+)
+
+echo.
+set COMMIT_MSG=Версия %date% %time%
+echo [3/3] Создание коммита: "%COMMIT_MSG%"...
+git commit -m "%COMMIT_MSG%"
+if errorlevel 1 (
+    echo [ПРЕДУПРЕЖДЕНИЕ] Возможно, нет изменений для коммита
+)
+
+git push
+if errorlevel 1 (
+    echo [ОШИБКА] Не удалось отправить на GitHub
+    pause
+    exit /b 1
+)
+
+echo.
+echo ========================================
+echo   ✓ Изменения успешно сохранены на GitHub!
+echo ========================================
+echo.
 pause
