@@ -256,9 +256,11 @@ async def cb_exp_orders_date(update: Update, context: ContextTypes.DEFAULT_TYPE)
     all_orders = data if isinstance(data, list) else (data.get("orders") or data.get("data") or [])
     orders = [o for o in all_orders if o.get("status_code") in ("open", "delivery")]
 
+    lbl_route = await t(update, context, "telegram.expeditor.route_for", fallback="Маршрут на")
     if not orders:
-        await q.edit_message_text(
-            f"🗺 Маршрут на {fmt_date(chosen_date)}:\n\nНет заказов.",
+        lbl_no_orders = await t(update, context, "telegram.expeditor.no_orders", fallback="Нет заказов.")
+        await _edit_loc(q, update, context,
+            f"🗺 {lbl_route} {fmt_date(chosen_date)}:\n\n{lbl_no_orders}",
             reply_markup=back_button("exp_orders"),
             parse_mode="Markdown",
         )
@@ -266,7 +268,8 @@ async def cb_exp_orders_date(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     context.user_data["exp_orders_list"] = orders
 
-    lines = [f"🗺 *Маршрут на {fmt_date(chosen_date)}:* ({len(orders)} заказов)\n"]
+    lbl_orders_count = await t(update, context, "telegram.expeditor.orders_count", fallback="заказов")
+    lines = [f"🗺 *{lbl_route} {fmt_date(chosen_date)}:* ({len(orders)} {lbl_orders_count})\n"]
     buttons = []
     for o in orders:
         order_no = o.get("order_no")
@@ -316,9 +319,9 @@ async def cb_exp_route(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chosen_date = context.user_data.get("exp_date", date.today().isoformat())
 
     if not points:
-        await q.edit_message_text(
-            "❌ Нет координат клиентов для построения маршрута.\n"
-            "Убедитесь, что у клиентов заполнены координаты.",
+        lbl_no_coords = await t(update, context, "telegram.expeditor.no_coords_route", fallback="❌ Нет координат клиентов для построения маршрута.\nУбедитесь, что у клиентов заполнены координаты.")
+        await _edit_loc(q, update, context,
+            lbl_no_coords,
             reply_markup=back_button(f"exp_orders_date_{chosen_date}"),
         )
         return
@@ -330,19 +333,24 @@ async def cb_exp_route(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         url = yandex_route_url(points)
     logger.info("exp_route_built: date=%s points=%s url=%s", chosen_date, len(points), url)
-    lines = [f"🗺 *Маршрут на {fmt_date(chosen_date)}:*\n"]
+    lbl_route = await t(update, context, "telegram.expeditor.route_for", fallback="Маршрут на")
+    lines = [f"🗺 *{lbl_route} {fmt_date(chosen_date)}:*\n"]
     for name in point_names:
         lines.append(name)
-    lines.append(f"\n📍 Точек: {len(points)}")
+        
+    lbl_points = await t(update, context, "telegram.expeditor.points_count", fallback="Точек")
+    lines.append(f"\n📍 {lbl_points}: {len(points)}")
     if len(points) > 1:
-        lines.append("Маршрут построен через все точки по порядку списка.")
+        lbl_route_built = await t(update, context, "telegram.expeditor.route_built_all", fallback="Маршрут построен через все точки по порядку списка.")
+        lines.append(lbl_route_built)
 
     await log_action(q.from_user.id, session.login, session.role, "route_built",
                      f"date={chosen_date}, points={len(points)}", "success")
 
+    lbl_open_map = await t(update, context, "telegram.expeditor.open_map", fallback="🗺 Открыть в Яндекс.Картах")
     buttons = [
-        [InlineKeyboardButton("🗺 Открыть в Яндекс.Картах", url=url)],
-        [InlineKeyboardButton("◀️ Назад", callback_data=f"exp_orders_date_{chosen_date}")],
+        [InlineKeyboardButton(lbl_open_map, url=url)],
+        [InlineKeyboardButton(await t(update, context, "telegram.button.back", fallback="◀️ Назад"), callback_data=f"exp_orders_date_{chosen_date}")],
     ]
     await _edit_loc(q, update, context,
         "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
@@ -392,25 +400,35 @@ async def cb_exp_order_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception as customer_error:
             logger.debug("Failed to load customer details for order: %s", customer_error)
 
+    lbl_order = await t(update, context, "telegram.expeditor.order_title", fallback="Заказ №")
+    lbl_client = await t(update, context, "telegram.expeditor.client", fallback="Клиент:")
+    lbl_phone = await t(update, context, "telegram.expeditor.phone", fallback="Телефон:")
+    lbl_address = await t(update, context, "telegram.expeditor.address", fallback="Адрес:")
+    lbl_status_desc = await t(update, context, "telegram.expeditor.status", fallback="Статус:")
+    lbl_goods = await t(update, context, "telegram.expeditor.goods", fallback="Товары:")
+    lbl_total = await t(update, context, "telegram.expeditor.total", fallback="Итого:")
+    lbl_payment_type = await t(update, context, "telegram.expeditor.payment", fallback="Оплата:")
+    lbl_coordinates = await t(update, context, "telegram.agent.coordinates", fallback="� *Координаты:*")
+
     lines = [
-        f"📦 *Заказ №{order_no}*\n",
-        f"*Клиент:* {client}",
-        f"*Телефон:* {phone}",
-        f"*Адрес:* {address}",
-        f"*Статус:* {status}",
+        f"📦 *{lbl_order}{order_no}*\n",
+        f"*{lbl_client}* {client}",
+        f"*{lbl_phone}* {phone}",
+        f"*{lbl_address}* {address}",
+        f"*{lbl_status_desc}* {status}",
         "",
-        "*Товары:*",
+        f"*{lbl_goods}*",
     ]
     for it in items:
         name = it.get("product_name") or it.get("product_code", "?")
         qty = it.get("quantity", 0)
         price = it.get("price", 0)
         lines.append(f"  • {name}: {qty} × {fmt_money(price)}")
-    lines.append(f"\n*Итого:* {fmt_money(total)}")
-    lines.append(f"*Оплата:* {pay}")
+    lines.append(f"\n*{lbl_total}* {fmt_money(total)}")
+    lines.append(f"*{lbl_payment_type}* {pay}")
 
     if lat and lon:
-        lines.append(f"\n📍 Координаты: {lat}, {lon}")
+        lines.append(f"\n{lbl_coordinates} {lat}, {lon}")
 
     photo_count = 0
     if customer_id:
@@ -427,12 +445,15 @@ async def cb_exp_order_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     buttons = []
     if lat and lon:
         map_url = yandex_map_point_url(lat, lon)
-        buttons.append([InlineKeyboardButton("📍 Открыть в Яндекс.Картах", url=map_url)])
+        lbl_open_map = await t(update, context, "telegram.expeditor.open_map", fallback="📍 Открыть в Яндекс.Картах")
+        buttons.append([InlineKeyboardButton(lbl_open_map, url=map_url)])
 
     if o.get("status_code") == "open":
-        buttons.append([InlineKeyboardButton("🚚 Доставить заказ", callback_data=f"exp_complete_{order_no}")])
+        lbl_deliver_order = await t(update, context, "telegram.expeditor.deliver_order", fallback="🚚 Доставить заказ")
+        buttons.append([InlineKeyboardButton(lbl_deliver_order, callback_data=f"exp_complete_{order_no}")])
     elif o.get("status_code") == "delivery":
-        buttons.append([InlineKeyboardButton("✅ Доставлен", callback_data=f"exp_delivered_{order_no}")])
+        lbl_delivered = await t(update, context, "telegram.expeditor.delivered", fallback="✅ Доставлен")
+        buttons.append([InlineKeyboardButton(lbl_delivered, callback_data=f"exp_delivered_{order_no}")])
 
     date_str = context.user_data.get("exp_date", date.today().isoformat())
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data=f"exp_orders_date_{date_str}")])
@@ -801,9 +822,11 @@ async def cb_exp_pay_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                  f"order={order_no}", "error", op_err.detail)
         await log_action(q.from_user.id, session.login, session.role, "payment_received",
                          f"order={order_no}, amount={amount}", "success")
+        lbl_success_top = await t(update, context, "telegram.expeditor.payment_recorded", fallback="✅ Оплата зафиксирована по заказу №")
+        lbl_sum = await t(update, context, "telegram.expeditor.sum", fallback="Сумма")
+        lbl_status_not_changed = await t(update, context, "telegram.expeditor.status_not_changed", fallback="Статус заказа не изменён.")
         await q.edit_message_text(
-            f"✅ Оплата зафиксирована по заказу №{order_no}.\nСумма: {fmt_money(amount)}\n"
-            f"Статус заказа не изменён.",
+            f"{lbl_success_top}{order_no}.\n{lbl_sum}: {fmt_money(amount)}\n{lbl_status_not_changed}",
             reply_markup=back_button(),
             parse_mode="Markdown",
         )
@@ -881,10 +904,14 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await log_action(update.effective_user.id, session.login, session.role, "payment_received",
                          f"order={order_no}, amount={amount}", "success")
         context.user_data.pop("pay_other_order", None)
+        lbl_success_top = await t(update, context, "telegram.expeditor.payment_recorded", fallback="✅ Оплата зафиксирована по заказу №")
+        lbl_sum = await t(update, context, "telegram.expeditor.sum", fallback="Сумма")
+        lbl_status_not_changed = await t(update, context, "telegram.expeditor.status_not_changed", fallback="Статус заказа не изменён.")
+        
         await update.message.reply_text(
-            f"✅ Оплата зафиксирована по заказу №{order_no}.\n"
-            f"Сумма: {fmt_money(amount)}\n"
-            f"Статус заказа не изменён."
+            f"{lbl_success_top}{order_no}.\n"
+            f"{lbl_sum}: {fmt_money(amount)}\n"
+            f"{lbl_status_not_changed}"
         )
         from .handlers_auth import show_main_menu
         await show_main_menu(update, context, session)
