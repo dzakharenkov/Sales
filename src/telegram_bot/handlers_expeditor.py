@@ -127,9 +127,9 @@ async def cb_exp_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     lbl_route = await t(update, context, "telegram.expeditor.route_title", fallback="Мой маршрут")
     lbl_choose_date = await t(update, context, "telegram.expeditor.choose_date", fallback="Выберите дату:")
-    lbl_today = await t(update, context, "telegram.button.today", fallback="Сегодня")
-    lbl_tomorrow = await t(update, context, "telegram.button.tomorrow", fallback="Завтра")
-    lbl_pick_date = await t(update, context, "telegram.button.pick_date", fallback="Выбрать дату")
+    lbl_today = await t(update, context, "telegram.common.today", fallback="Сегодня")
+    lbl_tomorrow = await t(update, context, "telegram.common.tomorrow", fallback="Завтра")
+    lbl_pick_date = await t(update, context, "telegram.common.choose_date_btn", fallback="Выбрать дату")
     lbl_back = await t(update, context, "telegram.button.back", fallback="◀️ Назад")
 
     kb = date_picker_keyboard("exp_orders", lbl_today, lbl_tomorrow, lbl_pick_date, lbl_back)
@@ -220,15 +220,23 @@ async def cb_exp_orders_calendar(update: Update, context: ContextTypes.DEFAULT_T
     q = update.callback_query
     await q.answer()
     offset = int(q.data.split("_")[-1])
-    kb = calendar_keyboard("exp_orders", offset)
-    await _edit_loc(q, update, context, "📅 Выберите дату:", reply_markup=kb, parse_mode="Markdown")
+    lbl_choose_date = await t(update, context, "telegram.common.choose_date", fallback="Выберите дату:")
+    lbl_back = await t(update, context, "telegram.button.back", fallback="◀️ Назад")
+    kb = calendar_keyboard("exp_orders", offset, text_back=lbl_back)
+    await _edit_loc(q, update, context, f"📅 {lbl_choose_date}", reply_markup=kb, parse_mode="Markdown")
 
 
 async def cb_exp_orders_pick_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    kb = date_picker_keyboard("exp_orders")
-    await _edit_loc(q, update, context, "🗺 *Мой маршрут*\n\nВыберите дату:", reply_markup=kb, parse_mode="Markdown")
+    lbl_route = await t(update, context, "telegram.expeditor.route_title", fallback="Мой маршрут")
+    lbl_choose_date = await t(update, context, "telegram.common.choose_date", fallback="Выберите дату:")
+    lbl_today = await t(update, context, "telegram.common.today", fallback="Сегодня")
+    lbl_tomorrow = await t(update, context, "telegram.common.tomorrow", fallback="Завтра")
+    lbl_pick_date = await t(update, context, "telegram.common.choose_date_btn", fallback="Выбрать дату")
+    lbl_back = await t(update, context, "telegram.button.back", fallback="◀️ Назад")
+    kb = date_picker_keyboard("exp_orders", lbl_today, lbl_tomorrow, lbl_pick_date, lbl_back)
+    await _edit_loc(q, update, context, f"🗺 *{lbl_route}*\n\n{lbl_choose_date}", reply_markup=kb, parse_mode="Markdown")
 
 
 async def cb_exp_orders_date(update: Update, context: ContextTypes.DEFAULT_TYPE):

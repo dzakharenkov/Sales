@@ -115,7 +115,11 @@ def date_picker_keyboard(
     ])
 
 
-def calendar_keyboard(prefix: str, offset_days: int = 0) -> InlineKeyboardMarkup:
+def calendar_keyboard(
+    prefix: str,
+    offset_days: int = 0,
+    text_back: str = "◀️ Назад"
+) -> InlineKeyboardMarkup:
     """Календарь на 30 дней вперёд (пагинация по 10)."""
     today = date.today()
     start = today + timedelta(days=offset_days)
@@ -134,5 +138,5 @@ def calendar_keyboard(prefix: str, offset_days: int = 0) -> InlineKeyboardMarkup
         nav.append(InlineKeyboardButton("➡️", callback_data=f"{prefix}_calendar_{offset_days + 10}"))
     if nav:
         buttons.append(nav)
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data=f"{prefix}_pick_date")])
+    buttons.append([InlineKeyboardButton(text_back, callback_data=f"{prefix}_pick_date")])
     return InlineKeyboardMarkup(buttons)

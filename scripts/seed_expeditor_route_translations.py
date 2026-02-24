@@ -11,6 +11,21 @@ from src.database.connection import async_session
 from src.database.models import Translation
 
 KEYS = {
+    "telegram.button.today": {
+        "ru": "Сегодня",
+        "en": "Today",
+        "uz": "Bugun"
+    },
+    "telegram.button.tomorrow": {
+        "ru": "Завтра",
+        "en": "Tomorrow",
+        "uz": "Ertaga"
+    },
+    "telegram.button.pick_date": {
+        "ru": "Выбрать дату",
+        "en": "Pick date",
+        "uz": "Sanani tanlash"
+    },
     "telegram.expeditor.route_title": {
         "ru": "Мой маршрут",
         "en": "My Route",
