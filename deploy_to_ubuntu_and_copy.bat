@@ -53,10 +53,10 @@ git status --short
 echo.
 
 echo [1.1/3] Check for leaked secrets...
-git grep -n -I "sntryu_" >nul 2>&1
+git grep -n -I -E "sntryu_[a-f0-9]{64}" -- . ":(exclude)deploy_to_ubuntu_and_copy.bat" >nul 2>&1
 if not errorlevel 1 (
     echo [ERROR] Potential Sentry token found in tracked files.
-    git grep -n -I "sntryu_"
+    git grep -n -I -E "sntryu_[a-f0-9]{64}" -- . ":(exclude)deploy_to_ubuntu_and_copy.bat"
     echo Remove secrets before commit/push.
     pause
     exit /b 1
