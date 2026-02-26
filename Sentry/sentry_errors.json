@@ -2,14 +2,701 @@
   "metadata": {
     "organization": "zakharenkov",
     "project_filter": "sales",
-    "total_issues": 8,
-    "fetched_at": "2026-02-26T10:26:29.796257+00:00",
+    "total_issues": 11,
+    "fetched_at": "2026-02-26T15:17:19.422560+00:00",
     "period": "14d unresolved + historical merged",
     "by_project": {
-      "sales": 8
+      "sales": 11
     }
   },
   "errors": [
+    {
+      "id": "7294095442",
+      "title": "IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.ForeignKeyViolationError'>: update or delete on table \"operation_types\" violates foreign key constraint \"operation_config_operation_type_code_fkey\" on table \"operation_co...",
+      "status": "resolved",
+      "level": "error",
+      "count": 2,
+      "first_seen": "2026-02-26T15:03:11Z",
+      "last_seen": "2026-02-26T15:03:30Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7294095442/",
+      "stacktrace": {
+        "exception_type": "ForeignKeyViolationError",
+        "exception_value": "update or delete on table \"operation_types\" violates foreign key constraint \"operation_config_operation_type_code_fkey\" on table \"operation_config\"",
+        "frames": [
+          {
+            "filename": "sqlalchemy/dialects/postgresql/asyncpg.py",
+            "line_number": 550,
+            "function": "_prepare_and_execute",
+            "code_context": [
+              [
+                545,
+                ""
+              ],
+              [
+                546,
+                "                if self.server_side:"
+              ],
+              [
+                547,
+                "                    self._cursor = await prepared_stmt.cursor(*parameters)"
+              ],
+              [
+                548,
+                "                    self.rowcount = -1"
+              ],
+              [
+                549,
+                "                else:"
+              ],
+              [
+                550,
+                "                    self._rows = deque(await prepared_stmt.fetch(*parameters))"
+              ],
+              [
+                551,
+                "                    status = prepared_stmt.get_statusmsg()"
+              ],
+              [
+                552,
+                ""
+              ],
+              [
+                553,
+                "                    reg = re.match("
+              ],
+              [
+                554,
+                "                        r\"(?:SELECT|UPDATE|DELETE|INSERT \\d+) (\\d+)\","
+              ],
+              [
+                555,
+                "                        status or \"\","
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/prepared_stmt.py",
+            "line_number": 177,
+            "function": "fetch",
+            "code_context": [
+              [
+                172,
+                "        :param args: Query arguments"
+              ],
+              [
+                173,
+                "        :param float timeout: Optional timeout value in seconds."
+              ],
+              [
+                174,
+                ""
+              ],
+              [
+                175,
+                "        :return: A list of :class:`Record` instances."
+              ],
+              [
+                176,
+                "        \"\"\""
+              ],
+              [
+                177,
+                "        data = await self.__bind_execute(args, 0, timeout)"
+              ],
+              [
+                178,
+                "        return data"
+              ],
+              [
+                179,
+                ""
+              ],
+              [
+                180,
+                "    @connresource.guarded"
+              ],
+              [
+                181,
+                "    async def fetchval(self, *args, column=0, timeout=None):"
+              ],
+              [
+                182,
+                "        \"\"\"Execute the statement and return a value in the first row."
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/prepared_stmt.py",
+            "line_number": 268,
+            "function": "__bind_execute",
+            "code_context": [
+              [
+                263,
+                "            # invalidate themselves (unfortunately, clearing caches again)."
+              ],
+              [
+                264,
+                "            self._state.mark_closed()"
+              ],
+              [
+                265,
+                "            raise"
+              ],
+              [
+                266,
+                ""
+              ],
+              [
+                267,
+                "    async def __bind_execute(self, args, limit, timeout):"
+              ],
+              [
+                268,
+                "        data, status, _ = await self.__do_execute("
+              ],
+              [
+                269,
+                "            lambda protocol: protocol.bind_execute("
+              ],
+              [
+                270,
+                "                self._state, args, '', limit, True, timeout))"
+              ],
+              [
+                271,
+                "        self._last_status = status"
+              ],
+              [
+                272,
+                "        return data"
+              ],
+              [
+                273,
+                ""
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/prepared_stmt.py",
+            "line_number": 257,
+            "function": "__do_execute",
+            "code_context": [
+              [
+                252,
+                "            ))"
+              ],
+              [
+                253,
+                ""
+              ],
+              [
+                254,
+                "    async def __do_execute(self, executor):"
+              ],
+              [
+                255,
+                "        protocol = self._connection._protocol"
+              ],
+              [
+                256,
+                "        try:"
+              ],
+              [
+                257,
+                "            return await executor(protocol)"
+              ],
+              [
+                258,
+                "        except exceptions.OutdatedSchemaCacheError:"
+              ],
+              [
+                259,
+                "            await self._connection.reload_schema_state()"
+              ],
+              [
+                260,
+                "            # We can not find all manually created prepared statements, so just"
+              ],
+              [
+                261,
+                "            # drop known cached ones in the `self._connection`."
+              ],
+              [
+                262,
+                "            # Other manually created prepared statements will fail and"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/protocol/protocol.pyx",
+            "line_number": 205,
+            "function": "bind_execute",
+            "code_context": [
+              [
+                200,
+                "            self.queries_count += 1"
+              ],
+              [
+                201,
+                "        except Exception as ex:"
+              ],
+              [
+                202,
+                "            waiter.set_exception(ex)"
+              ],
+              [
+                203,
+                "            self._coreproto_error()"
+              ],
+              [
+                204,
+                "        finally:"
+              ],
+              [
+                205,
+                "            return await waiter"
+              ],
+              [
+                206,
+                ""
+              ],
+              [
+                207,
+                "    async def bind_execute_many("
+              ],
+              [
+                208,
+                "        self,"
+              ],
+              [
+                209,
+                "        state: PreparedStatementState,"
+              ],
+              [
+                210,
+                "        args,"
+              ]
+            ]
+          }
+        ]
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": "84.54.86.3"
+        },
+        "tags": {
+          "browser": "Microsoft Edge 145",
+          "browser.name": "Microsoft Edge",
+          "client_os": "Windows",
+          "client_os.name": "Windows",
+          "environment": "production",
+          "handled": "yes",
+          "level": "error",
+          "logger": "src.core.exception_handlers",
+          "mechanism": "logging",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-api",
+          "transaction": "/api/v1/operation-types/{code}",
+          "url": "http://sales.zakharenkov.ru/api/v1/operation-types/damage",
+          "user": "ip:84.54.86.3"
+        }
+      },
+      "comment": "Исправлено удаление типа операции: добавлена корректная обработка связанных данных и возврат понятной ошибки без падения API (FK violation handled)."
+    },
+    {
+      "id": "7275717149",
+      "title": "Database session error: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.ForeignKeyViolationError'>: update or delete on table \"operation_types\" violates foreign key constraint \"operation_config_operation_type_code_fkey...",
+      "status": "resolved",
+      "level": "error",
+      "count": 125,
+      "first_seen": "2026-02-19T05:35:27Z",
+      "last_seen": "2026-02-26T15:03:30Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7275717149/",
+      "stacktrace": {
+        "exception_type": "Unknown",
+        "exception_value": "Unknown",
+        "frames": []
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": "84.54.86.3"
+        },
+        "tags": {
+          "browser": "Microsoft Edge 145",
+          "browser.name": "Microsoft Edge",
+          "client_os": "Windows",
+          "client_os.name": "Windows",
+          "environment": "production",
+          "level": "error",
+          "logger": "src.database.connection",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-api",
+          "transaction": "/api/v1/operation-types/{code}",
+          "url": "http://sales.zakharenkov.ru/api/v1/operation-types/damage",
+          "user": "ip:84.54.86.3"
+        }
+      },
+      "comment": "Убрано ложное логирование 401 как database session error: HTTPException обрабатывается отдельно без записи в Sentry как ошибка БД."
+    },
+    {
+      "id": "7294021913",
+      "title": "ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column ot.executor_role does not exist",
+      "status": "resolved",
+      "level": "error",
+      "count": 4,
+      "first_seen": "2026-02-26T14:32:29Z",
+      "last_seen": "2026-02-26T14:33:57Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7294021913/",
+      "stacktrace": {
+        "exception_type": "UndefinedColumnError",
+        "exception_value": "column ot.executor_role does not exist",
+        "frames": [
+          {
+            "filename": "sqlalchemy/dialects/postgresql/asyncpg.py",
+            "line_number": 526,
+            "function": "_prepare_and_execute",
+            "code_context": [
+              [
+                521,
+                ""
+              ],
+              [
+                522,
+                "            if parameters is None:"
+              ],
+              [
+                523,
+                "                parameters = ()"
+              ],
+              [
+                524,
+                ""
+              ],
+              [
+                525,
+                "            try:"
+              ],
+              [
+                526,
+                "                prepared_stmt, attributes = await adapt_connection._prepare("
+              ],
+              [
+                527,
+                "                    operation, self._invalidate_schema_cache_asof"
+              ],
+              [
+                528,
+                "                )"
+              ],
+              [
+                529,
+                ""
+              ],
+              [
+                530,
+                "                if attributes:"
+              ],
+              [
+                531,
+                "                    self.description = ["
+              ]
+            ]
+          },
+          {
+            "filename": "sqlalchemy/dialects/postgresql/asyncpg.py",
+            "line_number": 773,
+            "function": "_prepare",
+            "code_context": [
+              [
+                768,
+                "            # changes such as size of a VARCHAR changing, so there is also"
+              ],
+              [
+                769,
+                "            # a cross-connection invalidation timestamp"
+              ],
+              [
+                770,
+                "            if cached_timestamp > invalidate_timestamp:"
+              ],
+              [
+                771,
+                "                return prepared_stmt, attributes"
+              ],
+              [
+                772,
+                ""
+              ],
+              [
+                773,
+                "        prepared_stmt = await self._connection.prepare("
+              ],
+              [
+                774,
+                "            operation, name=self._prepared_statement_name_func()"
+              ],
+              [
+                775,
+                "        )"
+              ],
+              [
+                776,
+                "        attributes = prepared_stmt.get_attributes()"
+              ],
+              [
+                777,
+                "        cache[operation] = (prepared_stmt, attributes, time.time())"
+              ],
+              [
+                778,
+                ""
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connection.py",
+            "line_number": 638,
+            "function": "prepare",
+            "code_context": [
+              [
+                633,
+                "            Added the *record_class* parameter."
+              ],
+              [
+                634,
+                ""
+              ],
+              [
+                635,
+                "        .. versionchanged:: 0.25.0"
+              ],
+              [
+                636,
+                "            Added the *name* parameter."
+              ],
+              [
+                637,
+                "        \"\"\""
+              ],
+              [
+                638,
+                "        return await self._prepare("
+              ],
+              [
+                639,
+                "            query,"
+              ],
+              [
+                640,
+                "            name=name,"
+              ],
+              [
+                641,
+                "            timeout=timeout,"
+              ],
+              [
+                642,
+                "            record_class=record_class,"
+              ],
+              [
+                643,
+                "        )"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connection.py",
+            "line_number": 657,
+            "function": "_prepare",
+            "code_context": [
+              [
+                652,
+                "        record_class=None"
+              ],
+              [
+                653,
+                "    ):"
+              ],
+              [
+                654,
+                "        self._check_open()"
+              ],
+              [
+                655,
+                "        if name is None:"
+              ],
+              [
+                656,
+                "            name = self._stmt_cache_enabled"
+              ],
+              [
+                657,
+                "        stmt = await self._get_statement("
+              ],
+              [
+                658,
+                "            query,"
+              ],
+              [
+                659,
+                "            timeout,"
+              ],
+              [
+                660,
+                "            named=name,"
+              ],
+              [
+                661,
+                "            use_cache=use_cache,"
+              ],
+              [
+                662,
+                "            record_class=record_class,"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connection.py",
+            "line_number": 443,
+            "function": "_get_statement",
+            "code_context": [
+              [
+                438,
+                "        elif use_cache or named:"
+              ],
+              [
+                439,
+                "            stmt_name = self._get_unique_id('stmt')"
+              ],
+              [
+                440,
+                "        else:"
+              ],
+              [
+                441,
+                "            stmt_name = ''"
+              ],
+              [
+                442,
+                ""
+              ],
+              [
+                443,
+                "        statement = await self._protocol.prepare("
+              ],
+              [
+                444,
+                "            stmt_name,"
+              ],
+              [
+                445,
+                "            query,"
+              ],
+              [
+                446,
+                "            timeout,"
+              ],
+              [
+                447,
+                "            record_class=record_class,"
+              ],
+              [
+                448,
+                "            ignore_custom_codec=ignore_custom_codec,"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/protocol/protocol.pyx",
+            "line_number": 165,
+            "function": "prepare",
+            "code_context": [
+              [
+                160,
+                "            self.statement = state"
+              ],
+              [
+                161,
+                "        except Exception as ex:"
+              ],
+              [
+                162,
+                "            waiter.set_exception(ex)"
+              ],
+              [
+                163,
+                "            self._coreproto_error()"
+              ],
+              [
+                164,
+                "        finally:"
+              ],
+              [
+                165,
+                "            return await waiter"
+              ],
+              [
+                166,
+                ""
+              ],
+              [
+                167,
+                "    async def bind_execute("
+              ],
+              [
+                168,
+                "        self,"
+              ],
+              [
+                169,
+                "        state: PreparedStatementState,"
+              ],
+              [
+                170,
+                "        args,"
+              ]
+            ]
+          }
+        ]
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": "84.54.86.3"
+        },
+        "tags": {
+          "browser": "Microsoft Edge 145",
+          "browser.name": "Microsoft Edge",
+          "client_os": "Windows",
+          "client_os.name": "Windows",
+          "environment": "production",
+          "handled": "yes",
+          "level": "error",
+          "logger": "src.core.exception_handlers",
+          "mechanism": "logging",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-api",
+          "transaction": "/api/v1/operation-types",
+          "url": "http://sales.zakharenkov.ru/api/v1/operation-types",
+          "user": "ip:84.54.86.3"
+        }
+      },
+      "comment": "Исправлена совместимость со схемой БД без колонки executor_role: добавлена проверка наличия колонки и fallback-запросы для operation types."
+    },
     {
       "id": "7278663445",
       "title": "AttributeError: 'str' object has no attribute 'get'",
