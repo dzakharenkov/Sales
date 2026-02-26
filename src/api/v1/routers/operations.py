@@ -49,15 +49,49 @@ async def _ensure_user_can_create_operation_type(
     user: User,
     operation_type: str,
 ) -> str:
-    op_type_result = await session.execute(
-        select(OperationType).where(OperationType.code == operation_type)
+    col_result = await session.execute(
+        text(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'Sales'
+              AND table_name = 'operation_types'
+              AND column_name = 'executor_role'
+            LIMIT 1
+            """
+        )
     )
-    op_type = op_type_result.scalar_one_or_none()
-    if not op_type:
+    has_executor_role = col_result.scalar_one_or_none() is not None
+
+    if has_executor_role:
+        op_type_result = await session.execute(
+            text('SELECT code, COALESCE(executor_role, \'\') FROM "Sales".operation_types WHERE code = :code'),
+            {"code": operation_type},
+        )
+        op_type_row = op_type_result.fetchone()
+    else:
+        op_type_result = await session.execute(
+            text('SELECT code FROM "Sales".operation_types WHERE code = :code'),
+            {"code": operation_type},
+        )
+        row = op_type_result.fetchone()
+        legacy_roles = {
+            "payment_receipt_from_customer": "expeditor",
+            "cash_receipt": "paymaster",
+            "warehouse_receipt": "stockman",
+            "allocation": "stockman",
+            "transfer": "stockman",
+            "write_off": "stockman",
+            "delivery": "expeditor",
+            "promotional_sample": "expeditor",
+        }
+        op_type_row = (row[0], legacy_roles.get(operation_type, "admin")) if row else None
+
+    if not op_type_row:
         raise HTTPException(status_code=404, detail=f"Operation type '{operation_type}' not found")
 
     current_role = (user.role or "").strip().lower()
-    required_role = ((op_type.executor_role or "") if op_type else "").strip().lower()
+    required_role = (op_type_row[1] or "").strip().lower()
     if current_role == "admin":
         return required_role
     if not required_role:
@@ -279,10 +313,27 @@ async def list_operation_types(
 ):
     """Типы операций: приход, расход, продажа, возврат и т.д. (code PK) + активность из operation_config.
     active=True только если есть operation_config и oc.active=TRUE. has_config=True если конфиг есть (для создания операции)."""
+    col_result = await session.execute(
+        text(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'Sales'
+              AND table_name = 'operation_types'
+              AND column_name = 'executor_role'
+            LIMIT 1
+            """
+        )
+    )
+    has_executor_role = col_result.scalar_one_or_none() is not None
+
     result = await session.execute(
         text(
             '''
-            SELECT ot.code, ot.name, ot.description, ot.executor_role,
+            SELECT ot.code, ot.name, ot.description,
+                   '''
+            + ("ot.executor_role" if has_executor_role else "NULL::text")
+            + ''',
                    (oc.operation_type_code IS NOT NULL AND COALESCE(oc.active, TRUE) = TRUE) AS active,
                    (oc.operation_type_code IS NOT NULL) AS has_config
             FROM "Sales".operation_types ot
@@ -307,6 +358,22 @@ async def list_operation_types(
         }
         for r in rows
     ]
+
+
+async def _has_executor_role_column(session: AsyncSession) -> bool:
+    col_result = await session.execute(
+        text(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'Sales'
+              AND table_name = 'operation_types'
+              AND column_name = 'executor_role'
+            LIMIT 1
+            """
+        )
+    )
+    return col_result.scalar_one_or_none() is not None
 
 
 class OperationTypeCreate(BaseModel):
@@ -349,10 +416,16 @@ async def create_operation_type(
     user: User = Depends(require_admin),
 ):
     """Добавить тип операции. Только admin. Таблица Sales.operation_types (code PK)."""
-    await session.execute(
-        text('INSERT INTO "Sales".operation_types (code, name, description, executor_role) VALUES (:code, :name, :desc, :role)'),
-        {"code": body.code, "name": body.name, "desc": body.description, "role": body.role},
-    )
+    if await _has_executor_role_column(session):
+        await session.execute(
+            text('INSERT INTO "Sales".operation_types (code, name, description, executor_role) VALUES (:code, :name, :desc, :role)'),
+            {"code": body.code, "name": body.name, "desc": body.description, "role": body.role},
+        )
+    else:
+        await session.execute(
+            text('INSERT INTO "Sales".operation_types (code, name, description) VALUES (:code, :name, :desc)'),
+            {"code": body.code, "name": body.name, "desc": body.description},
+        )
     await session.commit()
     return {"code": body.code, "name": body.name, "role": body.role, "message": "created"}
 
@@ -375,7 +448,7 @@ async def update_operation_type(
             text('UPDATE "Sales".operation_types SET description = :desc WHERE code = :code'),
             {"desc": body.description, "code": code},
         )
-    if body.role is not None:
+    if body.role is not None and await _has_executor_role_column(session):
         await session.execute(
             text('UPDATE "Sales".operation_types SET executor_role = :role WHERE code = :code'),
             {"role": body.role, "code": code},
