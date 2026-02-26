@@ -4654,7 +4654,8 @@
                 var q = parseInt(qtyInp.value || '0', 10) || 0;
                 var maxA = parseInt(qtyInp.getAttribute('data-available') || '0', 10) || 0;
                 if (q > maxA) { q = maxA; qtyInp.value = q || ''; }
-                sumCell.textContent = price * q ? (price * q).toFixed(2) : '0';
+                // Раздача образцов всегда бесплатная (нулевая стоимость).
+                sumCell.textContent = '0';
                 if (weightG > 0 && q > 0) weightCell.textContent = ((weightG * q) / 1000).toFixed(2) + ' кг'; else weightCell.textContent = '—';
                 updateTransferTotals();
               }
@@ -4820,11 +4821,10 @@
             var totalQty = 0, totalSum = 0, totalWeightG = 0;
             document.querySelectorAll('.sample-row').forEach(function (row) {
               var qtyInp = row.querySelector('.sample-qty');
-              var price = parseFloat(row.getAttribute('data-price') || '0') || 0;
               var wg = parseInt(row.getAttribute('data-weight-g') || '0', 10) || 0;
               var q = parseInt((qtyInp && qtyInp.value) || '0', 10) || 0;
               totalQty += q;
-              totalSum += price * q;
+              totalSum += 0;
               totalWeightG += wg * q;
             });
             document.getElementById('sampleTotalQty').textContent = totalQty;
@@ -4872,11 +4872,12 @@
             function createNext() {
               if (idx >= items.length) {
                 if (msgEl) { msgEl.textContent = 'Создано операций раздачи образцов: ' + createdCount; msgEl.style.display = 'block'; }
-                setTimeout(function () { loadSectionOperations(false); }, 1500);
+                alert('Операции раздачи образцов успешно сохранены: ' + createdCount);
+                setTimeout(function () { loadSectionOperations(false); }, 800);
                 return;
               }
               var it = items[idx++];
-              api('/api/v1/operations/allocation', { method: 'POST', body: JSON.stringify({ warehouse_from: whFrom, warehouse_to: whTo, product_code: it.product_code, batch_code: it.batch_code, quantity: it.quantity, expeditor_login: expeditor, created_by: createdBy, comment: comment }) }).then(function () {
+              api('/api/v1/operations/promotional_sample/create', { method: 'POST', body: JSON.stringify({ warehouse_from: whFrom, warehouse_to: whTo, product_code: it.product_code, batch_code: it.batch_code, quantity: it.quantity, expeditor_login: expeditor, comment: comment, amount: 0 }) }).then(function () {
                 createdCount += 1;
                 createNext();
               }).catch(function (e) {

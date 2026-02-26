@@ -26,6 +26,14 @@ import logging
 
 router = APIRouter()
 ALLOWED_USER_ROLES = {"admin", "expeditor", "agent", "stockman", "paymaster"}
+OUTFLOW_OPERATION_TYPES = {
+    "allocation",
+    "delivery",
+    "promotional_sample",
+    "write_off",
+    "damage",
+    "transfer",
+}
 
 
 def _parse_delivery_date_input(raw: str) -> date:
@@ -105,6 +113,47 @@ async def _ensure_user_can_create_operation_type(
             detail=f"Only role '{required_role}' (or admin) can create operation type '{operation_type}'.",
         )
     return required_role
+
+
+async def _ensure_sufficient_batch_stock(
+    session: AsyncSession,
+    operation_type: str,
+    warehouse_from: str | None,
+    product_code: str | None,
+    batch_code: str | None,
+    qty: int | float | None,
+) -> None:
+    if operation_type not in OUTFLOW_OPERATION_TYPES:
+        return
+    if not warehouse_from or not product_code or not batch_code:
+        return
+    requested = int(qty or 0)
+    if requested <= 0:
+        return
+
+    stock_result = await session.execute(
+        text(
+            '''
+            SELECT COALESCE(total_qty, 0)::int
+            FROM "Sales".v_warehouse_stock
+            WHERE warehouse_code = :wh
+              AND product_code = :pc
+              AND batch_code = :bc
+            '''
+        ),
+        {"wh": warehouse_from, "pc": product_code, "bc": batch_code},
+    )
+    stock_row = stock_result.fetchone()
+    available = int(stock_row[0]) if stock_row and stock_row[0] is not None else 0
+    if available < requested:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Недостаточно остатков для операции '{operation_type}': "
+                f"склад={warehouse_from}, товар={product_code}, партия={batch_code}, "
+                f"доступно {available}, запрошено {requested}."
+            ),
+        )
 
 
 @router.get("/operations/allocation/suggest-by-delivery-date", response_model=EntityModel | list[EntityModel])
@@ -1063,6 +1112,18 @@ async def create_operation_from_config(
             await session.flush()
             batch_id = new_batch.id
             logger.info(f"  Ð¡Ð¾Ð·Ð´Ð°Ð½Ð° Ð½Ð¾Ð²Ð°Ñ Ð¿Ð°Ñ€Ñ‚Ð¸Ñ: {data['batch_code']}, expiry_date={expiry_date_parsed}")
+
+    await _ensure_sufficient_batch_stock(
+        session=session,
+        operation_type=operation_type,
+        warehouse_from=data.get("warehouse_from"),
+        product_code=data.get("product_code"),
+        batch_code=data.get("batch_code"),
+        qty=data.get("quantity"),
+    )
+
+    if operation_type == "promotional_sample":
+        data["amount"] = 0
     
     op = Operation(
         operation_number=operation_number,
