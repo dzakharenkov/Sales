@@ -5572,8 +5572,10 @@
           // Загружаем типы операций сразу (быстро, мало данных)
           api('/api/v1/operation-types').catch(function () { return []; }).then(function (types) {
             var typeOpts = '<option value="">— Выберите тип операции —</option>';
+            var currentRole = ((currentUser && currentUser.role) ? currentUser.role : '').toLowerCase();
             (types || []).forEach(function (ty) {
               if (ty.active !== true || ty.has_config !== true) return;
+              if (currentRole && currentRole !== 'admin' && ((ty.role || '').toLowerCase() !== currentRole)) return;
               typeOpts += '<option value="' + escAttr(ty.code) + '">' + escAttr(ty.name || ty.code) + '</option>';
             });
             var sel = document.getElementById('opSelectType');
