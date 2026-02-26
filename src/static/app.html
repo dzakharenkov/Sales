@@ -1355,23 +1355,23 @@
         (items || []).forEach(function (m) { menuByCode[m.code] = m.access_level || 'view'; });
         menuItems = items || [];
 
-        // Пропускаем только подпункты справочников (ref_payment, ref_products и т.д.)
-        // которые возвращены API как отдельные записи
+        // Пропускаем подпункты, если они уже будут отрисованы внутри родителя.
+        // Иначе API может вернуть и родителя, и child как отдельные пункты, что даёт дубли.
         var skipCodes = {};
-        if (SIDEBAR_CHILDREN['references']) {
-          SIDEBAR_CHILDREN['references'].forEach(function (child) {
-            // Пропускаем только если этот подпункт справочника есть в API
-            if (menuByCode[child.s] && child.s !== 'references') {
+        Object.keys(SIDEBAR_CHILDREN).forEach(function (parentCode) {
+          if (!menuByCode[parentCode] || menuByCode[parentCode] === 'none') return;
+          (SIDEBAR_CHILDREN[parentCode] || []).forEach(function (child) {
+            if (menuByCode[child.s] && menuByCode[child.s] !== 'none') {
               skipCodes[child.s] = true;
             }
           });
-        }
+        });
 
         var html = '';
         (items || []).forEach(function (m) {
           var code = m.code;
 
-          // Пропускаем ТОЛЬКО подпункты справочников
+          // Пропускаем child-пункты, которые уже будут показаны внутри parent-меню.
           if (skipCodes[code]) return;
 
           var section = SIDEBAR_SECTIONS[code] || code;
