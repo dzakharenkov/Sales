@@ -1,5 +1,5 @@
-"""
-Операции: новая структура (operation_number, type_code, warehouse_from/to, status и др.).
+﻿"""
+ÐžÐ¿ÐµÑ€Ð°Ñ†Ð¸Ð¸: Ð½Ð¾Ð²Ð°Ñ ÑÑ‚Ñ€ÑƒÐºÑ‚ÑƒÑ€Ð° (operation_number, type_code, warehouse_from/to, status Ð¸ Ð´Ñ€.).
 """
 import io
 from datetime import date, datetime, timezone
@@ -32,7 +32,7 @@ def _parse_delivery_date_input(raw: str) -> date:
     """Parse delivery date from yyyy-mm-dd or dd.mm.yyyy."""
     value = (raw or "").strip()
     if not value:
-        raise HTTPException(status_code=400, detail="Не указана дата поставки.")
+        raise HTTPException(status_code=400, detail="ÐÐµ ÑƒÐºÐ°Ð·Ð°Ð½Ð° Ð´Ð°Ñ‚Ð° Ð¿Ð¾ÑÑ‚Ð°Ð²ÐºÐ¸.")
     for fmt in ("%Y-%m-%d", "%d.%m.%Y"):
         try:
             return datetime.strptime(value, fmt).date()
@@ -40,7 +40,7 @@ def _parse_delivery_date_input(raw: str) -> date:
             continue
     raise HTTPException(
         status_code=400,
-        detail="Неверный формат даты поставки. Используйте дд.мм.гггг или yyyy-mm-dd.",
+        detail="ÐÐµÐ²ÐµÑ€Ð½Ñ‹Ð¹ Ñ„Ð¾Ñ€Ð¼Ð°Ñ‚ Ð´Ð°Ñ‚Ñ‹ Ð¿Ð¾ÑÑ‚Ð°Ð²ÐºÐ¸. Ð˜ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐ¹Ñ‚Ðµ Ð´Ð´.Ð¼Ð¼.Ð³Ð³Ð³Ð³ Ð¸Ð»Ð¸ yyyy-mm-dd.",
     )
 
 
@@ -109,16 +109,16 @@ async def _ensure_user_can_create_operation_type(
 
 @router.get("/operations/allocation/suggest-by-delivery-date", response_model=EntityModel | list[EntityModel])
 async def suggest_allocation_items_by_delivery_date(
-    warehouse_from: str = Query(..., description="Код склада от"),
-    expeditor_login: str = Query(..., description="Логин экспедитора"),
-    delivery_date: str = Query(..., description="Дата поставки (yyyy-mm-dd или dd.mm.yyyy)"),
+    warehouse_from: str = Query(..., description="ÐšÐ¾Ð´ ÑÐºÐ»Ð°Ð´Ð° Ð¾Ñ‚"),
+    expeditor_login: str = Query(..., description="Ð›Ð¾Ð³Ð¸Ð½ ÑÐºÑÐ¿ÐµÐ´Ð¸Ñ‚Ð¾Ñ€Ð°"),
+    delivery_date: str = Query(..., description="Ð”Ð°Ñ‚Ð° Ð¿Ð¾ÑÑ‚Ð°Ð²ÐºÐ¸ (yyyy-mm-dd Ð¸Ð»Ð¸ dd.mm.yyyy)"),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Автоподбор позиций для allocation на основе заказов в доставке по дате поставки."""
+    """ÐÐ²Ñ‚Ð¾Ð¿Ð¾Ð´Ð±Ð¾Ñ€ Ð¿Ð¾Ð·Ð¸Ñ†Ð¸Ð¹ Ð´Ð»Ñ allocation Ð½Ð° Ð¾ÑÐ½Ð¾Ð²Ðµ Ð·Ð°ÐºÐ°Ð·Ð¾Ð² Ð² Ð´Ð¾ÑÑ‚Ð°Ð²ÐºÐµ Ð¿Ð¾ Ð´Ð°Ñ‚Ðµ Ð¿Ð¾ÑÑ‚Ð°Ð²ÐºÐ¸."""
     delivery_dt = _parse_delivery_date_input(delivery_date)
 
-    # 1) Находим ВСЕ активные (не закрытые) заказы экспедитора на выбранную дату.
+    # 1) ÐÐ°Ñ…Ð¾Ð´Ð¸Ð¼ Ð’Ð¡Ð• Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ðµ (Ð½Ðµ Ð·Ð°ÐºÑ€Ñ‹Ñ‚Ñ‹Ðµ) Ð·Ð°ÐºÐ°Ð·Ñ‹ ÑÐºÑÐ¿ÐµÐ´Ð¸Ñ‚Ð¾Ñ€Ð° Ð½Ð° Ð²Ñ‹Ð±Ñ€Ð°Ð½Ð½ÑƒÑŽ Ð´Ð°Ñ‚Ñƒ.
     status_code_l = func.lower(func.coalesce(Order.status_code, ""))
     status_name_l = func.lower(func.coalesce(Status.name, ""))
     matched_orders_result = await session.execute(
@@ -131,8 +131,8 @@ async def suggest_allocation_items_by_delivery_date(
         .where(
             ~or_(
                 status_code_l.in_(["completed", "cancelled", "canceled", "3", "4"]),
-                status_name_l.like("%отмен%"),
-                status_name_l.like("%доставлен%"),
+                status_name_l.like("%Ð¾Ñ‚Ð¼ÐµÐ½%"),
+                status_name_l.like("%Ð´Ð¾ÑÑ‚Ð°Ð²Ð»ÐµÐ½%"),
                 status_name_l.like("%cancel%"),
                 status_name_l.like("%completed%"),
                 status_name_l.like("%closed%"),
@@ -149,12 +149,12 @@ async def suggest_allocation_items_by_delivery_date(
             "no_orders": True,
             "matched_orders_count": 0,
             "matched_order_ids": [],
-            "message": f"На выбранную дату нет активных заказов для доставки экспедитором {expeditor_login}.",
+            "message": f"ÐÐ° Ð²Ñ‹Ð±Ñ€Ð°Ð½Ð½ÑƒÑŽ Ð´Ð°Ñ‚Ñƒ Ð½ÐµÑ‚ Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ñ… Ð·Ð°ÐºÐ°Ð·Ð¾Ð² Ð´Ð»Ñ Ð´Ð¾ÑÑ‚Ð°Ð²ÐºÐ¸ ÑÐºÑÐ¿ÐµÐ´Ð¸Ñ‚Ð¾Ñ€Ð¾Ð¼ {expeditor_login}.",
             "items": [],
             "warnings": [],
         }
 
-    # 2) Суммируем количества по товарам по ВСЕМ найденным заказам.
+    # 2) Ð¡ÑƒÐ¼Ð¼Ð¸Ñ€ÑƒÐµÐ¼ ÐºÐ¾Ð»Ð¸Ñ‡ÐµÑÑ‚Ð²Ð° Ð¿Ð¾ Ñ‚Ð¾Ð²Ð°Ñ€Ð°Ð¼ Ð¿Ð¾ Ð’Ð¡Ð•Ðœ Ð½Ð°Ð¹Ð´ÐµÐ½Ð½Ñ‹Ð¼ Ð·Ð°ÐºÐ°Ð·Ð°Ð¼.
     grouped_items_result = await session.execute(
         select(
             Item.product_code,
@@ -172,7 +172,7 @@ async def suggest_allocation_items_by_delivery_date(
 
     product_codes = list(filtered_required.keys())
 
-    # 2) Получаем остатки по партиям со склада от.
+    # 2) ÐŸÐ¾Ð»ÑƒÑ‡Ð°ÐµÐ¼ Ð¾ÑÑ‚Ð°Ñ‚ÐºÐ¸ Ð¿Ð¾ Ð¿Ð°Ñ€Ñ‚Ð¸ÑÐ¼ ÑÐ¾ ÑÐºÐ»Ð°Ð´Ð° Ð¾Ñ‚.
     stock_result = await session.execute(
         text(
             '''
@@ -205,7 +205,7 @@ async def suggest_allocation_items_by_delivery_date(
             }
         )
 
-    # 3) Подтягиваем справочные данные о сроках и товарах.
+    # 3) ÐŸÐ¾Ð´Ñ‚ÑÐ³Ð¸Ð²Ð°ÐµÐ¼ ÑÐ¿Ñ€Ð°Ð²Ð¾Ñ‡Ð½Ñ‹Ðµ Ð´Ð°Ð½Ð½Ñ‹Ðµ Ð¾ ÑÑ€Ð¾ÐºÐ°Ñ… Ð¸ Ñ‚Ð¾Ð²Ð°Ñ€Ð°Ñ….
     expiry_by_batch: dict = {}
     if batch_ids:
         batch_result = await session.execute(
@@ -225,7 +225,7 @@ async def suggest_allocation_items_by_delivery_date(
             "weight_g": int(weight_g) if weight_g is not None else 0,
         }
 
-    # 4) FEFO-алгоритм: распределяем требуемое количество по доступным партиям.
+    # 4) FEFO-Ð°Ð»Ð³Ð¾Ñ€Ð¸Ñ‚Ð¼: Ñ€Ð°ÑÐ¿Ñ€ÐµÐ´ÐµÐ»ÑÐµÐ¼ Ñ‚Ñ€ÐµÐ±ÑƒÐµÐ¼Ð¾Ðµ ÐºÐ¾Ð»Ð¸Ñ‡ÐµÑÑ‚Ð²Ð¾ Ð¿Ð¾ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ñ‹Ð¼ Ð¿Ð°Ñ€Ñ‚Ð¸ÑÐ¼.
     today = date.today()
     items: list[dict] = []
     warnings: list[str] = []
@@ -276,8 +276,8 @@ async def suggest_allocation_items_by_delivery_date(
         shortage_qty = max(0, int(required_qty or 0) - allocated_total)
         if shortage_qty > 0:
             warnings.append(
-                f"Товар '{product_meta['product_name']}' недостаточно на складе: "
-                f"требуется {int(required_qty or 0)} шт., доступно {available_total} шт., заполнено {allocated_total} шт."
+                f"Ð¢Ð¾Ð²Ð°Ñ€ '{product_meta['product_name']}' Ð½ÐµÐ´Ð¾ÑÑ‚Ð°Ñ‚Ð¾Ñ‡Ð½Ð¾ Ð½Ð° ÑÐºÐ»Ð°Ð´Ðµ: "
+                f"Ñ‚Ñ€ÐµÐ±ÑƒÐµÑ‚ÑÑ {int(required_qty or 0)} ÑˆÑ‚., Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ð¾ {available_total} ÑˆÑ‚., Ð·Ð°Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¾ {allocated_total} ÑˆÑ‚."
             )
 
         items.append(
@@ -311,8 +311,8 @@ async def list_operation_types(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Типы операций: приход, расход, продажа, возврат и т.д. (code PK) + активность из operation_config.
-    active=True только если есть operation_config и oc.active=TRUE. has_config=True если конфиг есть (для создания операции)."""
+    """Ð¢Ð¸Ð¿Ñ‹ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¹: Ð¿Ñ€Ð¸Ñ…Ð¾Ð´, Ñ€Ð°ÑÑ…Ð¾Ð´, Ð¿Ñ€Ð¾Ð´Ð°Ð¶Ð°, Ð²Ð¾Ð·Ð²Ñ€Ð°Ñ‚ Ð¸ Ñ‚.Ð´. (code PK) + Ð°ÐºÑ‚Ð¸Ð²Ð½Ð¾ÑÑ‚ÑŒ Ð¸Ð· operation_config.
+    active=True Ñ‚Ð¾Ð»ÑŒÐºÐ¾ ÐµÑÐ»Ð¸ ÐµÑÑ‚ÑŒ operation_config Ð¸ oc.active=TRUE. has_config=True ÐµÑÐ»Ð¸ ÐºÐ¾Ð½Ñ„Ð¸Ð³ ÐµÑÑ‚ÑŒ (Ð´Ð»Ñ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ñ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸)."""
     col_result = await session.execute(
         text(
             """
@@ -389,7 +389,7 @@ class OperationTypeCreate(BaseModel):
         if normalized not in ALLOWED_USER_ROLES:
             raise ValueError("role must be one of: admin, expeditor, agent, stockman, paymaster")
         return normalized
-    # Активность берётся из operation_config (active), здесь не управляем
+    # ÐÐºÑ‚Ð¸Ð²Ð½Ð¾ÑÑ‚ÑŒ Ð±ÐµÑ€Ñ‘Ñ‚ÑÑ Ð¸Ð· operation_config (active), Ð·Ð´ÐµÑÑŒ Ð½Ðµ ÑƒÐ¿Ñ€Ð°Ð²Ð»ÑÐµÐ¼
 
 
 class OperationTypeUpdate(BaseModel):
@@ -415,7 +415,7 @@ async def create_operation_type(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Добавить тип операции. Только admin. Таблица Sales.operation_types (code PK)."""
+    """Ð”Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ Ñ‚Ð¸Ð¿ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸. Ð¢Ð¾Ð»ÑŒÐºÐ¾ admin. Ð¢Ð°Ð±Ð»Ð¸Ñ†Ð° Sales.operation_types (code PK)."""
     if await _has_executor_role_column(session):
         await session.execute(
             text('INSERT INTO "Sales".operation_types (code, name, description, executor_role) VALUES (:code, :name, :desc, :role)'),
@@ -437,7 +437,7 @@ async def update_operation_type(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Изменить тип операции. Только admin. Активность берётся из operation_config.active."""
+    """Ð˜Ð·Ð¼ÐµÐ½Ð¸Ñ‚ÑŒ Ñ‚Ð¸Ð¿ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸. Ð¢Ð¾Ð»ÑŒÐºÐ¾ admin. ÐÐºÑ‚Ð¸Ð²Ð½Ð¾ÑÑ‚ÑŒ Ð±ÐµÑ€Ñ‘Ñ‚ÑÑ Ð¸Ð· operation_config.active."""
     if body.name is not None:
         await session.execute(
             text('UPDATE "Sales".operation_types SET name = :name WHERE code = :code'),
@@ -454,7 +454,7 @@ async def update_operation_type(
             {"role": body.role, "code": code},
         )
     if body.active is not None:
-        # Обновляем активность в таблице конфигурации
+        # ÐžÐ±Ð½Ð¾Ð²Ð»ÑÐµÐ¼ Ð°ÐºÑ‚Ð¸Ð²Ð½Ð¾ÑÑ‚ÑŒ Ð² Ñ‚Ð°Ð±Ð»Ð¸Ñ†Ðµ ÐºÐ¾Ð½Ñ„Ð¸Ð³ÑƒÑ€Ð°Ñ†Ð¸Ð¸
         await session.execute(
             text('UPDATE "Sales".operation_config SET active = :act WHERE operation_type_code = :code'),
             {"act": body.active, "code": code},
@@ -469,12 +469,42 @@ async def delete_operation_type(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Удалить тип операции. Только admin."""
-    result = await session.execute(
-        text('DELETE FROM "Sales".operation_types WHERE code = :code'),
+    """Delete operation type. Admin only."""
+    exists_result = await session.execute(
+        text('SELECT 1 FROM "Sales".operation_types WHERE code = :code'),
         {"code": code},
     )
-    await session.commit()
+    if exists_result.fetchone() is None:
+        raise HTTPException(status_code=404, detail="Тип операции не найден")
+
+    usage_result = await session.execute(
+        text('SELECT COUNT(*) FROM "Sales".operations WHERE type_code = :code'),
+        {"code": code},
+    )
+    usage_count = int(usage_result.scalar() or 0)
+    if usage_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Нельзя удалить тип операции '{code}': есть связанные операции ({usage_count}).",
+        )
+
+    try:
+        await session.execute(
+            text('DELETE FROM "Sales".operation_config WHERE operation_type_code = :code'),
+            {"code": code},
+        )
+        result = await session.execute(
+            text('DELETE FROM "Sales".operation_types WHERE code = :code'),
+            {"code": code},
+        )
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Нельзя удалить тип операции '{code}': есть связанные данные.",
+        )
+
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Тип операции не найден")
     return {"code": code, "message": "deleted"}
@@ -493,7 +523,7 @@ async def list_operations(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Список операций с фильтрами."""
+    """Ð¡Ð¿Ð¸ÑÐ¾Ðº Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¹ Ñ Ñ„Ð¸Ð»ÑŒÑ‚Ñ€Ð°Ð¼Ð¸."""
     data, total = await OperationService(session).list_operations(
         pagination,
         type_code=type_code,
@@ -510,7 +540,7 @@ async def export_operations_excel(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Выгрузка операций в Excel. Только admin."""
+    """Ð’Ñ‹Ð³Ñ€ÑƒÐ·ÐºÐ° Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¹ Ð² Excel. Ð¢Ð¾Ð»ÑŒÐºÐ¾ admin."""
     q = select(Operation).order_by(Operation.operation_date.desc().nulls_last(), Operation.created_at.desc().nulls_last())
     result = await session.execute(q)
     rows = result.scalars().all()[:50000]
@@ -526,7 +556,7 @@ async def export_operations_excel(
             customer_names[r[0]] = (r[1] or r[2] or "")
     wb = Workbook()
     ws = wb.active
-    ws.title = "Операции"
+    ws.title = "ÐžÐ¿ÐµÑ€Ð°Ñ†Ð¸Ð¸"
     for col, name in enumerate(OPERATIONS_EXPORT_HEADERS_RU, start=1):
         ws.cell(row=1, column=col, value=name)
     for row_idx, o in enumerate(rows, start=2):
@@ -565,7 +595,7 @@ async def get_operation(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
-    """Одна операция по id."""
+    """ÐžÐ´Ð½Ð° Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ñ Ð¿Ð¾ id."""
     result = await session.execute(select(Operation).where(Operation.id == operation_id))
     op = result.scalar_one_or_none()
     if not op:
@@ -585,7 +615,7 @@ async def get_operation(
         row = c.scalar_one_or_none()
         if row:
             customer_name = row[0] or row[1]
-    STATUS_RU = {"pending": "В ожидании", "completed": "Выполнено", "cancelled": "Отменено", "canceled": "Отменено"}
+    STATUS_RU = {"pending": "Ð’ Ð¾Ð¶Ð¸Ð´Ð°Ð½Ð¸Ð¸", "completed": "Ð’Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¾", "cancelled": "ÐžÑ‚Ð¼ÐµÐ½ÐµÐ½Ð¾", "canceled": "ÐžÑ‚Ð¼ÐµÐ½ÐµÐ½Ð¾"}
     st = (op.status or "").strip().lower()
     return {
         "id": str(op.id),
@@ -669,7 +699,7 @@ async def update_operation(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Изменить операцию. Только admin."""
+    """Ð˜Ð·Ð¼ÐµÐ½Ð¸Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ. Ð¢Ð¾Ð»ÑŒÐºÐ¾ admin."""
     result = await session.execute(select(Operation).where(Operation.id == operation_id))
     op = result.scalar_one_or_none()
     if not op:
@@ -684,7 +714,7 @@ async def update_operation(
             {"code": body.type_code},
         )
         if t.fetchone() is None:
-            raise HTTPException(status_code=400, detail=f"Тип операции «{body.type_code}» не найден")
+            raise HTTPException(status_code=400, detail=f"Ð¢Ð¸Ð¿ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸ Â«{body.type_code}Â» Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½")
         op.type_code = body.type_code
     if body.warehouse_from is not None:
         op.warehouse_from = body.warehouse_from or None
@@ -724,22 +754,22 @@ async def create_operation(
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_admin),
 ):
-    """Создать операцию. Номер генерируется в БД (generate_operation_number). Только admin."""
+    """Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ. ÐÐ¾Ð¼ÐµÑ€ Ð³ÐµÐ½ÐµÑ€Ð¸Ñ€ÑƒÐµÑ‚ÑÑ Ð² Ð‘Ð” (generate_operation_number). Ð¢Ð¾Ð»ÑŒÐºÐ¾ admin."""
     try:
         type_check = await session.execute(
             text('SELECT 1 FROM "Sales".operation_types WHERE code = :code'),
             {"code": body.type_code},
         )
         if type_check.fetchone() is None:
-            raise HTTPException(status_code=400, detail=f"Тип операции «{body.type_code}» не найден")
+            raise HTTPException(status_code=400, detail=f"Ð¢Ð¸Ð¿ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸ Â«{body.type_code}Â» Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½")
         if body.order_id is not None:
             order_result = await session.execute(select(Order).where(Order.order_no == body.order_id))
             if order_result.scalar_one_or_none() is None:
-                raise HTTPException(status_code=400, detail=f"Заказ с номером {body.order_id} не найден")
+                raise HTTPException(status_code=400, detail=f"Ð—Ð°ÐºÐ°Ð· Ñ Ð½Ð¾Ð¼ÐµÑ€Ð¾Ð¼ {body.order_id} Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½")
         if body.product_code:
             prod_result = await session.execute(select(Product).where(Product.code == body.product_code.strip()))
             if prod_result.scalar_one_or_none() is None:
-                raise HTTPException(status_code=400, detail=f"Товар с кодом «{body.product_code}» не найден")
+                raise HTTPException(status_code=400, detail=f"Ð¢Ð¾Ð²Ð°Ñ€ Ñ ÐºÐ¾Ð´Ð¾Ð¼ Â«{body.product_code}Â» Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½")
         num_result = await session.execute(text('SELECT "Sales".generate_operation_number()'))
         operation_number = num_result.scalar() or f"OP-{datetime.utcnow().strftime('%Y-%m-%d')}-000001"
         op = Operation(
@@ -769,11 +799,11 @@ async def create_operation(
         raise
     except IntegrityError:
         await session.rollback()
-        raise HTTPException(status_code=400, detail="Ошибка связи с данными: проверьте заказ, товар, склад или пользователя.")
+        raise HTTPException(status_code=400, detail="ÐžÑˆÐ¸Ð±ÐºÐ° ÑÐ²ÑÐ·Ð¸ Ñ Ð´Ð°Ð½Ð½Ñ‹Ð¼Ð¸: Ð¿Ñ€Ð¾Ð²ÐµÑ€ÑŒÑ‚Ðµ Ð·Ð°ÐºÐ°Ð·, Ñ‚Ð¾Ð²Ð°Ñ€, ÑÐºÐ»Ð°Ð´ Ð¸Ð»Ð¸ Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»Ñ.")
     except Exception as e:
         await session.rollback()
-        err_msg = str(e).strip() if e else "Ошибка сохранения"
-        raise HTTPException(status_code=400, detail="Не удалось сохранить операцию: " + err_msg[:200])
+        err_msg = str(e).strip() if e else "ÐžÑˆÐ¸Ð±ÐºÐ° ÑÐ¾Ñ…Ñ€Ð°Ð½ÐµÐ½Ð¸Ñ"
+        raise HTTPException(status_code=400, detail="ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ ÑÐ¾Ñ…Ñ€Ð°Ð½Ð¸Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ: " + err_msg[:200])
     return {"id": str(op.id), "operation_number": op.operation_number, "type_code": body.type_code, "message": "created"}
 
 
@@ -787,12 +817,12 @@ async def get_operation_form_config(
     user: User = Depends(get_current_user),
 ):
     """
-    Получить конфигурацию формы для создания операции определённого типа.
-    Возвращает список полей: required, optional, hidden, readonly.
+    ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ ÐºÐ¾Ð½Ñ„Ð¸Ð³ÑƒÑ€Ð°Ñ†Ð¸ÑŽ Ñ„Ð¾Ñ€Ð¼Ñ‹ Ð´Ð»Ñ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ñ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸ Ð¾Ð¿Ñ€ÐµÐ´ÐµÐ»Ñ‘Ð½Ð½Ð¾Ð³Ð¾ Ñ‚Ð¸Ð¿Ð°.
+    Ð’Ð¾Ð·Ð²Ñ€Ð°Ñ‰Ð°ÐµÑ‚ ÑÐ¿Ð¸ÑÐ¾Ðº Ð¿Ð¾Ð»ÐµÐ¹: required, optional, hidden, readonly.
     """
-    logger.info(f"[FORM-CONFIG] Запрос конфига для операции: {operation_type}")
+    logger.info(f"[FORM-CONFIG] Ð—Ð°Ð¿Ñ€Ð¾Ñ ÐºÐ¾Ð½Ñ„Ð¸Ð³Ð° Ð´Ð»Ñ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸: {operation_type}")
     
-    # Получить конфиг из БД
+    # ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ ÐºÐ¾Ð½Ñ„Ð¸Ð³ Ð¸Ð· Ð‘Ð”
     config_result = await session.execute(
         select(OperationConfig).where(
             OperationConfig.operation_type_code == operation_type,
@@ -802,30 +832,30 @@ async def get_operation_form_config(
     config = config_result.scalar_one_or_none()
     
     if not config:
-        logger.warning(f"[FORM-CONFIG] Конфиг не найден для: {operation_type}")
+        logger.warning(f"[FORM-CONFIG] ÐšÐ¾Ð½Ñ„Ð¸Ð³ Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½ Ð´Ð»Ñ: {operation_type}")
         raise HTTPException(
             status_code=404,
             detail=f"Configuration for operation '{operation_type}' not found"
         )
     
-    # Получить название операции из operation_types
+    # ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ð½Ð°Ð·Ð²Ð°Ð½Ð¸Ðµ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸ Ð¸Ð· operation_types
     type_result = await session.execute(
         select(OperationType).where(OperationType.code == operation_type)
     )
     op_type = type_result.scalar_one_or_none()
     operation_name = op_type.name if op_type else operation_type
     
-    # Парсить JSON из БД
+    # ÐŸÐ°Ñ€ÑÐ¸Ñ‚ÑŒ JSON Ð¸Ð· Ð‘Ð”
     try:
         required_fields = json.loads(config.required_fields) if config.required_fields else []
         optional_fields = json.loads(config.optional_fields) if config.optional_fields else []
         hidden_fields = json.loads(config.hidden_fields) if config.hidden_fields else []
         readonly_fields = json.loads(config.readonly_fields) if config.readonly_fields else []
     except json.JSONDecodeError as e:
-        logger.error(f"[FORM-CONFIG] Ошибка парсинга JSON: {e}")
+        logger.error(f"[FORM-CONFIG] ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ð°Ñ€ÑÐ¸Ð½Ð³Ð° JSON: {e}")
         raise HTTPException(status_code=500, detail=f"Invalid JSON in config: {str(e)}")
     
-    logger.info(f"[FORM-CONFIG] Конфиг загружен: required={len(required_fields)}, optional={len(optional_fields)}")
+    logger.info(f"[FORM-CONFIG] ÐšÐ¾Ð½Ñ„Ð¸Ð³ Ð·Ð°Ð³Ñ€ÑƒÐ¶ÐµÐ½: required={len(required_fields)}, optional={len(optional_fields)}")
     
     return {
         "operation_type": config.operation_type_code,
@@ -840,12 +870,12 @@ async def get_operation_form_config(
 
 
 class OperationCreateFromConfig(BaseModel):
-    """Модель для создания операции из конфига (динамические поля)."""
+    """ÐœÐ¾Ð´ÐµÐ»ÑŒ Ð´Ð»Ñ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ñ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸ Ð¸Ð· ÐºÐ¾Ð½Ñ„Ð¸Ð³Ð° (Ð´Ð¸Ð½Ð°Ð¼Ð¸Ñ‡ÐµÑÐºÐ¸Ðµ Ð¿Ð¾Ð»Ñ)."""
     warehouse_from: str | None = None
     warehouse_to: str | None = None
     product_code: str | None = None
     batch_code: str | None = None
-    expiry_date: str | None = None  # дд.мм.гггг или YYYY-MM-DD для создания партии
+    expiry_date: str | None = None  # Ð´Ð´.Ð¼Ð¼.Ð³Ð³Ð³Ð³ Ð¸Ð»Ð¸ YYYY-MM-DD Ð´Ð»Ñ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ñ Ð¿Ð°Ñ€Ñ‚Ð¸Ð¸
     quantity: int | None = None
     amount: float | None = None
     payment_type_code: str | None = None
@@ -866,16 +896,16 @@ async def create_operation_from_config(
     user: User = Depends(get_current_user),
 ):
     """
-    Создать операцию с валидацией по конфигу из operation_config.
-    Проверяет required_fields, игнорирует hidden_fields, заполняет readonly_fields автоматически.
+    Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ Ñ Ð²Ð°Ð»Ð¸Ð´Ð°Ñ†Ð¸ÐµÐ¹ Ð¿Ð¾ ÐºÐ¾Ð½Ñ„Ð¸Ð³Ñƒ Ð¸Ð· operation_config.
+    ÐŸÑ€Ð¾Ð²ÐµÑ€ÑÐµÑ‚ required_fields, Ð¸Ð³Ð½Ð¾Ñ€Ð¸Ñ€ÑƒÐµÑ‚ hidden_fields, Ð·Ð°Ð¿Ð¾Ð»Ð½ÑÐµÑ‚ readonly_fields Ð°Ð²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸.
     """
     logger.info(f"=== CREATING OPERATION ===")
     logger.info(f"Operation type: {operation_type}")
     logger.info(f"Current user: {user.login}")
     logger.info(f"Incoming data: {body.model_dump()}")
     
-    # ШАГ 1: Получить конфиг
-    logger.info(f"[STEP 1] Получаем конфиг для операции: {operation_type}")
+    # Ð¨ÐÐ“ 1: ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ ÐºÐ¾Ð½Ñ„Ð¸Ð³
+    logger.info(f"[STEP 1] ÐŸÐ¾Ð»ÑƒÑ‡Ð°ÐµÐ¼ ÐºÐ¾Ð½Ñ„Ð¸Ð³ Ð´Ð»Ñ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸: {operation_type}")
     
     config_result = await session.execute(
         select(OperationConfig).where(
@@ -886,81 +916,81 @@ async def create_operation_from_config(
     config = config_result.scalar_one_or_none()
     
     if not config:
-        logger.error(f"[STEP 1] Конфиг не найден для: {operation_type}")
+        logger.error(f"[STEP 1] ÐšÐ¾Ð½Ñ„Ð¸Ð³ Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½ Ð´Ð»Ñ: {operation_type}")
         raise HTTPException(
             status_code=404,
             detail=f"Configuration for '{operation_type}' not found"
         )
     await _ensure_user_can_create_operation_type(session, user, operation_type)
-    logger.info(f"✓ Конфиг найден")
+    logger.info(f"âœ“ ÐšÐ¾Ð½Ñ„Ð¸Ð³ Ð½Ð°Ð¹Ð´ÐµÐ½")
     
-    # ШАГ 2: Парсить required_fields из конфига
-    logger.info(f"[STEP 2] Проверяем обязательные поля")
+    # Ð¨ÐÐ“ 2: ÐŸÐ°Ñ€ÑÐ¸Ñ‚ÑŒ required_fields Ð¸Ð· ÐºÐ¾Ð½Ñ„Ð¸Ð³Ð°
+    logger.info(f"[STEP 2] ÐŸÑ€Ð¾Ð²ÐµÑ€ÑÐµÐ¼ Ð¾Ð±ÑÐ·Ð°Ñ‚ÐµÐ»ÑŒÐ½Ñ‹Ðµ Ð¿Ð¾Ð»Ñ")
     
     try:
         required_fields = json.loads(config.required_fields) if config.required_fields else []
         optional_fields = json.loads(config.optional_fields) if config.optional_fields else []
         hidden_fields = json.loads(config.hidden_fields) if config.hidden_fields else []
     except json.JSONDecodeError as e:
-        logger.error(f"[STEP 2] Ошибка парсинга JSON: {e}")
+        logger.error(f"[STEP 2] ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ð°Ñ€ÑÐ¸Ð½Ð³Ð° JSON: {e}")
         raise HTTPException(status_code=500, detail=f"Invalid JSON in config: {str(e)}")
     
     logger.info(f"  Required: {required_fields}")
     logger.info(f"  Optional: {optional_fields}")
     logger.info(f"  Hidden: {hidden_fields}")
     
-    # ШАГ 3: Проверить, что все required_fields заполнены
-    logger.info(f"[STEP 3] Валидируем заполненность required_fields")
+    # Ð¨ÐÐ“ 3: ÐŸÑ€Ð¾Ð²ÐµÑ€Ð¸Ñ‚ÑŒ, Ñ‡Ñ‚Ð¾ Ð²ÑÐµ required_fields Ð·Ð°Ð¿Ð¾Ð»Ð½ÐµÐ½Ñ‹
+    logger.info(f"[STEP 3] Ð’Ð°Ð»Ð¸Ð´Ð¸Ñ€ÑƒÐµÐ¼ Ð·Ð°Ð¿Ð¾Ð»Ð½ÐµÐ½Ð½Ð¾ÑÑ‚ÑŒ required_fields")
     
     data = body.model_dump(exclude_none=True)
     errors = {}
     
     for field in required_fields:
-        # Специальные поля, которые заполняются автоматически
+        # Ð¡Ð¿ÐµÑ†Ð¸Ð°Ð»ÑŒÐ½Ñ‹Ðµ Ð¿Ð¾Ð»Ñ, ÐºÐ¾Ñ‚Ð¾Ñ€Ñ‹Ðµ Ð·Ð°Ð¿Ð¾Ð»Ð½ÑÑŽÑ‚ÑÑ Ð°Ð²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸
         if field in ['created_by', 'operation_date', 'operation_number', 'status', 'type_code']:
             continue
         
-        # Проверить, что поле заполнено
+        # ÐŸÑ€Ð¾Ð²ÐµÑ€Ð¸Ñ‚ÑŒ, Ñ‡Ñ‚Ð¾ Ð¿Ð¾Ð»Ðµ Ð·Ð°Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¾
         if field not in data or data[field] is None or (isinstance(data[field], str) and data[field].strip() == ''):
             errors[field] = "This field is required"
-            logger.info(f"  ❌ {field}: MISSING")
+            logger.info(f"  âŒ {field}: MISSING")
         else:
-            logger.info(f"  ✓ {field}: OK")
+            logger.info(f"  âœ“ {field}: OK")
     
-    # Если есть ошибки валидации — вернуть их
+    # Ð•ÑÐ»Ð¸ ÐµÑÑ‚ÑŒ Ð¾ÑˆÐ¸Ð±ÐºÐ¸ Ð²Ð°Ð»Ð¸Ð´Ð°Ñ†Ð¸Ð¸ â€” Ð²ÐµÑ€Ð½ÑƒÑ‚ÑŒ Ð¸Ñ…
     if errors:
-        logger.warning(f"\n❌ ОШИБКИ ВАЛИДАЦИИ: {errors}")
+        logger.warning(f"\nâŒ ÐžÐ¨Ð˜Ð‘ÐšÐ˜ Ð’ÐÐ›Ð˜Ð”ÐÐ¦Ð˜Ð˜: {errors}")
         raise HTTPException(status_code=400, detail={"errors": errors})
     
-    # ШАГ 4: Проверить, что никакие hidden_fields не переданы
-    logger.info(f"\n[STEP 4] Проверяем, что скрытые поля не переданы")
+    # Ð¨ÐÐ“ 4: ÐŸÑ€Ð¾Ð²ÐµÑ€Ð¸Ñ‚ÑŒ, Ñ‡Ñ‚Ð¾ Ð½Ð¸ÐºÐ°ÐºÐ¸Ðµ hidden_fields Ð½Ðµ Ð¿ÐµÑ€ÐµÐ´Ð°Ð½Ñ‹
+    logger.info(f"\n[STEP 4] ÐŸÑ€Ð¾Ð²ÐµÑ€ÑÐµÐ¼, Ñ‡Ñ‚Ð¾ ÑÐºÑ€Ñ‹Ñ‚Ñ‹Ðµ Ð¿Ð¾Ð»Ñ Ð½Ðµ Ð¿ÐµÑ€ÐµÐ´Ð°Ð½Ñ‹")
     
     for field in hidden_fields:
         if field in data:
-            logger.warning(f"  ⚠️ ВНИМАНИЕ: Поле {field} должно быть скрыто, но передано в data!")
+            logger.warning(f"  âš ï¸ Ð’ÐÐ˜ÐœÐÐÐ˜Ð•: ÐŸÐ¾Ð»Ðµ {field} Ð´Ð¾Ð»Ð¶Ð½Ð¾ Ð±Ñ‹Ñ‚ÑŒ ÑÐºÑ€Ñ‹Ñ‚Ð¾, Ð½Ð¾ Ð¿ÐµÑ€ÐµÐ´Ð°Ð½Ð¾ Ð² data!")
             del data[field]
     
-    logger.info(f"✓ Скрытые поля очищены")
+    logger.info(f"âœ“ Ð¡ÐºÑ€Ñ‹Ñ‚Ñ‹Ðµ Ð¿Ð¾Ð»Ñ Ð¾Ñ‡Ð¸Ñ‰ÐµÐ½Ñ‹")
     
-    # ШАГ 5: Заполнить readonly_fields автоматически
-    logger.info(f"\n[STEP 5] Заполняем readonly_fields")
+    # Ð¨ÐÐ“ 5: Ð—Ð°Ð¿Ð¾Ð»Ð½Ð¸Ñ‚ÑŒ readonly_fields Ð°Ð²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸
+    logger.info(f"\n[STEP 5] Ð—Ð°Ð¿Ð¾Ð»Ð½ÑÐµÐ¼ readonly_fields")
     
-    # Генерируем номер операции
+    # Ð“ÐµÐ½ÐµÑ€Ð¸Ñ€ÑƒÐµÐ¼ Ð½Ð¾Ð¼ÐµÑ€ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸
     num_result = await session.execute(text('SELECT "Sales".generate_operation_number()'))
     operation_number = num_result.scalar() or f"OP-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}-000001"
     logger.info(f"  Generated operation_number: {operation_number}")
     
-    # Получаем статус из конфига (для доставки — всегда completed)
+    # ÐŸÐ¾Ð»ÑƒÑ‡Ð°ÐµÐ¼ ÑÑ‚Ð°Ñ‚ÑƒÑ Ð¸Ð· ÐºÐ¾Ð½Ñ„Ð¸Ð³Ð° (Ð´Ð»Ñ Ð´Ð¾ÑÑ‚Ð°Ð²ÐºÐ¸ â€” Ð²ÑÐµÐ³Ð´Ð° completed)
     default_status = config.default_status
     if operation_type == "delivery":
         default_status = "completed"
     logger.info(f"  default_status: {default_status}")
     
-    # Получаем текущего пользователя
+    # ÐŸÐ¾Ð»ÑƒÑ‡Ð°ÐµÐ¼ Ñ‚ÐµÐºÑƒÑ‰ÐµÐ³Ð¾ Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»Ñ
     created_by = user.login
     logger.info(f"  created_by: {created_by}")
     
-    # Для доставки: проверить, что заказ не уже доставлен, и что остатков хватает
+    # Ð”Ð»Ñ Ð´Ð¾ÑÑ‚Ð°Ð²ÐºÐ¸: Ð¿Ñ€Ð¾Ð²ÐµÑ€Ð¸Ñ‚ÑŒ, Ñ‡Ñ‚Ð¾ Ð·Ð°ÐºÐ°Ð· Ð½Ðµ ÑƒÐ¶Ðµ Ð´Ð¾ÑÑ‚Ð°Ð²Ð»ÐµÐ½, Ð¸ Ñ‡Ñ‚Ð¾ Ð¾ÑÑ‚Ð°Ñ‚ÐºÐ¾Ð² Ñ…Ð²Ð°Ñ‚Ð°ÐµÑ‚
     if operation_type == "delivery":
         order_id_val = data.get("order_id")
         if order_id_val is not None:
@@ -969,7 +999,7 @@ async def create_operation_from_config(
             if order_obj and (order_obj.status_code or "").strip().lower() == "completed":
                 raise HTTPException(
                     status_code=400,
-                    detail="Заказ уже доставлен. Нельзя создать ещё одну операцию доставки по этому заказу.",
+                    detail="Ð—Ð°ÐºÐ°Ð· ÑƒÐ¶Ðµ Ð´Ð¾ÑÑ‚Ð°Ð²Ð»ÐµÐ½. ÐÐµÐ»ÑŒÐ·Ñ ÑÐ¾Ð·Ð´Ð°Ñ‚ÑŒ ÐµÑ‰Ñ‘ Ð¾Ð´Ð½Ñƒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ Ð´Ð¾ÑÑ‚Ð°Ð²ÐºÐ¸ Ð¿Ð¾ ÑÑ‚Ð¾Ð¼Ñƒ Ð·Ð°ÐºÐ°Ð·Ñƒ.",
                 )
         wh_from = data.get("warehouse_from")
         pc = data.get("product_code")
@@ -989,7 +1019,7 @@ async def create_operation_from_config(
                 if available < qty:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Недостаточно остатков на складе: доступно {available}, запрошено {qty}.",
+                        detail=f"ÐÐµÐ´Ð¾ÑÑ‚Ð°Ñ‚Ð¾Ñ‡Ð½Ð¾ Ð¾ÑÑ‚Ð°Ñ‚ÐºÐ¾Ð² Ð½Ð° ÑÐºÐ»Ð°Ð´Ðµ: Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ð¾ {available}, Ð·Ð°Ð¿Ñ€Ð¾ÑˆÐµÐ½Ð¾ {qty}.",
                     )
             except HTTPException:
                 raise
@@ -999,10 +1029,10 @@ async def create_operation_from_config(
                     stock_check_error,
                 )
     
-    # ШАГ 6: Создать операцию в БД
-    logger.info(f"\n[STEP 6] Создаём операцию в БД")
+    # Ð¨ÐÐ“ 6: Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ Ð² Ð‘Ð”
+    logger.info(f"\n[STEP 6] Ð¡Ð¾Ð·Ð´Ð°Ñ‘Ð¼ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ Ð² Ð‘Ð”")
     
-    # Получить или создать batch по batch_code и product_code
+    # ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ð¸Ð»Ð¸ ÑÐ¾Ð·Ð´Ð°Ñ‚ÑŒ batch Ð¿Ð¾ batch_code Ð¸ product_code
     batch_id = None
     if data.get("batch_code") and data.get("product_code"):
         batch_result = await session.execute(
@@ -1032,7 +1062,7 @@ async def create_operation_from_config(
             session.add(new_batch)
             await session.flush()
             batch_id = new_batch.id
-            logger.info(f"  Создана новая партия: {data['batch_code']}, expiry_date={expiry_date_parsed}")
+            logger.info(f"  Ð¡Ð¾Ð·Ð´Ð°Ð½Ð° Ð½Ð¾Ð²Ð°Ñ Ð¿Ð°Ñ€Ñ‚Ð¸Ñ: {data['batch_code']}, expiry_date={expiry_date_parsed}")
     
     op = Operation(
         operation_number=operation_number,
@@ -1073,24 +1103,24 @@ async def create_operation_from_config(
             related_operation_id=op.id,
         )
         session.add(handover)
-        logger.info(f"  Автосоздана cash_handover_from_expeditor: {num2}")
+        logger.info(f"  ÐÐ²Ñ‚Ð¾ÑÐ¾Ð·Ð´Ð°Ð½Ð° cash_handover_from_expeditor: {num2}")
     try:
         await session.commit()
         await session.refresh(op)
     except IntegrityError as e:
         await session.rollback()
-        logger.error(f"[STEP 6] Ошибка IntegrityError: {e}")
-        raise HTTPException(status_code=400, detail="Ошибка связи с данными: проверьте заказ, товар, склад или пользователя.")
+        logger.error(f"[STEP 6] ÐžÑˆÐ¸Ð±ÐºÐ° IntegrityError: {e}")
+        raise HTTPException(status_code=400, detail="ÐžÑˆÐ¸Ð±ÐºÐ° ÑÐ²ÑÐ·Ð¸ Ñ Ð´Ð°Ð½Ð½Ñ‹Ð¼Ð¸: Ð¿Ñ€Ð¾Ð²ÐµÑ€ÑŒÑ‚Ðµ Ð·Ð°ÐºÐ°Ð·, Ñ‚Ð¾Ð²Ð°Ñ€, ÑÐºÐ»Ð°Ð´ Ð¸Ð»Ð¸ Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»Ñ.")
     except Exception as e:
         await session.rollback()
-        logger.error(f"[STEP 6] Ошибка создания операции: {e}")
-        err_msg = str(e).strip() if e else "Ошибка сохранения"
-        raise HTTPException(status_code=400, detail="Не удалось сохранить операцию: " + err_msg[:200])
+        logger.error(f"[STEP 6] ÐžÑˆÐ¸Ð±ÐºÐ° ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ñ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸: {e}")
+        err_msg = str(e).strip() if e else "ÐžÑˆÐ¸Ð±ÐºÐ° ÑÐ¾Ñ…Ñ€Ð°Ð½ÐµÐ½Ð¸Ñ"
+        raise HTTPException(status_code=400, detail="ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ ÑÐ¾Ñ…Ñ€Ð°Ð½Ð¸Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ: " + err_msg[:200])
     
-    logger.info(f"✓ Операция создана: {op.operation_number}")
+    logger.info(f"âœ“ ÐžÐ¿ÐµÑ€Ð°Ñ†Ð¸Ñ ÑÐ¾Ð·Ð´Ð°Ð½Ð°: {op.operation_number}")
     logger.info(f"=== END ===")
     
-    # ШАГ 7: Вернуть результат
+    # Ð¨ÐÐ“ 7: Ð’ÐµÑ€Ð½ÑƒÑ‚ÑŒ Ñ€ÐµÐ·ÑƒÐ»ÑŒÑ‚Ð°Ñ‚
     return {
         "status": "success",
         "operation_id": str(op.id),
@@ -1102,15 +1132,15 @@ async def create_operation_from_config(
 
 
 class WarehouseReceiptBatchItem(BaseModel):
-    """Одна позиция товара для прихода на склад."""
+    """ÐžÐ´Ð½Ð° Ð¿Ð¾Ð·Ð¸Ñ†Ð¸Ñ Ñ‚Ð¾Ð²Ð°Ñ€Ð° Ð´Ð»Ñ Ð¿Ñ€Ð¸Ñ…Ð¾Ð´Ð° Ð½Ð° ÑÐºÐ»Ð°Ð´."""
     product_code: str
-    expiry_date: str  # дд.мм.гггг или YYYY-MM-DD
+    expiry_date: str  # Ð´Ð´.Ð¼Ð¼.Ð³Ð³Ð³Ð³ Ð¸Ð»Ð¸ YYYY-MM-DD
     quantity: int
-    batch_code: str  # автогенерируется, но передаётся для проверки
+    batch_code: str  # Ð°Ð²Ñ‚Ð¾Ð³ÐµÐ½ÐµÑ€Ð¸Ñ€ÑƒÐµÑ‚ÑÑ, Ð½Ð¾ Ð¿ÐµÑ€ÐµÐ´Ð°Ñ‘Ñ‚ÑÑ Ð´Ð»Ñ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ¸
 
 
 class WarehouseReceiptBatchCreate(BaseModel):
-    """Создание нескольких операций прихода на склад."""
+    """Ð¡Ð¾Ð·Ð´Ð°Ð½Ð¸Ðµ Ð½ÐµÑÐºÐ¾Ð»ÑŒÐºÐ¸Ñ… Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¹ Ð¿Ñ€Ð¸Ñ…Ð¾Ð´Ð° Ð½Ð° ÑÐºÐ»Ð°Ð´."""
     warehouse_to: str
     items: list[WarehouseReceiptBatchItem]
     comment: str | None = None
@@ -1123,8 +1153,8 @@ async def create_warehouse_receipt_batch(
     user: User = Depends(get_current_user),
 ):
     """
-    Создать несколько операций прихода на склад за раз (для каждого товара отдельная операция).
-    batch_code генерируется автоматически как {product_code}_{DDMMYYYY} на основе expiry_date.
+    Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð½ÐµÑÐºÐ¾Ð»ÑŒÐºÐ¾ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¹ Ð¿Ñ€Ð¸Ñ…Ð¾Ð´Ð° Ð½Ð° ÑÐºÐ»Ð°Ð´ Ð·Ð° Ñ€Ð°Ð· (Ð´Ð»Ñ ÐºÐ°Ð¶Ð´Ð¾Ð³Ð¾ Ñ‚Ð¾Ð²Ð°Ñ€Ð° Ð¾Ñ‚Ð´ÐµÐ»ÑŒÐ½Ð°Ñ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ñ).
+    batch_code Ð³ÐµÐ½ÐµÑ€Ð¸Ñ€ÑƒÐµÑ‚ÑÑ Ð°Ð²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¸ ÐºÐ°Ðº {product_code}_{DDMMYYYY} Ð½Ð° Ð¾ÑÐ½Ð¾Ð²Ðµ expiry_date.
     """
     logger.info(f"=== CREATING WAREHOUSE RECEIPT BATCH ===")
     logger.info(f"Warehouse: {body.warehouse_to}, Items: {len(body.items)}")
@@ -1132,9 +1162,9 @@ async def create_warehouse_receipt_batch(
     await _ensure_user_can_create_operation_type(session, user, "warehouse_receipt")
     
     if not body.items:
-        raise HTTPException(status_code=400, detail="Список товаров пуст")
+        raise HTTPException(status_code=400, detail="Ð¡Ð¿Ð¸ÑÐ¾Ðº Ñ‚Ð¾Ð²Ð°Ñ€Ð¾Ð² Ð¿ÑƒÑÑ‚")
     
-    # Получить конфиг для warehouse_receipt
+    # ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ ÐºÐ¾Ð½Ñ„Ð¸Ð³ Ð´Ð»Ñ warehouse_receipt
     config_result = await session.execute(
         select(OperationConfig).where(
             OperationConfig.operation_type_code == 'warehouse_receipt',
@@ -1151,7 +1181,7 @@ async def create_warehouse_receipt_batch(
     
     for idx, item in enumerate(body.items):
         try:
-            # Парсить expiry_date
+            # ÐŸÐ°Ñ€ÑÐ¸Ñ‚ÑŒ expiry_date
             expiry_date_parsed = None
             raw = item.expiry_date.strip()
             for fmt in ("%d.%m.%Y", "%Y-%m-%d"):
@@ -1162,19 +1192,19 @@ async def create_warehouse_receipt_batch(
                     continue
             
             if not expiry_date_parsed:
-                errors.append(f"Позиция {idx + 1}: неверный формат даты '{item.expiry_date}'")
+                errors.append(f"ÐŸÐ¾Ð·Ð¸Ñ†Ð¸Ñ {idx + 1}: Ð½ÐµÐ²ÐµÑ€Ð½Ñ‹Ð¹ Ñ„Ð¾Ñ€Ð¼Ð°Ñ‚ Ð´Ð°Ñ‚Ñ‹ '{item.expiry_date}'")
                 continue
             
-            # Проверить batch_code (должен быть product_code_DDMMYYYY)
+            # ÐŸÑ€Ð¾Ð²ÐµÑ€Ð¸Ñ‚ÑŒ batch_code (Ð´Ð¾Ð»Ð¶ÐµÐ½ Ð±Ñ‹Ñ‚ÑŒ product_code_DDMMYYYY)
             expected_batch_code = f"{item.product_code}_{expiry_date_parsed.strftime('%d%m%Y')}"
             if item.batch_code != expected_batch_code:
-                logger.warning(f"  Позиция {idx + 1}: batch_code не совпадает. Ожидалось: {expected_batch_code}, получено: {item.batch_code}")
-                # Используем ожидаемый код
+                logger.warning(f"  ÐŸÐ¾Ð·Ð¸Ñ†Ð¸Ñ {idx + 1}: batch_code Ð½Ðµ ÑÐ¾Ð²Ð¿Ð°Ð´Ð°ÐµÑ‚. ÐžÐ¶Ð¸Ð´Ð°Ð»Ð¾ÑÑŒ: {expected_batch_code}, Ð¿Ð¾Ð»ÑƒÑ‡ÐµÐ½Ð¾: {item.batch_code}")
+                # Ð˜ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ Ð¾Ð¶Ð¸Ð´Ð°ÐµÐ¼Ñ‹Ð¹ ÐºÐ¾Ð´
                 batch_code = expected_batch_code
             else:
                 batch_code = item.batch_code
             
-            # Найти или создать партию
+            # ÐÐ°Ð¹Ñ‚Ð¸ Ð¸Ð»Ð¸ ÑÐ¾Ð·Ð´Ð°Ñ‚ÑŒ Ð¿Ð°Ñ€Ñ‚Ð¸ÑŽ
             batch_result = await session.execute(
                 select(Batch).where(
                     Batch.batch_code == batch_code,
@@ -1192,15 +1222,15 @@ async def create_warehouse_receipt_batch(
                 session.add(new_batch)
                 await session.flush()
                 batch_id = new_batch.id
-                logger.info(f"  Создана партия: {batch_code}")
+                logger.info(f"  Ð¡Ð¾Ð·Ð´Ð°Ð½Ð° Ð¿Ð°Ñ€Ñ‚Ð¸Ñ: {batch_code}")
             else:
                 batch_id = batch.id
             
-            # Генерировать номер операции
+            # Ð“ÐµÐ½ÐµÑ€Ð¸Ñ€Ð¾Ð²Ð°Ñ‚ÑŒ Ð½Ð¾Ð¼ÐµÑ€ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸
             num_result = await session.execute(text('SELECT "Sales".generate_operation_number()'))
             operation_number = num_result.scalar() or f"OP-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}-000001"
             
-            # Создать операцию
+            # Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ
             op = Operation(
                 operation_number=operation_number,
                 type_code='warehouse_receipt',
@@ -1220,11 +1250,11 @@ async def create_warehouse_receipt_batch(
                 "product_code": item.product_code,
                 "quantity": item.quantity,
             })
-            logger.info(f"  Создана операция: {op.operation_number} для товара {item.product_code}")
+            logger.info(f"  Ð¡Ð¾Ð·Ð´Ð°Ð½Ð° Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ñ: {op.operation_number} Ð´Ð»Ñ Ñ‚Ð¾Ð²Ð°Ñ€Ð° {item.product_code}")
             
         except Exception as e:
-            logger.error(f"  Ошибка при создании позиции {idx + 1}: {e}")
-            errors.append(f"Позиция {idx + 1}: {str(e)[:100]}")
+            logger.error(f"  ÐžÑˆÐ¸Ð±ÐºÐ° Ð¿Ñ€Ð¸ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ð¸ Ð¿Ð¾Ð·Ð¸Ñ†Ð¸Ð¸ {idx + 1}: {e}")
+            errors.append(f"ÐŸÐ¾Ð·Ð¸Ñ†Ð¸Ñ {idx + 1}: {str(e)[:100]}")
             continue
     
     if errors and not created_operations:
@@ -1233,24 +1263,24 @@ async def create_warehouse_receipt_batch(
     
     try:
         await session.commit()
-        logger.info(f"✓ Создано операций: {len(created_operations)}")
+        logger.info(f"âœ“ Ð¡Ð¾Ð·Ð´Ð°Ð½Ð¾ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¹: {len(created_operations)}")
         logger.info(f"=== END ===")
     except Exception as e:
         await session.rollback()
-        logger.error(f"Ошибка коммита: {e}")
-        raise HTTPException(status_code=400, detail=f"Не удалось сохранить операции: {str(e)[:200]}")
+        logger.error(f"ÐžÑˆÐ¸Ð±ÐºÐ° ÐºÐ¾Ð¼Ð¼Ð¸Ñ‚Ð°: {e}")
+        raise HTTPException(status_code=400, detail=f"ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ ÑÐ¾Ñ…Ñ€Ð°Ð½Ð¸Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸: {str(e)[:200]}")
     
     return {
         "status": "success",
         "operations_count": len(created_operations),
         "operations": created_operations,
         "errors": errors if errors else None,
-        "message": f"Создано операций: {len(created_operations)}"
+        "message": f"Ð¡Ð¾Ð·Ð´Ð°Ð½Ð¾ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¹: {len(created_operations)}"
     }
 
 
 class AllocationCreate(BaseModel):
-    """Модель для выдачи товара экспедитору (allocation)."""
+    """ÐœÐ¾Ð´ÐµÐ»ÑŒ Ð´Ð»Ñ Ð²Ñ‹Ð´Ð°Ñ‡Ð¸ Ñ‚Ð¾Ð²Ð°Ñ€Ð° ÑÐºÑÐ¿ÐµÐ´Ð¸Ñ‚Ð¾Ñ€Ñƒ (allocation)."""
     warehouse_from: str
     warehouse_to: str
     product_code: str
@@ -1267,14 +1297,14 @@ async def create_allocation_operation(
     user: User = Depends(get_current_user),
 ):
     """
-    Создать одну операцию «allocation» (выдача экспедитору).
+    Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð¾Ð´Ð½Ñƒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ Â«allocationÂ» (Ð²Ñ‹Ð´Ð°Ñ‡Ð° ÑÐºÑÐ¿ÐµÐ´Ð¸Ñ‚Ð¾Ñ€Ñƒ).
 
-    Использует существующую партию (batch) по product_code + batch_code,
-    не создаёт новые партии.
+    Ð˜ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÑ‚ ÑÑƒÑ‰ÐµÑÑ‚Ð²ÑƒÑŽÑ‰ÑƒÑŽ Ð¿Ð°Ñ€Ñ‚Ð¸ÑŽ (batch) Ð¿Ð¾ product_code + batch_code,
+    Ð½Ðµ ÑÐ¾Ð·Ð´Ð°Ñ‘Ñ‚ Ð½Ð¾Ð²Ñ‹Ðµ Ð¿Ð°Ñ€Ñ‚Ð¸Ð¸.
     """
     await _ensure_user_can_create_operation_type(session, user, "allocation")
 
-    # Найти партию по product_code + batch_code
+    # ÐÐ°Ð¹Ñ‚Ð¸ Ð¿Ð°Ñ€Ñ‚Ð¸ÑŽ Ð¿Ð¾ product_code + batch_code
     batch_result = await session.execute(
         select(Batch).where(
             Batch.product_code == body.product_code.strip(),
@@ -1285,10 +1315,10 @@ async def create_allocation_operation(
     if not batch:
         raise HTTPException(
             status_code=400,
-            detail=f"Партия с кодом «{body.batch_code}» для товара «{body.product_code}» не найдена",
+            detail=f"ÐŸÐ°Ñ€Ñ‚Ð¸Ñ Ñ ÐºÐ¾Ð´Ð¾Ð¼ Â«{body.batch_code}Â» Ð´Ð»Ñ Ñ‚Ð¾Ð²Ð°Ñ€Ð° Â«{body.product_code}Â» Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½Ð°",
         )
 
-    # Получить конфиг для allocation, чтобы взять default_status
+    # ÐŸÐ¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ ÐºÐ¾Ð½Ñ„Ð¸Ð³ Ð´Ð»Ñ allocation, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð²Ð·ÑÑ‚ÑŒ default_status
     config_result = await session.execute(
         select(OperationConfig).where(
             OperationConfig.operation_type_code == "allocation",
@@ -1298,7 +1328,7 @@ async def create_allocation_operation(
     config = config_result.scalar_one_or_none()
     default_status = config.default_status if config else "completed"
 
-    # Сгенерировать номер операции
+    # Ð¡Ð³ÐµÐ½ÐµÑ€Ð¸Ñ€Ð¾Ð²Ð°Ñ‚ÑŒ Ð½Ð¾Ð¼ÐµÑ€ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸
     num_result = await session.execute(text('SELECT "Sales".generate_operation_number()'))
     operation_number = num_result.scalar() or f"OP-{datetime.utcnow().strftime('%Y-%m-%d')}-000001"
 
@@ -1326,20 +1356,21 @@ async def create_allocation_operation(
         logger.error(f"[ALLOCATION] IntegrityError: {e}")
         raise HTTPException(
             status_code=400,
-            detail="Ошибка связи с данными: проверьте склады, товар, партию или пользователя.",
+            detail="ÐžÑˆÐ¸Ð±ÐºÐ° ÑÐ²ÑÐ·Ð¸ Ñ Ð´Ð°Ð½Ð½Ñ‹Ð¼Ð¸: Ð¿Ñ€Ð¾Ð²ÐµÑ€ÑŒÑ‚Ðµ ÑÐºÐ»Ð°Ð´Ñ‹, Ñ‚Ð¾Ð²Ð°Ñ€, Ð¿Ð°Ñ€Ñ‚Ð¸ÑŽ Ð¸Ð»Ð¸ Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»Ñ.",
         )
     except Exception as e:
         await session.rollback()
-        logger.error(f"[ALLOCATION] Ошибка создания операции: {e}")
-        err_msg = str(e).strip() if e else "Ошибка сохранения"
-        raise HTTPException(status_code=400, detail="Не удалось сохранить операцию: " + err_msg[:200])
+        logger.error(f"[ALLOCATION] ÐžÑˆÐ¸Ð±ÐºÐ° ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ñ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸Ð¸: {e}")
+        err_msg = str(e).strip() if e else "ÐžÑˆÐ¸Ð±ÐºÐ° ÑÐ¾Ñ…Ñ€Ð°Ð½ÐµÐ½Ð¸Ñ"
+        raise HTTPException(status_code=400, detail="ÐÐµ ÑƒÐ´Ð°Ð»Ð¾ÑÑŒ ÑÐ¾Ñ…Ñ€Ð°Ð½Ð¸Ñ‚ÑŒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ: " + err_msg[:200])
 
     return {
         "status": "success",
         "operation_id": str(op.id),
         "operation_number": op.operation_number,
         "type": op.type_code,
-        "message": "Операция выдачи экспедитору создана",
+        "message": "ÐžÐ¿ÐµÑ€Ð°Ñ†Ð¸Ñ Ð²Ñ‹Ð´Ð°Ñ‡Ð¸ ÑÐºÑÐ¿ÐµÐ´Ð¸Ñ‚Ð¾Ñ€Ñƒ ÑÐ¾Ð·Ð´Ð°Ð½Ð°",
     }
+
 
 
