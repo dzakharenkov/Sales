@@ -25,6 +25,7 @@ import json
 import logging
 
 router = APIRouter()
+ALLOWED_USER_ROLES = {"admin", "expeditor", "agent", "stockman", "paymaster"}
 
 
 def _parse_delivery_date_input(raw: str) -> date:
@@ -41,6 +42,35 @@ def _parse_delivery_date_input(raw: str) -> date:
         status_code=400,
         detail="Неверный формат даты поставки. Используйте дд.мм.гггг или yyyy-mm-dd.",
     )
+
+
+async def _ensure_user_can_create_operation_type(
+    session: AsyncSession,
+    user: User,
+    operation_type: str,
+) -> str:
+    op_type_result = await session.execute(
+        select(OperationType).where(OperationType.code == operation_type)
+    )
+    op_type = op_type_result.scalar_one_or_none()
+    if not op_type:
+        raise HTTPException(status_code=404, detail=f"Operation type '{operation_type}' not found")
+
+    current_role = (user.role or "").strip().lower()
+    required_role = ((op_type.executor_role or "") if op_type else "").strip().lower()
+    if current_role == "admin":
+        return required_role
+    if not required_role:
+        raise HTTPException(
+            status_code=403,
+            detail="Executor role is not configured for this operation type. Contact administrator.",
+        )
+    if current_role != required_role:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Only role '{required_role}' (or admin) can create operation type '{operation_type}'.",
+        )
+    return required_role
 
 
 @router.get("/operations/allocation/suggest-by-delivery-date", response_model=EntityModel | list[EntityModel])
@@ -252,7 +282,7 @@ async def list_operation_types(
     result = await session.execute(
         text(
             '''
-            SELECT ot.code, ot.name, ot.description,
+            SELECT ot.code, ot.name, ot.description, ot.executor_role,
                    (oc.operation_type_code IS NOT NULL AND COALESCE(oc.active, TRUE) = TRUE) AS active,
                    (oc.operation_type_code IS NOT NULL) AS has_config
             FROM "Sales".operation_types ot
@@ -271,8 +301,9 @@ async def list_operation_types(
             "code": r[0],
             "name": translated.get(f"operation_type.{r[0]}", r[1]),
             "description": r[2],
-            "active": bool(r[3]),
-            "has_config": bool(r[4]),
+            "role": r[3],
+            "active": bool(r[4]),
+            "has_config": bool(r[5]),
         }
         for r in rows
     ]
@@ -282,13 +313,33 @@ class OperationTypeCreate(BaseModel):
     code: str
     name: str
     description: str | None = None
+    role: str
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in ALLOWED_USER_ROLES:
+            raise ValueError("role must be one of: admin, expeditor, agent, stockman, paymaster")
+        return normalized
     # Активность берётся из operation_config (active), здесь не управляем
 
 
 class OperationTypeUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    role: str | None = None
     active: bool | None = None
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in ALLOWED_USER_ROLES:
+            raise ValueError("role must be one of: admin, expeditor, agent, stockman, paymaster")
+        return normalized
 
 
 @router.post("/operation-types", response_model=EntityModel | list[EntityModel])
@@ -299,11 +350,11 @@ async def create_operation_type(
 ):
     """Добавить тип операции. Только admin. Таблица Sales.operation_types (code PK)."""
     await session.execute(
-        text('INSERT INTO "Sales".operation_types (code, name, description) VALUES (:code, :name, :desc)'),
-        {"code": body.code, "name": body.name, "desc": body.description},
+        text('INSERT INTO "Sales".operation_types (code, name, description, executor_role) VALUES (:code, :name, :desc, :role)'),
+        {"code": body.code, "name": body.name, "desc": body.description, "role": body.role},
     )
     await session.commit()
-    return {"code": body.code, "name": body.name, "message": "created"}
+    return {"code": body.code, "name": body.name, "role": body.role, "message": "created"}
 
 
 @router.put("/operation-types/{code}")
@@ -323,6 +374,11 @@ async def update_operation_type(
         await session.execute(
             text('UPDATE "Sales".operation_types SET description = :desc WHERE code = :code'),
             {"desc": body.description, "code": code},
+        )
+    if body.role is not None:
+        await session.execute(
+            text('UPDATE "Sales".operation_types SET executor_role = :role WHERE code = :code'),
+            {"role": body.role, "code": code},
         )
     if body.active is not None:
         # Обновляем активность в таблице конфигурации
@@ -762,24 +818,7 @@ async def create_operation_from_config(
             status_code=404,
             detail=f"Configuration for '{operation_type}' not found"
         )
-    role = (user.role or "").lower()
-    if operation_type == "payment_receipt_from_customer":
-        if role not in ("admin", "expeditor"):
-            raise HTTPException(status_code=403, detail="Только экспедитор или администратор может создать эту операцию")
-    elif operation_type == "cash_receipt":
-        if role not in ("admin", "paymaster"):
-            raise HTTPException(status_code=403, detail="Только кассир или администратор может создать эту операцию")
-    elif operation_type in ("warehouse_receipt", "allocation", "transfer", "write_off"):
-        if role not in ("admin", "stockman"):
-            raise HTTPException(status_code=403, detail="Только кладовщик или администратор может создать эту операцию")
-    elif operation_type == "delivery":
-        if role not in ("admin", "expeditor"):
-            raise HTTPException(status_code=403, detail="Только экспедитор или администратор может создать эту операцию")
-    elif operation_type == "promotional_sample":
-        if role not in ("admin", "stockman", "expeditor"):
-            raise HTTPException(status_code=403, detail="Только кладовщик, экспедитор или администратор может создать эту операцию")
-    elif role != "admin":
-        raise HTTPException(status_code=403, detail="Только администратор может создать эту операцию")
+    await _ensure_user_can_create_operation_type(session, user, operation_type)
     logger.info(f"✓ Конфиг найден")
     
     # ШАГ 2: Парсить required_fields из конфига
@@ -1008,7 +1047,7 @@ class WarehouseReceiptBatchCreate(BaseModel):
 async def create_warehouse_receipt_batch(
     body: WarehouseReceiptBatchCreate,
     session: AsyncSession = Depends(get_db_session),
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
 ):
     """
     Создать несколько операций прихода на склад за раз (для каждого товара отдельная операция).
@@ -1017,6 +1056,7 @@ async def create_warehouse_receipt_batch(
     logger.info(f"=== CREATING WAREHOUSE RECEIPT BATCH ===")
     logger.info(f"Warehouse: {body.warehouse_to}, Items: {len(body.items)}")
     logger.info(f"Current user: {user.login}")
+    await _ensure_user_can_create_operation_type(session, user, "warehouse_receipt")
     
     if not body.items:
         raise HTTPException(status_code=400, detail="Список товаров пуст")
@@ -1159,12 +1199,7 @@ async def create_allocation_operation(
     Использует существующую партию (batch) по product_code + batch_code,
     не создаёт новые партии.
     """
-    role = (user.role or "").strip().lower()
-    if role not in ("admin", "stockman"):
-        raise HTTPException(
-            status_code=403,
-            detail="Только кладовщик или администратор может создать эту операцию",
-        )
+    await _ensure_user_can_create_operation_type(session, user, "allocation")
 
     # Найти партию по product_code + batch_code
     batch_result = await session.execute(
@@ -1233,3 +1268,5 @@ async def create_allocation_operation(
         "type": op.type_code,
         "message": "Операция выдачи экспедитору создана",
     }
+
+

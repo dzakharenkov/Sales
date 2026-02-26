@@ -1,5 +1,5 @@
 """
-Отчётность: по клиентам, агентам, экспедиторам, визитам, дашборд, фото.
+Отчётность: по клиентам, агентам, экспедиторам, визитам, дашборд, фото, локации.
 """
 import io
 from datetime import date
@@ -251,7 +251,7 @@ async def report_agents(
                  WHERE o.status_code = 'completed'{date_filter_orders}), 0) AS orders_completed_amount
         FROM "Sales".users u
         LEFT JOIN "Sales".customers_visits cv ON u.login = cv.responsible_login {date_filter}
-        WHERE LOWER(u.role::text) IN ('agent', 'expeditor', 'admin')
+        WHERE LOWER(u.role::text) = 'agent'
         GROUP BY u.login, u.fio
         ORDER BY total_visits DESC
         """
@@ -925,4 +925,127 @@ async def report_photos_export(
         content=buf.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="report_photos.xlsx"'},
+    )
+
+
+@router.get("/locations", response_model=EntityModel | list[EntityModel])
+async def report_locations(
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Отчёт: локации клиентов с признаком заполненности координат."""
+    try:
+        q = """
+        SELECT
+            c.id,
+            COALESCE(c.name_client, c.firm_name, '') AS customer_name,
+            c.address,
+            COALESCE(ct.name, '') AS city,
+            COALESCE(tr.name, '') AS territory,
+            c.phone,
+            c.contact_person,
+            c.tax_id,
+            c.latitude,
+            c.longitude,
+            CASE
+                WHEN c.latitude IS NOT NULL AND c.longitude IS NOT NULL THEN TRUE
+                ELSE FALSE
+            END AS has_coordinates
+        FROM "Sales".customers c
+        LEFT JOIN "Sales".cities ct ON ct.id = c.city_id
+        LEFT JOIN "Sales".territories tr ON tr.id = c.territory_id
+        ORDER BY COALESCE(c.name_client, c.firm_name, ''), c.id
+        """
+        result = await session.execute(text(q))
+        rows = result.fetchall()
+
+        data = []
+        with_coordinates = 0
+        for row in rows:
+            has_coordinates = bool(row[10])
+            if has_coordinates:
+                with_coordinates += 1
+            data.append(
+                {
+                    "id": row[0],
+                    "customer_name": str(row[1] or ""),
+                    "address": str(row[2] or ""),
+                    "city": str(row[3] or ""),
+                    "territory": str(row[4] or ""),
+                    "phone": str(row[5] or ""),
+                    "contact_person": str(row[6] or ""),
+                    "tax_id": str(row[7] or ""),
+                    "latitude": row[8],
+                    "longitude": row[9],
+                    "has_coordinates": has_coordinates,
+                }
+            )
+
+        total = len(data)
+        return {
+            "statistics": {
+                "total_customers": total,
+                "with_coordinates": with_coordinates,
+                "without_coordinates": total - with_coordinates,
+            },
+            "data": data,
+        }
+    except Exception as e:
+        return {"statistics": {}, "data": [], "error": str(e)[:200]}
+
+
+@router.get("/locations/export", response_model=None)
+async def report_locations_export(
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """Экспорт отчёта по локациям клиентов в Excel."""
+    res = await report_locations(session, user)
+    rows = res.get("data") or []
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Локации клиентов"
+    center_align = Alignment(horizontal='center', vertical='center')
+
+    headers = [
+        "Клиент",
+        "Адрес",
+        "Город",
+        "Территория",
+        "Телефон",
+        "Контактное лицо",
+        "ИНН",
+        "Широта",
+        "Долгота",
+        "Координаты заполнены",
+    ]
+    for col, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.alignment = center_align
+
+    for row_idx, r in enumerate(rows[:50000], start=2):
+        vals = [
+            r.get("customer_name") or "",
+            r.get("address") or "",
+            r.get("city") or "",
+            r.get("territory") or "",
+            r.get("phone") or "",
+            r.get("contact_person") or "",
+            r.get("tax_id") or "",
+            r.get("latitude"),
+            r.get("longitude"),
+            "Да" if r.get("has_coordinates") else "Нет",
+        ]
+        for col_idx, v in enumerate(vals, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=v)
+            cell.alignment = center_align
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="report_locations.xlsx"'},
     )

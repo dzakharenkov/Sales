@@ -7,23 +7,23 @@ echo   Deploy to Ubuntu server (with backup)
 echo ========================================
 echo.
 
-REM Проверяем, установлен ли Python
+REM Check Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Python не найден! Установите Python и добавьте его в PATH.
+    echo [ERROR] Python not found. Install Python and add it to PATH.
     pause
     exit /b 1
 )
 
-echo Запуск скрипта деплоя (deploy_to_ubuntu_and_copy.py)...
-echo Логи будут сохраняться в D:\Python\Sales\deploy_to_ubuntu_and_copy.log
+echo Running deploy script (deploy_to_ubuntu_and_copy.py)...
+echo Logs: D:\Python\Sales\deploy_to_ubuntu_and_copy.log
 echo.
 
 python "%~dp0deploy_to_ubuntu_and_copy.py"
 
 if errorlevel 1 (
     echo.
-    echo [ERROR] Возникла ошибка при выполнении скрипта. Проверьте лог-файл:
+    echo [ERROR] Deploy script failed. Check log file:
     echo D:\Python\Sales\deploy_to_ubuntu_and_copy.log
     pause
     exit /b 1
@@ -31,53 +31,67 @@ if errorlevel 1 (
 
 echo.
 echo ========================================
-echo   Деплой и перезапуск сервисов завершены!
+echo   Deploy and service restart completed
 echo ========================================
 echo.
 
 echo ========================================
-echo   Сохранение изменений на GitHub
+echo   Save changes to GitHub
 echo ========================================
 echo.
 
-REM Проверка наличия git
+REM Check git
 git --version >nul 2>&1
 if errorlevel 1 (
-    echo [ОШИБКА] Git не найден! Установите Git с https://git-scm.com
+    echo [ERROR] Git not found. Install Git from https://git-scm.com
     pause
     exit /b 1
 )
 
-echo [1/3] Проверка изменений...
+echo [1/3] Check changes...
 git status --short
 echo.
 
-echo [2/3] Добавление всех изменений...
-git add .
+echo [1.1/3] Check for leaked secrets...
+git grep -n -I "sntryu_" >nul 2>&1
+if not errorlevel 1 (
+    echo [ERROR] Potential Sentry token found in tracked files.
+    git grep -n -I "sntryu_"
+    echo Remove secrets before commit/push.
+    pause
+    exit /b 1
+)
+
+echo [2/3] Stage changes...
+git add -A
+
+REM Do not include backup archives in commits
+for %%F in (beckaps\*.zip) do git reset -q -- "%%F" >nul 2>&1
+
 if errorlevel 1 (
-    echo [ОШИБКА] Не удалось добавить файлы
+    echo [ERROR] Failed to stage files.
     pause
     exit /b 1
 )
 
 echo.
-set COMMIT_MSG=Версия %date% %time%
-echo [3/3] Создание коммита: "%COMMIT_MSG%"...
+set COMMIT_MSG=Version %date% %time%
+echo [3/3] Create commit: "%COMMIT_MSG%"...
 git commit -m "%COMMIT_MSG%"
 if errorlevel 1 (
-    echo [ПРЕДУПРЕЖДЕНИЕ] Возможно, нет изменений для коммита
+    echo [WARNING] Nothing to commit.
 )
 
 git push
 if errorlevel 1 (
-    echo [ОШИБКА] Не удалось отправить на GitHub
+    echo [ERROR] Failed to push to GitHub.
     pause
     exit /b 1
 )
 
 echo.
 echo ========================================
-echo   ✓ Изменения успешно сохранены на GitHub!
+echo   Changes pushed to GitHub successfully
 echo ========================================
 echo.
 pause

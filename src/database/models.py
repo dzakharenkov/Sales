@@ -211,6 +211,7 @@ class OperationType(Base):
     code = Column(String, primary_key=True)  # PK без id, только code
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
+    executor_role = Column(String, nullable=False, server_default=text("'admin'"))
 
 
 class OperationConfig(Base):

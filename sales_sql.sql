@@ -139,7 +139,8 @@ CREATE TABLE "Sales".customers (
 CREATE TABLE "Sales".operation_types (
   code TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  description TEXT
+  description TEXT,
+  executor_role TEXT NOT NULL DEFAULT 'admin' CHECK (executor_role IN ('admin', 'expeditor', 'agent', 'stockman', 'paymaster'))
 );
 
 -- Конфигурация операций (правила для каждого типа операции)
@@ -270,18 +271,18 @@ $$ LANGUAGE plpgsql;
 -- ============================================================
 
 -- Типы операций (актуальный перечень)
-INSERT INTO "Sales".operation_types (code, name, description) VALUES
-  ('warehouse_receipt', 'Приход на склад', 'Поступление товара от производителя на основной склад'),
-  ('allocation', 'Выдача экспедитору', 'Выдача товара экспедитору со основного склада на его витрину'),
-  ('transfer', 'Перемещение между складами', 'Перемещение товара между складами'),
-  ('delivery', 'Доставка клиенту', 'Доставка товара клиенту экспедитором'),
-  ('return_from_customer', 'Возврат от клиента', 'Возврат товара от клиента'),
-  ('promotional_sample', 'Раздача образцов', 'Раздача товара в качестве образца (без оплаты)'),
-  ('cash_receipt', 'Приём наличных', 'Приём наличных денег в кассу'),
-  ('cash_return', 'Возврат денег', 'Возврат денег клиенту'),
-  ('write_off', 'Списание', 'Списание товара (порча, брак, истечение)'),
-  ('damage', 'Повреждение', 'Товар повреждён'),
-  ('inventory', 'Инвентаризация', 'Проверка остатков товара');
+INSERT INTO "Sales".operation_types (code, name, description, executor_role) VALUES
+  ('warehouse_receipt', 'Приход на склад', 'Поступление товара от производителя на основной склад', 'stockman'),
+  ('allocation', 'Выдача экспедитору', 'Выдача товара экспедитору со основного склада на его витрину', 'stockman'),
+  ('transfer', 'Перемещение между складами', 'Перемещение товара между складами', 'stockman'),
+  ('delivery', 'Доставка клиенту', 'Доставка товара клиенту экспедитором', 'expeditor'),
+  ('return_from_customer', 'Возврат от клиента', 'Возврат товара от клиента', 'expeditor'),
+  ('promotional_sample', 'Раздача образцов', 'Раздача товара в качестве образца (без оплаты)', 'expeditor'),
+  ('cash_receipt', 'Приём наличных', 'Приём наличных денег в кассу', 'paymaster'),
+  ('cash_return', 'Возврат денег', 'Возврат денег клиенту', 'paymaster'),
+  ('write_off', 'Списание', 'Списание товара (порча, брак, истечение)', 'stockman'),
+  ('damage', 'Повреждение', 'Товар повреждён', 'stockman'),
+  ('inventory', 'Инвентаризация', 'Проверка остатков товара', 'stockman');
 
 -- Конфигурация операций (правила для каждого типа операции)
 INSERT INTO "Sales".operation_config (

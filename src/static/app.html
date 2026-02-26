@@ -1118,6 +1118,7 @@
         report_visits: { ru: 'По визитам', uz: 'Tashriflar bo\'yicha', en: 'By visits' },
         report_dashboard: { ru: 'Сводная аналитика', uz: 'Umumiy analitika', en: 'Dashboard' },
         report_photos: { ru: 'Фотографии клиентов', uz: 'Mijoz suratlari', en: 'Customer photos' },
+        report_locations: { ru: 'Локации клиентов', uz: 'Mijozlar lokatsiyasi', en: 'Customer locations' },
       };
 
       function childLabel(c) {
@@ -1171,6 +1172,7 @@
           'ui.report.agents.title', 'ui.report.customers.title',
           'ui.report.expeditors.title', 'ui.report.visits.title',
           'ui.report.photos.title', 'ui.report.photos.customers_without_photos',
+          'ui.report.locations.title',
           'ui.dashboard.no_category_data',
           // Customers map
           'ui.customers.map.title', 'ui.customers.map.provider',
@@ -1315,7 +1317,7 @@
         ops_parent: 'operations', operations: 'operations', operations_create: 'operations',
         stock: 'balances',
         cash_parent: 'cashier', cash_pending: 'cashier', cash_received: 'cashier', cashier_orders: 'cashier',
-        reports_parent: 'reports', report_customers: 'reports', report_agents: 'reports', report_expeditors: 'reports', report_visits: 'reports', report_dashboard: 'reports', report_photos: 'reports',
+        reports_parent: 'reports', report_customers: 'reports', report_agents: 'reports', report_expeditors: 'reports', report_visits: 'reports', report_dashboard: 'reports', report_photos: 'reports', report_locations: 'reports',
         role_menu_access: 'users'
       };
       function sectionToCode(name) { return SECTION_TO_CODE[name] || name; }
@@ -1338,7 +1340,7 @@
         orders: [{ s: 'orders', l: 'Поиск заказов' }, { s: 'orders_create', l: 'Создать заказ' }, { s: 'order_items', l: 'Поиск позиций заказов' }],
         operations: [{ s: 'operations', l: 'Поиск операций' }, { s: 'operations_create', l: 'Создать операцию' }],
         cashier: [{ s: 'cash_pending', l: 'Ожидающие передачи от экспедиторов' }, { s: 'cash_received', l: 'Принятые деньги за период' }, { s: 'cashier_orders', l: 'Заказы для подтверждения оплаты' }],
-        reports: [{ s: 'report_customers', l: 'По клиентам' }, { s: 'report_agents', l: 'По агентам' }, { s: 'report_expeditors', l: 'По экспедиторам' }, { s: 'report_visits', l: 'По визитам' }, { s: 'report_dashboard', l: 'Сводная аналитика' }, { s: 'report_photos', l: 'Фотографии клиентов' }]
+        reports: [{ s: 'report_customers', l: 'По клиентам' }, { s: 'report_agents', l: 'По агентам' }, { s: 'report_expeditors', l: 'По экспедиторам' }, { s: 'report_visits', l: 'По визитам' }, { s: 'report_dashboard', l: 'Сводная аналитика' }, { s: 'report_photos', l: 'Фотографии клиентов' }, { s: 'report_locations', l: 'Локации клиентов' }]
       };
       var SIDEBAR_SECTIONS = { users: 'users', references: 'ref_parent', ref_translations: 'ref_translations', customers: 'customers_parent', visits: 'visits_parent', orders: 'orders_parent', operations: 'ops_parent', balances: 'stock', cashier: 'cash_parent', reports: 'reports_parent' };
       if (SIDEBAR_CHILDREN.references && !SIDEBAR_CHILDREN.references.some(function (c) { return c.s === 'ref_translations'; })) {
@@ -1557,7 +1559,7 @@
           if (a.id === 'ordersParent') a.classList.toggle('open', (name === 'orders_parent' || name === 'orders' || name === 'orders_create' || name === 'order_items'));
           if (a.id === 'opsParent') a.classList.toggle('open', (name === 'ops_parent' || name === 'operations' || name === 'operations_create'));
           if (a.id === 'cashParent') a.classList.toggle('open', (name === 'cash_parent' || name === 'cash_pending' || name === 'cash_received' || name === 'cashier_orders'));
-          if (a.id === 'reportsParent') a.classList.toggle('open', (name === 'reports_parent' || name === 'report_customers' || name === 'report_agents' || name === 'report_expeditors' || name === 'report_visits' || name === 'report_dashboard' || name === 'report_photos'));
+          if (a.id === 'reportsParent') a.classList.toggle('open', (name === 'reports_parent' || name === 'report_customers' || name === 'report_agents' || name === 'report_expeditors' || name === 'report_visits' || name === 'report_dashboard' || name === 'report_photos' || name === 'report_locations'));
         });
         var sub = document.getElementById('refSubmenu');
         if (sub) sub.classList.toggle('open', name === 'ref_parent' || name === 'ref_payment' || name === 'ref_products' || name === 'ref_operations' || name === 'ref_currency' || name === 'ref_cities' || name === 'ref_territories' || name === 'ref_translations' || name === 'warehouses' || name === 'products');
@@ -1572,7 +1574,7 @@
         var cashSub = document.getElementById('cashSubmenu');
         if (cashSub) cashSub.classList.toggle('open', name === 'cash_parent' || name === 'cash_pending' || name === 'cash_received' || name === 'cashier_orders');
         var reportsSub = document.getElementById('reportsSubmenu');
-        if (reportsSub) reportsSub.classList.toggle('open', name === 'reports_parent' || name === 'report_customers' || name === 'report_agents' || name === 'report_expeditors' || name === 'report_visits' || name === 'report_dashboard' || name === 'report_photos');
+        if (reportsSub) reportsSub.classList.toggle('open', name === 'reports_parent' || name === 'report_customers' || name === 'report_agents' || name === 'report_expeditors' || name === 'report_visits' || name === 'report_dashboard' || name === 'report_photos' || name === 'report_locations');
         var content = document.getElementById('content');
         if (!content) return;
         if (name === 'ref_parent' || name === 'ops_parent' || name === 'orders_parent' || name === 'customers_parent' || name === 'visits_parent' || name === 'cash_parent' || name === 'reports_parent') return;
@@ -1646,6 +1648,7 @@
         else if (name === 'report_visits') loadSectionReportVisits();
         else if (name === 'report_dashboard') loadSectionReportDashboard();
         else if (name === 'report_photos') loadSectionReportPhotos();
+        else if (name === 'report_locations') loadSectionReportLocations();
         setTimeout(applyViewOnlyAccess, 300);
       };
 
@@ -2118,6 +2121,15 @@
           if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Нет данных.</p>'; bindRefOpsAdd(); return; }
           var sortCol = 'code';
           var sortDir = 1;
+          var ROLE_LABELS = { admin: 'Администратор', agent: 'Агент', expeditor: 'Экспедитор', stockman: 'Кладовщик', paymaster: 'Кассир' };
+          function roleOptionsHtml(selectedRole) {
+            var selected = (selectedRole || '').toLowerCase();
+            var roles = ['admin', 'agent', 'expeditor', 'stockman', 'paymaster'];
+            return roles.map(function (r) {
+              var sel = (r === selected) ? ' selected' : '';
+              return '<option value="' + r + '"' + sel + '>' + (ROLE_LABELS[r] || r) + '</option>';
+            }).join('');
+          }
           function renderTable(data) {
             var sorted = data.slice().sort(function (a, b) {
               var va = (a[sortCol] || '').toString().toLowerCase();
@@ -2130,13 +2142,13 @@
               return sortDir * cmp;
             });
             var arrow = sortDir > 0 ? ' ▲' : ' ▼';
-            var t = '<table><thead><tr><th class="sortable" data-col="code">Код' + (sortCol === 'code' ? arrow : '') + '</th><th class="sortable" data-col="name">Название' + (sortCol === 'name' ? arrow : '') + '</th><th class="sortable" data-col="description">Описание' + (sortCol === 'description' ? arrow : '') + '</th><th class="sortable" data-col="active">Активна' + (sortCol === 'active' ? arrow : '') + '</th><th>Действия</th></tr></thead><tbody>';
+            var t = '<table><thead><tr><th class="sortable" data-col="code">Код' + (sortCol === 'code' ? arrow : '') + '</th><th class="sortable" data-col="name">Название' + (sortCol === 'name' ? arrow : '') + '</th><th class="sortable" data-col="description">Описание' + (sortCol === 'description' ? arrow : '') + '</th><th class="sortable" data-col="role">Роль' + (sortCol === 'role' ? arrow : '') + '</th><th class="sortable" data-col="active">Активна' + (sortCol === 'active' ? arrow : '') + '</th><th>Действия</th></tr></thead><tbody>';
             sorted.forEach(function (r) {
-              var c = escAttr(r.code), n = escAttr(r.name), d = escAttr(r.description);
+              var c = escAttr(r.code), n = escAttr(r.name), d = escAttr(r.description), rr = (r.role || '').toLowerCase();
               var actText = (r.active === true ? 'Да' : 'Нет');
               var actAttr = (r.active === true ? 'true' : 'false');
-              t += '<tr><td>' + (r.code || '') + '</td><td>' + (r.name || '') + '</td><td>' + (r.description || '') + '</td><td>' + actText + '</td><td>';
-              if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-edit data-code="' + c + '" data-name="' + n + '" data-desc="' + d + '" data-active="' + actAttr + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-del data-code="' + c + '">Удалить</button>';
+              t += '<tr><td>' + (r.code || '') + '</td><td>' + (r.name || '') + '</td><td>' + (r.description || '') + '</td><td>' + (ROLE_LABELS[rr] || rr || '—') + '</td><td>' + actText + '</td><td>';
+              if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-edit data-code="' + c + '" data-name="' + n + '" data-desc="' + d + '" data-role="' + escAttr(rr) + '" data-active="' + actAttr + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-del data-code="' + c + '">Удалить</button>';
               t += '</td></tr>';
             });
             t += '</tbody></table>';
@@ -2157,12 +2169,14 @@
                   + '<div class="form-group"><label>Код (не изменяется)</label><input type="text" id="ro_code" value="' + el.getAttribute('data-code') + '" readonly></div>'
                   + '<div class="form-group"><label>Название</label><input type="text" id="ro_name" value="' + (el.getAttribute('data-name') || '').replace(/&quot;/g, '"') + '"></div>'
                   + '<div class="form-group"><label>Описание</label><input type="text" id="ro_desc" value="' + (el.getAttribute('data-desc') || '').replace(/&quot;/g, '"') + '"></div>'
+                  + '<div class="form-group"><label>Роль</label><select id="ro_role">' + roleOptionsHtml(el.getAttribute('data-role') || '') + '</select></div>'
                   + '<div class="form-group"><label>Активна</label><select id="ro_active"><option value="true">Да</option><option value="false">Нет</option></select></div>';
                 showModal('Изменить тип операции', bodyHtml, function (errEl) {
                   var name = document.getElementById('ro_name').value.trim();
                   var desc = document.getElementById('ro_desc').value.trim() || null;
+                  var roleVal = (document.getElementById('ro_role').value || '').trim();
                   var activeVal = document.getElementById('ro_active').value === 'true';
-                  return api('/api/v1/operation-types/' + encodeURIComponent(el.getAttribute('data-code')), { method: 'PUT', body: JSON.stringify({ name: name, description: desc, active: activeVal }) }).then(function () { loadSectionRefOperations(); });
+                  return api('/api/v1/operation-types/' + encodeURIComponent(el.getAttribute('data-code')), { method: 'PUT', body: JSON.stringify({ name: name, description: desc, role: roleVal, active: activeVal }) }).then(function () { loadSectionRefOperations(); });
                 });
                 var sel = document.getElementById('ro_active');
                 if (sel) sel.value = (act === 'false' ? 'false' : 'true');
@@ -2178,8 +2192,8 @@
           var btn = document.getElementById('refAdd');
           if (!btn || !isAdmin()) return;
           btn.onclick = function () {
-            showModal('Добавить тип операции', '<div class="form-group"><label>Код</label><input type="text" id="ro_code" placeholder="например transfer"></div><div class="form-group"><label>Название</label><input type="text" id="ro_name" placeholder="Название"></div><div class="form-group"><label>Описание</label><input type="text" id="ro_desc" placeholder="Описание"></div>', function (errEl) {
-              return api('/api/v1/operation-types', { method: 'POST', body: JSON.stringify({ code: document.getElementById('ro_code').value.trim(), name: document.getElementById('ro_name').value.trim(), description: document.getElementById('ro_desc').value.trim() || null }) }).then(function () { loadSectionRefOperations(); });
+            showModal('Добавить тип операции', '<div class="form-group"><label>Код</label><input type="text" id="ro_code" placeholder="например transfer"></div><div class="form-group"><label>Название</label><input type="text" id="ro_name" placeholder="Название"></div><div class="form-group"><label>Описание</label><input type="text" id="ro_desc" placeholder="Описание"></div><div class="form-group"><label>Роль</label><select id="ro_role">' + roleOptionsHtml('stockman') + '</select></div>', function (errEl) {
+              return api('/api/v1/operation-types', { method: 'POST', body: JSON.stringify({ code: document.getElementById('ro_code').value.trim(), name: document.getElementById('ro_name').value.trim(), description: document.getElementById('ro_desc').value.trim() || null, role: document.getElementById('ro_role').value }) }).then(function () { loadSectionRefOperations(); });
             });
           };
         }
@@ -3643,6 +3657,12 @@
           var sel = isEdit && opData ? { type_code: opData.type_code || '', customer_id: opData.customer_id != null ? String(opData.customer_id) : '', product_code: opData.product_code || '', quantity: opData.quantity != null ? opData.quantity : '', amount: opData.amount != null ? opData.amount : '', comment: opData.comment || '', order_id: opData.order_id != null ? opData.order_id : '', operation_date: opData.operation_date ? opData.operation_date.slice(0, 10) : '', warehouse_from: opData.warehouse_from || '', warehouse_to: opData.warehouse_to || '', payment_type_code: opData.payment_type_code || '', status: opData.status || 'pending', expeditor_login: opData.expeditor_login || '', cashier_login: opData.cashier_login || '', storekeeper_login: opData.storekeeper_login || '' } : { type_code: '', customer_id: '', product_code: '', quantity: '1', amount: '', comment: '', order_id: '', operation_date: new Date().toISOString().slice(0, 10), warehouse_from: '', warehouse_to: '', payment_type_code: '', status: 'pending', expeditor_login: '', cashier_login: '', storekeeper_login: '' };
           // Фильтруем только активные типы операций, но при редактировании добавляем текущий тип операции (даже если неактивен)
           var activeTypes = types.filter(function (ty) { return ty.active !== false; });
+          var currentRole = ((currentUser && currentUser.role) ? currentUser.role : '').toLowerCase();
+          if (!isEdit && currentRole && currentRole !== 'admin') {
+            activeTypes = activeTypes.filter(function (ty) {
+              return ((ty.role || '').toLowerCase() === currentRole);
+            });
+          }
           if (isEdit && opData && opData.type_code) {
             var currentType = types.find(function (ty) { return ty.code === opData.type_code; });
             if (currentType && currentType.active === false) {
@@ -6235,7 +6255,7 @@
               q = (q || '').trim();
               if (q.length < 2) return;
               api('/api/v1/customers?search=' + encodeURIComponent(q) + '&limit=20').then(function (list) {
-                list = list || [];
+                list = asList(list);
                 vsPick.innerHTML = '<option value="">— Все клиенты —</option>';
                 list.forEach(function (c) {
                   var name = (c.name_client || c.firm_name || '').trim() || ('Клиент #' + c.id);
@@ -6499,7 +6519,7 @@
                 if (agent) params.push('login_agent=' + encodeURIComponent(agent));
                 resultsEl.innerHTML = '<p>Загрузка...</p>';
                 api('/api/v1/customers?' + params.join('&')).then(function (list) {
-                  list = list || [];
+                  list = asList(list);
                   if (!list.length) { resultsEl.innerHTML = '<p>Клиенты не найдены.</p>'; return; }
                   var t = '<div style=\"max-height:380px;overflow:auto\"><table><thead><tr><th></th><th>Клиент</th><th>ИНН</th><th>Агент</th></tr></thead><tbody>';
                   list.forEach(function (c) {
@@ -6569,7 +6589,7 @@
         api('/api/v1/dictionary/user-logins').catch(function () { return []; }).then(function (userList) {
           var sel = document.getElementById('vcal_responsible');
           if (sel) {
-            userList = userList || [];
+            userList = (userList || []).filter(function (u) { return (u.role || '').toLowerCase() === 'agent'; });
             userList.forEach(function (u) { var o = document.createElement('option'); o.value = u.login; o.textContent = (u.login || '') + (u.fio ? ' — ' + u.fio : ''); sel.appendChild(o); });
           }
         });
@@ -7117,6 +7137,108 @@
               var a = document.createElement('a');
               a.href = URL.createObjectURL(blob);
               a.download = 'report_photos.xlsx';
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }).catch(function () { alert('Ошибка выгрузки отчёта.'); });
+          };
+        }
+      }
+
+      function loadSectionReportLocations() {
+        var content = document.getElementById('content');
+        content.innerHTML = '<div class="card"><h2>' + tr('ui.report.locations.title', 'Отчёт: Локации клиентов') + '</h2><p><button type="button" class="btn btn-primary" id="rl_load">' + tUi('show_btn', 'Показать') + '</button> <button type="button" class="btn btn-secondary" id="rl_export">' + tUi('export_xlsx', 'Экспорт в Excel') + '</button></p><div id="rl_stats"></div><div id="rl_table_wrap"></div></div>';
+        var rlSortCol = null, rlSortDir = 1;
+
+        function sortRows(data, col, dir) {
+          if (!col) return data;
+          return data.slice().sort(function (a, b) {
+            var av = a[col];
+            var bv = b[col];
+            if (col === 'has_coordinates') {
+              av = av ? 1 : 0;
+              bv = bv ? 1 : 0;
+            }
+            av = (av == null ? '' : av).toString().toLowerCase();
+            bv = (bv == null ? '' : bv).toString().toLowerCase();
+            if (av === bv) return 0;
+            return (av < bv ? -1 : 1) * dir;
+          });
+        }
+
+        function run() {
+          document.getElementById('rl_stats').innerHTML = '<p>' + tUi('loading', 'Загрузка...') + '</p>';
+          document.getElementById('rl_table_wrap').innerHTML = '';
+          api('/api/v1/reports/locations').then(function (res) {
+            var stats = (res && res.statistics) ? res.statistics : {};
+            var rows = (res && res.data) ? res.data : [];
+            var withCoords = stats.with_coordinates || 0;
+            var withoutCoords = stats.without_coordinates || 0;
+            document.getElementById('rl_stats').innerHTML = '<p><strong>Всего клиентов:</strong> ' + (stats.total_customers || rows.length || 0) + ', С координатами: ' + withCoords + ', Без координат: ' + withoutCoords + '</p>';
+            if (!rows.length) {
+              document.getElementById('rl_table_wrap').innerHTML = '<p>' + tUi('no_data', 'Нет данных.') + '</p>';
+              return;
+            }
+            var data = sortRows(rows, rlSortCol, rlSortDir);
+            var cols = [
+              ['customer_name', 'Клиент'],
+              ['address', 'Адрес'],
+              ['city', 'Город'],
+              ['territory', 'Территория'],
+              ['phone', 'Телефон'],
+              ['contact_person', 'Контактное лицо'],
+              ['tax_id', 'ИНН'],
+              ['latitude', 'Широта'],
+              ['longitude', 'Долгота'],
+              ['has_coordinates', 'Координаты'],
+            ];
+            var tb = '<div style="overflow-x:auto"><table><thead><tr>';
+            cols.forEach(function (c) {
+              tb += '<th data-col="' + c[0] + '" style="cursor:pointer">' + c[1] + (rlSortCol === c[0] ? (rlSortDir === 1 ? ' ▲' : ' ▼') : '') + '</th>';
+            });
+            tb += '</tr></thead><tbody>';
+            data.forEach(function (r) {
+              tb += '<tr>'
+                + '<td>' + escAttr(r.customer_name || '') + '</td>'
+                + '<td>' + escAttr(r.address || '') + '</td>'
+                + '<td>' + escAttr(r.city || '') + '</td>'
+                + '<td>' + escAttr(r.territory || '') + '</td>'
+                + '<td>' + escAttr(r.phone || '') + '</td>'
+                + '<td>' + escAttr(r.contact_person || '') + '</td>'
+                + '<td>' + escAttr(r.tax_id || '') + '</td>'
+                + '<td>' + escAttr(r.latitude == null ? '' : String(r.latitude)) + '</td>'
+                + '<td>' + escAttr(r.longitude == null ? '' : String(r.longitude)) + '</td>'
+                + '<td>' + (r.has_coordinates ? 'Да' : 'Нет') + '</td>'
+                + '</tr>';
+            });
+            tb += '</tbody></table></div>';
+            document.getElementById('rl_table_wrap').innerHTML = tb;
+            document.querySelectorAll('#rl_table_wrap th[data-col]').forEach(function (th) {
+              th.onclick = function () {
+                var col = th.getAttribute('data-col');
+                if (rlSortCol === col) rlSortDir = -rlSortDir;
+                else { rlSortCol = col; rlSortDir = 1; }
+                run();
+              };
+            });
+          }).catch(function () {
+            document.getElementById('rl_stats').innerHTML = '<p class="err">Ошибка загрузки</p>';
+          });
+        }
+
+        var loadBtn = document.getElementById('rl_load');
+        if (loadBtn) loadBtn.onclick = run;
+        run();
+
+        var exportBtn = document.getElementById('rl_export');
+        if (exportBtn) {
+          exportBtn.onclick = function () {
+            fetch('/api/v1/reports/locations/export', { method: 'GET', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sds_token') || '') } }).then(function (r) {
+              if (!r.ok) throw new Error('Ошибка выгрузки');
+              return r.blob();
+            }).then(function (blob) {
+              var a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = 'report_locations.xlsx';
               a.click();
               URL.revokeObjectURL(a.href);
             }).catch(function () { alert('Ошибка выгрузки отчёта.'); });
