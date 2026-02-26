@@ -1320,7 +1320,12 @@
         reports_parent: 'reports', report_customers: 'reports', report_agents: 'reports', report_expeditors: 'reports', report_visits: 'reports', report_dashboard: 'reports', report_photos: 'reports', report_locations: 'reports',
         role_menu_access: 'users'
       };
-      function sectionToCode(name) { return SECTION_TO_CODE[name] || name; }
+      function sectionToCode(name) {
+        // If a concrete submenu code is present in role permissions, use it.
+        // Otherwise fallback to historical parent mapping.
+        if (menuByCode[name] && menuByCode[name] !== 'none') return name;
+        return SECTION_TO_CODE[name] || name;
+      }
 
       var SIDEBAR_ICONS = {
         users: '<path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>',
@@ -1361,7 +1366,8 @@
         Object.keys(SIDEBAR_CHILDREN).forEach(function (parentCode) {
           if (!menuByCode[parentCode] || menuByCode[parentCode] === 'none') return;
           (SIDEBAR_CHILDREN[parentCode] || []).forEach(function (child) {
-            if (menuByCode[child.s] && menuByCode[child.s] !== 'none') {
+            // Do not hide parent item if child code equals parent code (orders->orders, operations->operations, etc).
+            if (child.s !== parentCode && menuByCode[child.s] && menuByCode[child.s] !== 'none') {
               skipCodes[child.s] = true;
             }
           });
