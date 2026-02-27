@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from openpyxl import Workbook
 from pydantic import BaseModel
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.connection import get_db_session
-from src.database.models import Order, Item, Customer, Product, Status, PaymentType, User as UserModel, Warehouse
+from src.database.models import Order, Item, Customer, Product, Status, PaymentType, User as UserModel, Warehouse, Batch, Operation
 from src.core.deps import get_current_user, require_admin
 from src.core.notifications import (
     notify_new_order,
@@ -58,6 +58,157 @@ async def _is_delivery_status(session: AsyncSession, status_code: str | None) ->
     return code_str in ("2", "delivery", "доставка") or any(
         k in name_lower for k in ("достав", "deliver", "delivery", "shipping")
     )
+
+
+async def _create_delivery_ops_for_expeditor_completed_order(
+    session: AsyncSession,
+    order: Order,
+    customer: Customer | None,
+    actor_login: str,
+) -> int:
+    """Create delivery operations and consume expeditor stock for order completion in Web."""
+    if not customer:
+        raise HTTPException(status_code=400, detail="У заказа не найден клиент")
+    expeditor_login = (customer.login_expeditor or "").strip()
+    if not expeditor_login:
+        raise HTTPException(status_code=400, detail="У клиента не указан экспедитор")
+
+    existing_result = await session.execute(
+        text(
+            '''
+            SELECT 1
+            FROM "Sales".operations o
+            WHERE o.type_code = 'delivery'
+              AND o.order_id = :oid
+              AND COALESCE(LOWER(o.status), '') NOT IN ('cancelled', 'canceled')
+            LIMIT 1
+            '''
+        ),
+        {"oid": order.order_no},
+    )
+    if existing_result.first():
+        return 0
+
+    wh_result = await session.execute(
+        select(Warehouse.code).where(Warehouse.expeditor_login == expeditor_login).limit(1)
+    )
+    warehouse_from = wh_result.scalar_one_or_none()
+    if not warehouse_from:
+        raise HTTPException(status_code=400, detail="Не найден склад экспедитора для списания товара")
+
+    items_result = await session.execute(
+        select(Item, Product)
+        .outerjoin(Product, Product.code == Item.product_code)
+        .where(Item.order_id == order.order_no)
+    )
+    item_rows = items_result.all()
+    if not item_rows:
+        raise HTTPException(status_code=400, detail="В заказе нет позиций для доставки")
+
+    stock_result = await session.execute(
+        text(
+            '''
+            SELECT product_code, batch_code, COALESCE(total_qty, 0)::int AS total_qty, expiry_date
+            FROM "Sales".v_warehouse_stock
+            WHERE warehouse_code = :wh
+              AND COALESCE(total_qty, 0) > 0
+            ORDER BY product_code, expiry_date NULLS LAST, batch_code
+            '''
+        ),
+        {"wh": warehouse_from},
+    )
+    stock_rows = stock_result.fetchall()
+    stock_by_product: dict[str, list[dict]] = {}
+    for row in stock_rows:
+        product_code = (row[0] or "").strip()
+        batch_code = (row[1] or "").strip()
+        total_qty = int(row[2] or 0)
+        if not product_code or not batch_code or total_qty <= 0:
+            continue
+        stock_by_product.setdefault(product_code, []).append(
+            {"batch_code": batch_code, "available": total_qty}
+        )
+
+    allocations: list[dict] = []
+    shortages: list[str] = []
+    for item, product in item_rows:
+        product_code = (item.product_code or "").strip()
+        required_qty = int(item.quantity or 0)
+        if not product_code or required_qty <= 0:
+            continue
+        product_name = (product.name if product and product.name else product_code).strip()
+        item_price = float(item.price) if item.price is not None else float(product.price or 0) if product else 0.0
+
+        product_stock = stock_by_product.get(product_code, [])
+        remaining = required_qty
+        for stock_entry in product_stock:
+            if remaining <= 0:
+                break
+            available = int(stock_entry["available"])
+            if available <= 0:
+                continue
+            take = min(remaining, available)
+            allocations.append(
+                {
+                    "product_code": product_code,
+                    "batch_code": stock_entry["batch_code"],
+                    "quantity": take,
+                    "amount": float(take * item_price),
+                }
+            )
+            stock_entry["available"] = available - take
+            remaining -= take
+
+        if remaining > 0:
+            available_total = required_qty - remaining
+            shortages.append(f"{product_name}: требуется {required_qty}, доступно {available_total}")
+
+    if shortages:
+        raise HTTPException(
+            status_code=400,
+            detail="Недостаточно остатков на складе экспедитора: " + "; ".join(shortages),
+        )
+
+    payment_type_code = (order.payment_type_code or "").strip() or "cash_sum"
+    created_ops = 0
+    now = _now_utc()
+    for alloc in allocations:
+        batch_result = await session.execute(
+            select(Batch).where(
+                Batch.product_code == alloc["product_code"],
+                Batch.batch_code == alloc["batch_code"],
+            )
+        )
+        batch = batch_result.scalar_one_or_none()
+        if not batch:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Партия {alloc['batch_code']} не найдена для товара {alloc['product_code']}",
+            )
+        num_result = await session.execute(text('SELECT "Sales".generate_operation_number()'))
+        operation_number = num_result.scalar() or f"OP-{now.strftime('%Y-%m-%d')}-000001"
+        op = Operation(
+            operation_number=operation_number,
+            type_code="delivery",
+            status="completed",
+            operation_date=now,
+            created_by=actor_login,
+            warehouse_from=warehouse_from,
+            product_code=alloc["product_code"],
+            batch_id=batch.id,
+            quantity=int(alloc["quantity"]),
+            amount=float(alloc["amount"]),
+            payment_type_code=payment_type_code,
+            customer_id=order.customer_id,
+            order_id=order.order_no,
+            expeditor_login=expeditor_login,
+            comment="Подтверждение доставки из Web",
+        )
+        session.add(op)
+        created_ops += 1
+
+    await session.flush()
+    return created_ops
 
 
 class OrderCreate(BaseModel):
@@ -594,9 +745,45 @@ async def update_order(
     user: User = Depends(get_current_user),
 ):
     """Обновить заказ по номеру."""
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    login = str(getattr(user, "login", "") or "").strip().lower()
+    payload = body.model_dump(exclude_unset=True)
+
+    if role not in {"admin", "agent", "expeditor"}:
+        raise HTTPException(status_code=403, detail="Недостаточно прав для редактирования заказа")
+
+    if role == "expeditor":
+        order_owner_result = await session.execute(
+            select(Order, Customer)
+            .outerjoin(Customer, Order.customer_id == Customer.id)
+            .where(Order.order_no == order_id)
+        )
+        order_owner_row = order_owner_result.first()
+        if not order_owner_row:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        order_obj = order_owner_row[0]
+        customer_obj = order_owner_row[1]
+        order_expeditor = str((customer_obj.login_expeditor if customer_obj else "") or "").strip().lower()
+        if not order_expeditor or order_expeditor != login:
+            raise HTTPException(status_code=403, detail="Экспедитор может редактировать только свои заказы")
+
+        payload = {k: v for k, v in payload.items() if k == "status_code"}
+        if not payload:
+            raise HTTPException(status_code=403, detail="Экспедитор может менять только статус заказа")
+        target_status = str(payload.get("status_code") or "").strip().lower()
+        current_status = str(order_obj.status_code or "").strip().lower()
+        if target_status == "completed" and current_status != "completed":
+            await _create_delivery_ops_for_expeditor_completed_order(
+                session=session,
+                order=order_obj,
+                customer=customer_obj,
+                actor_login=user.login,
+            )
+
     response, notification = await OrderService(session).update_order(
         order_id=order_id,
-        payload=body.model_dump(exclude_unset=True),
+        payload=payload,
         updated_by=user.login,
     )
     if notification:

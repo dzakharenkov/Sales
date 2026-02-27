@@ -2,18 +2,20 @@
 Управление пользователями: список, создание, смена пароля. Только admin.
 Валидация телефона и email с понятными сообщениями на русском.
 """
-import re
 import logging
-from src.api.v1.schemas.common import EntityModel
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.v1.schemas.common import EntityModel
+from src.core.deps import require_admin
+from src.core.security import hash_password
 from src.database.connection import get_db_session
 from src.database.models import User
-from src.core.deps import get_current_user, require_admin
-from src.core.security import hash_password
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,17 @@ ROLES = ("admin", "expeditor", "agent", "stockman", "paymaster")
 PHONE_RE = re.compile(r"^[\d\s+\-()]{0,20}$")
 # Упрощённая проверка email
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def normalize_user_status(status: str | None) -> str | None:
+    if status is None:
+        return None
+    raw = status.strip().lower()
+    if raw in {"активен", "active"}:
+        return "активен"
+    if raw in {"не активен", "неактивен", "inactive"}:
+        return "не активен"
+    return None
 
 
 class UserCreate(BaseModel):
@@ -40,7 +53,7 @@ class UserCreate(BaseModel):
     def check_login(cls, v: str) -> str:
         if not v or len(v) < 3:
             raise ValueError("Логин должен быть минимум 3 символа.")
-        if not v.replace('_', '').isalnum():
+        if not v.replace("_", "").isalnum():
             raise ValueError("Логин: только латиница, цифры и подчёркивание.")
         return v
 
@@ -122,6 +135,16 @@ class UserUpdate(BaseModel):
             return v
         return None
 
+    @field_validator("status")
+    @classmethod
+    def check_status(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        normalized = normalize_user_status(v)
+        if normalized is None:
+            raise ValueError("Статус должен быть «активен» или «не активен».")
+        return normalized
+
 
 class UserSetPassword(BaseModel):
     password: str
@@ -133,9 +156,7 @@ async def list_users(
     user: User = Depends(require_admin),
 ):
     """Список пользователей. Только admin."""
-    result = await session.execute(
-        select(User).order_by(User.login)
-    )
+    result = await session.execute(select(User).order_by(User.login))
     rows = result.scalars().all()
     return [
         {
@@ -211,6 +232,32 @@ async def update_user(
     await session.commit()
     await session.refresh(target)
     return {"login": target.login, "message": "updated"}
+
+
+@router.delete("/users/{login}", response_model=EntityModel | list[EntityModel])
+async def delete_user(
+    login: str,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_admin),
+):
+    """Удалить пользователя. Только admin."""
+    result = await session.execute(select(User).where(User.login == login))
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.login == user.login:
+        raise HTTPException(status_code=400, detail="Нельзя удалить текущего пользователя.")
+
+    try:
+        await session.delete(target)
+        await session.commit()
+        return {"login": login, "message": "deleted"}
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Пользователь используется в связанных данных и не может быть удален.",
+        )
 
 
 @router.post("/users/{login}/set-password", response_model=EntityModel | list[EntityModel])

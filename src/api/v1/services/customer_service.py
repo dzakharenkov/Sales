@@ -187,12 +187,36 @@ class CustomerService:
             if territory_row is None:
                 raise HTTPException(status_code=400, detail="territory_id is invalid")
 
+    @staticmethod
+    def _is_blank(value: object | None) -> bool:
+        return value is None or (isinstance(value, str) and not value.strip())
+
+    async def _validate_create_required_fields(self, payload: dict) -> None:
+        if self._is_blank(payload.get("name_client")):
+            raise HTTPException(status_code=400, detail="Поле «Название клиента» обязательно.")
+        if payload.get("city_id") is None:
+            raise HTTPException(status_code=400, detail="Поле «Город» обязательно.")
+        if payload.get("territory_id") is None:
+            raise HTTPException(status_code=400, detail="Поле «Территория» обязательно.")
+        if self._is_blank(payload.get("login_agent")):
+            raise HTTPException(status_code=400, detail="Поле «login агента» обязательно.")
+
+    async def _validate_login_agent(self, login_agent: str) -> None:
+        result = await self.db.execute(select(User).where(User.login == login_agent))
+        agent = result.scalar_one_or_none()
+        if agent is None:
+            raise HTTPException(status_code=400, detail="Указанный login агента не найден.")
+        if (agent.role or "").strip().lower() != "agent":
+            raise HTTPException(status_code=400, detail="Указанный login не относится к роли agent.")
+
     async def create_customer(self, payload: dict, user_role: str | None) -> dict:
         role = (user_role or "").strip().lower()
         if role not in {"admin", "agent"}:
             raise ForbiddenError("Только admin или agent может создавать клиентов")
 
+        await self._validate_create_required_fields(payload)
         await self.validate_city_territory_refs(payload.get("city_id"), payload.get("territory_id"))
+        await self._validate_login_agent(str(payload.get("login_agent")))
 
         customer = Customer(
             name_client=payload.get("name_client"),

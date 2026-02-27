@@ -230,10 +230,25 @@ async def get_cash_received(
             "has_any_date": bool(df_date or dt_date),
         }
         q = """
-        SELECT o.id, o.operation_number, o.amount, o.payment_type_code,
-               o.cashier_login, o.expeditor_login, o.customer_id, o.order_id,
-               o.operation_date, o.comment, o.related_operation_id
+        SELECT
+          o.id,
+          o.operation_number,
+          o.amount,
+          o.payment_type_code,
+          COALESCE(pt.name, o.payment_type_code) AS payment_type_name,
+          o.cashier_login,
+          o.expeditor_login,
+          COALESCE(o.customer_id, ord.customer_id) AS customer_id,
+          COALESCE(o.order_id, ord.order_no) AS order_id,
+          COALESCE(c.name_client, c.firm_name, '') AS customer_name,
+          c.tax_id,
+          o.operation_date,
+          o.comment,
+          o.related_operation_id
         FROM "Sales".operations o
+        LEFT JOIN "Sales".orders ord ON ord.order_no = o.order_id
+        LEFT JOIN "Sales".customers c ON c.id = COALESCE(o.customer_id, ord.customer_id)
+        LEFT JOIN "Sales".payment_type pt ON pt.code = o.payment_type_code
         WHERE o.type_code = 'cash_receipt'
           AND o.status = 'completed'
           AND (:has_date_from = FALSE OR (o.operation_date AT TIME ZONE :tz)::date >= :date_from)
@@ -277,9 +292,21 @@ async def export_cash_received_excel(
             "has_any_date": bool(df_date or dt_date),
         }
         q = """
-        SELECT o.operation_number, o.amount, o.payment_type_code, o.cashier_login,
-               o.expeditor_login, o.customer_id, o.order_id, o.operation_date
+        SELECT
+          o.operation_number,
+          COALESCE(o.order_id, ord.order_no) AS order_id,
+          COALESCE(c.name_client, c.firm_name, '') AS customer_name,
+          c.tax_id,
+          o.amount,
+          COALESCE(pt.name, o.payment_type_code) AS payment_type_name,
+          o.cashier_login,
+          o.expeditor_login,
+          COALESCE(o.customer_id, ord.customer_id) AS customer_id,
+          o.operation_date
         FROM "Sales".operations o
+        LEFT JOIN "Sales".orders ord ON ord.order_no = o.order_id
+        LEFT JOIN "Sales".customers c ON c.id = COALESCE(o.customer_id, ord.customer_id)
+        LEFT JOIN "Sales".payment_type pt ON pt.code = o.payment_type_code
         WHERE o.type_code = 'cash_receipt'
           AND o.status = 'completed'
           AND (:has_date_from = FALSE OR (o.operation_date AT TIME ZONE :tz)::date >= :date_from)
@@ -294,7 +321,7 @@ async def export_cash_received_excel(
     wb = Workbook()
     ws = wb.active
     ws.title = "Принятые деньги"
-    headers = ["№ операции", "Сумма", "Тип оплаты", "Кассир", "От экспедитора", "Клиент ID", "Заказ №", "Дата"]
+    headers = ["№ операции", "Заказ №", "Клиент", "ИНН", "Сумма", "Тип оплаты", "Кассир", "От экспедитора", "Клиент ID", "Дата"]
     for col, h in enumerate(headers, start=1):
         ws.cell(row=1, column=col, value=h)
     for row_idx, row in enumerate(rows[:50000], start=2):

@@ -1111,6 +1111,13 @@
         operations_create: { ru: 'Создать операцию', uz: 'Operatsiya yaratish', en: 'Create operation' },
         cash_pending: { ru: 'Ожидающие передачи от экспедиторов', uz: 'Ekspeditordan kutilayotgan topshiruvlar', en: 'Pending handovers' },
         cash_received: { ru: 'Принятые деньги за период', uz: 'Davr bo\'yicha qabul qilingan pul', en: 'Received cash' },
+        cash_col_operation_no: { ru: '№ операции', uz: 'Operatsiya №', en: 'Operation #' },
+        cash_col_order_no: { ru: '№ заказа', uz: 'Buyurtma №', en: 'Order #' },
+        cash_col_customer: { ru: 'Клиент', uz: 'Mijoz', en: 'Customer' },
+        cash_col_tax_id: { ru: 'ИНН', uz: 'STIR', en: 'Tax ID' },
+        cash_col_cashier: { ru: 'Кассир', uz: 'Kassir', en: 'Cashier' },
+        cash_col_source: { ru: 'Источник', uz: 'Manba', en: 'Source' },
+        cash_col_date: { ru: 'Дата', uz: 'Sana', en: 'Date' },
         cashier_orders: { ru: 'Заказы для подтверждения оплаты', uz: 'To\'lovni tasdiqlash buyurtmalari', en: 'Orders for payment confirmation' },
         report_customers: { ru: 'По клиентам', uz: 'Mijozlar bo\'yicha', en: 'By customers' },
         report_agents: { ru: 'По агентам', uz: 'Agentlar bo\'yicha', en: 'By agents' },
@@ -1173,6 +1180,11 @@
           'ui.report.expeditors.title', 'ui.report.visits.title',
           'ui.report.photos.title', 'ui.report.photos.customers_without_photos',
           'ui.report.locations.title',
+          'ui.cash.received.col.operation_no', 'ui.cash.received.col.order_no',
+          'ui.cash.received.col.customer', 'ui.cash.received.col.tax_id',
+          'ui.cash.received.col.amount', 'ui.cash.received.col.payment_type',
+          'ui.cash.received.col.cashier', 'ui.cash.received.col.source',
+          'ui.cash.received.col.date',
           'ui.dashboard.no_category_data',
           // Customers map
           'ui.customers.map.title', 'ui.customers.map.provider',
@@ -1321,9 +1333,11 @@
         role_menu_access: 'users'
       };
       function sectionToCode(name) {
-        // If a concrete submenu code is present in role permissions, use it.
-        // Otherwise fallback to historical parent mapping.
-        if (menuByCode[name] && menuByCode[name] !== 'none') return name;
+        // If the submenu code exists in role permissions (including "none"),
+        // use it directly. This allows hiding specific report_* items.
+        if (Object.prototype.hasOwnProperty.call(menuByCode, name)) return name;
+        // Report submenus have dedicated ACL entries and must not fallback to parent.
+        if ((name || '').indexOf('report_') === 0) return name;
         return SECTION_TO_CODE[name] || name;
       }
 
@@ -1344,7 +1358,7 @@
         visits: [{ s: 'visits_search', l: 'Поиск визита' }, { s: 'visits_create', l: 'Создать визит' }, { s: 'visits_calendar', l: 'Календарь визитов' }],
         orders: [{ s: 'orders', l: 'Поиск заказов' }, { s: 'orders_create', l: 'Создать заказ' }, { s: 'order_items', l: 'Поиск позиций заказов' }],
         operations: [{ s: 'operations', l: 'Поиск операций' }, { s: 'operations_create', l: 'Создать операцию' }],
-        cashier: [{ s: 'cash_pending', l: 'Ожидающие передачи от экспедиторов' }, { s: 'cash_received', l: 'Принятые деньги за период' }, { s: 'cashier_orders', l: 'Заказы для подтверждения оплаты' }],
+        cashier: [{ s: 'cashier_orders', l: 'Заказы для подтверждения оплаты' }, { s: 'cash_pending', l: 'Ожидающие передачи от экспедиторов' }, { s: 'cash_received', l: 'Принятые деньги за период' }],
         reports: [{ s: 'report_customers', l: 'По клиентам' }, { s: 'report_agents', l: 'По агентам' }, { s: 'report_expeditors', l: 'По экспедиторам' }, { s: 'report_visits', l: 'По визитам' }, { s: 'report_dashboard', l: 'Сводная аналитика' }, { s: 'report_photos', l: 'Фотографии клиентов' }, { s: 'report_locations', l: 'Локации клиентов' }]
       };
       var SIDEBAR_SECTIONS = { users: 'users', references: 'ref_parent', ref_translations: 'ref_translations', customers: 'customers_parent', visits: 'visits_parent', orders: 'orders_parent', operations: 'ops_parent', balances: 'stock', cashier: 'cash_parent', reports: 'reports_parent' };
@@ -1598,7 +1612,10 @@
             document.getElementById('custCreateSave').onclick = function () {
               var errEl = document.getElementById('custCreateErr');
               if (errEl) errEl.textContent = '';
-              api('/api/v1/customers', { method: 'POST', body: JSON.stringify(custFormBody()) }).then(function () { showSection('customers'); }).catch(function (e) {
+              var body = custFormBody();
+              var validationErr = validateCustomerCreateRequired(body);
+              if (validationErr) { if (errEl) errEl.textContent = validationErr; return; }
+              api('/api/v1/customers', { method: 'POST', body: JSON.stringify(body) }).then(function () { showSection('customers'); }).catch(function (e) {
                 if (!errEl) return;
                 var d = e && e.data && e.data.detail;
                 errEl.textContent = (typeof d === 'string' ? d : (d ? JSON.stringify(d) : 'Ошибка сохранения'));
@@ -1682,7 +1699,7 @@
               var phone = (u.phone || '').replace(/"/g, '&quot;');
               var email = (u.email || '').replace(/"/g, '&quot;');
               t += '<tr><td>' + (u.login || '') + '</td><td>' + (u.fio || '') + '</td><td>' + (u.role || '') + '</td><td>' + formatUserStatusLabel(u.status) + '</td><td>' + (u.has_password ? tUi('yes', 'Yes') : tUi('no', 'No')) + '</td><td>';
-              if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-edit="' + login + '" data-fio="' + fio + '" data-role="' + (u.role || '') + '" data-status="' + status + '" data-phone="' + phone + '" data-email="' + email + '">' + tUi('edit', 'Edit') + '</button> <button type="button" class="btn btn-secondary btn-small" data-pwd="' + (u.login || '') + '">' + tUi('change_password', 'Change password') + '</button>';
+              if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-edit="' + login + '" data-fio="' + fio + '" data-role="' + (u.role || '') + '" data-status="' + status + '" data-phone="' + phone + '" data-email="' + email + '">' + tUi('edit', 'Edit') + '</button> <button type="button" class="btn btn-secondary btn-small" data-pwd="' + (u.login || '') + '">' + tUi('change_password', 'Change password') + '</button> <button type="button" class="btn btn-secondary btn-small" data-user-del="' + login + '">' + tUi('delete', 'Delete') + '</button>';
               t += '</td></tr>';
             });
             t += '</tbody></table>';
@@ -1712,8 +1729,11 @@
               var roles = ['agent', 'admin', 'expeditor', 'stockman', 'paymaster'];
               var roleOpts = roles.map(function (r) { return '<option value="' + r + '"' + (r === role ? ' selected' : '') + '>' + r + '</option>'; }).join('');
               var esc = function (s) { return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
-              showModal(tUi('edit_user_modal', 'Edit user') + ': ' + login, '<div class="form-group"><label>' + tUi('fio', 'Full Name') + '</label><input type="text" id="eu_fio" value="' + esc(fio) + '"></div><div class="form-group"><label>' + tUi('role', 'Role') + '</label><select id="eu_role">' + roleOpts + '</select></div><div class="form-group"><label>' + tUi('status', 'Status') + '</label><input type="text" id="eu_status" value="' + esc(status) + '" placeholder="active"></div><div class="form-group"><label>Телефон</label><input type="text" id="eu_phone" value="' + esc(phone) + '"></div><div class="form-group"><label>Email</label><input type="email" id="eu_email" value="' + esc(email) + '"></div>', function (errEl) {
-                return api('/api/v1/users/' + encodeURIComponent(login), { method: 'PATCH', body: JSON.stringify({ fio: document.getElementById('eu_fio').value.trim(), role: document.getElementById('eu_role').value, status: document.getElementById('eu_status').value.trim() || undefined, phone: document.getElementById('eu_phone').value.trim() || undefined, email: document.getElementById('eu_email').value.trim() || undefined }) }).then(function () { loadSectionUsers(); });
+              var normStatus = (status || '').toString().trim().toLowerCase();
+              var selectedStatus = (normStatus === 'inactive' || normStatus === 'не активен' || normStatus === 'неактивен') ? 'не активен' : 'активен';
+              var statusOpts = '<option value="активен"' + (selectedStatus === 'активен' ? ' selected' : '') + '>активен</option><option value="не активен"' + (selectedStatus === 'не активен' ? ' selected' : '') + '>не активен</option>';
+              showModal(tUi('edit_user_modal', 'Edit user') + ': ' + login, '<div class="form-group"><label>' + tUi('fio', 'Full Name') + '</label><input type="text" id="eu_fio" value="' + esc(fio) + '"></div><div class="form-group"><label>' + tUi('role', 'Role') + '</label><select id="eu_role">' + roleOpts + '</select></div><div class="form-group"><label>' + tUi('status', 'Status') + '</label><select id="eu_status">' + statusOpts + '</select></div><div class="form-group"><label>Телефон</label><input type="text" id="eu_phone" value="' + esc(phone) + '"></div><div class="form-group"><label>Email</label><input type="email" id="eu_email" value="' + esc(email) + '"></div>', function (errEl) {
+                return api('/api/v1/users/' + encodeURIComponent(login), { method: 'PATCH', body: JSON.stringify({ fio: document.getElementById('eu_fio').value.trim(), role: document.getElementById('eu_role').value, status: document.getElementById('eu_status').value, phone: document.getElementById('eu_phone').value.trim() || undefined, email: document.getElementById('eu_email').value.trim() || undefined }) }).then(function () { loadSectionUsers(); });
               });
             };
           });
@@ -1722,6 +1742,16 @@
               var login = el.getAttribute('data-pwd');
               showModal(tUi('change_password_modal', 'Change password') + ': ' + login, '<div class="form-group"><label>' + tUi('new_password', 'New password') + '</label><input type="password" id="sp_password" required></div>', function (errEl) {
                 return api('/api/v1/users/' + encodeURIComponent(login) + '/set-password', { method: 'POST', body: JSON.stringify({ password: document.getElementById('sp_password').value }) }).then(function () { loadSectionUsers(); });
+              });
+            };
+          });
+          tableDiv.querySelectorAll('[data-user-del]').forEach(function (el) {
+            el.onclick = function () {
+              var login = el.getAttribute('data-user-del').replace(/&quot;/g, '"');
+              if (!confirm('Удалить пользователя «' + login + '»? Это действие нельзя отменить.')) return;
+              api('/api/v1/users/' + encodeURIComponent(login), { method: 'DELETE' }).then(function () { loadSectionUsers(); }).catch(function (e) {
+                var msg = (e && e.data && e.data.detail) ? e.data.detail : 'Ошибка удаления';
+                alert(msg);
               });
             };
           });
@@ -2338,6 +2368,7 @@
         var agOpts = custUserSelectHtml(userList, c.login_agent || '');
         var expUsers = (userList || []).filter(function (u) { return (u.role || '').toLowerCase() === 'expeditor'; });
         var exOpts = custUserSelectHtml(expUsers, c.login_expeditor || '');
+        var req = '<span style="color:#dc2626">*</span>';
         var f = function (label, id, val) { return '<div class="form-group"><label>' + label + '</label><input type="text" id="' + id + '" value="' + custInputVal(val) + '"></div>'; };
         var num = function (label, id, val) { return '<div class="form-group"><label>' + label + '</label><input type="number" step="any" id="' + id + '" value="' + custInputVal(val) + '"></div>'; };
         var cityOpts = '<option value="">' + tUi('not_selected', '— Не выбрано —') + '</option>';
@@ -2346,7 +2377,7 @@
         territoriesCache.forEach(function (t) { territoryOpts += '<option value="' + t.id + '"' + (t.id === c.territory_id ? ' selected' : '') + '>' + escAttr(t.name) + '</option>'; });
         console.log('Built cityOpts:', cityOpts);
         console.log('Built territoryOpts:', territoryOpts);
-        return f(tUi('col_name', 'Название клиента'), 'cust_name', c.name_client) + f(tUi('col_firm', 'Название фирмы'), 'cust_firm', c.firm_name) + f(tUi('col_category', 'Категория клиента'), 'cust_category', c.category_client) + f(tUi('col_address', 'Адрес'), 'cust_address', c.address) + '<div class="form-group"><label>' + tUi('col_city', 'Город') + '</label><select id="cust_city">' + cityOpts + '</select></div><div class="form-group"><label>' + tUi('col_territory', 'Территория') + '</label><select id="cust_territory">' + territoryOpts + '</select></div>' + f(tUi('col_landmark', 'Ориентир'), 'cust_landmark', c.landmark) + f(tUi('col_phone', 'Телефон'), 'cust_phone', c.phone) + f(tUi('col_contact', 'Контактное лицо'), 'cust_contact', c.contact_person) + f(tUi('col_tax_id', 'ИНН'), 'cust_tax_id', c.tax_id) + f(tUi('col_status', 'Статус'), 'cust_status', c.status) + '<div class="form-group"><label>' + tUi('col_agent', 'login агента') + '</label><select id="cust_agent">' + agOpts + '</select></div><div class="form-group"><label>' + tUi('col_expeditor', 'login экспедитора') + '</label><select id="cust_expeditor">' + exOpts + '</select></div>' + num(tUi('col_lat', 'Широта'), 'cust_lat', c.latitude) + num(tUi('col_lon', 'Долгота'), 'cust_lon', c.longitude) + f(tUi('col_pinfl', 'ПИНФЛ'), 'cust_pinfl', c.PINFL) + f(tUi('col_contract_no', 'Договор №'), 'cust_contract_no', c.contract_no) + f(tUi('col_account_no', 'Р/С'), 'cust_account_no', c.account_no) + f(tUi('col_bank', 'Банк'), 'cust_bank', c.bank) + f(tUi('col_mfo', 'МФО'), 'cust_mfo', c.MFO) + f(tUi('col_oked', 'ОКЭД'), 'cust_oked', c.OKED) + f(tUi('col_vat_code', 'Регистрационный код плательщика НДС'), 'cust_vat_code', c.VAT_code);
+        return f(tUi('col_name', 'Название клиента') + ' ' + req, 'cust_name', c.name_client) + f(tUi('col_firm', 'Название фирмы'), 'cust_firm', c.firm_name) + f(tUi('col_category', 'Категория клиента'), 'cust_category', c.category_client) + f(tUi('col_address', 'Адрес'), 'cust_address', c.address) + '<div class="form-group"><label>' + tUi('col_city', 'Город') + ' ' + req + '</label><select id="cust_city">' + cityOpts + '</select></div><div class="form-group"><label>' + tUi('col_territory', 'Территория') + ' ' + req + '</label><select id="cust_territory">' + territoryOpts + '</select></div>' + f(tUi('col_landmark', 'Ориентир'), 'cust_landmark', c.landmark) + f(tUi('col_phone', 'Телефон'), 'cust_phone', c.phone) + f(tUi('col_contact', 'Контактное лицо'), 'cust_contact', c.contact_person) + f(tUi('col_tax_id', 'ИНН'), 'cust_tax_id', c.tax_id) + f(tUi('col_status', 'Статус'), 'cust_status', c.status) + '<div class="form-group"><label>' + tUi('col_agent', 'login агента') + ' ' + req + '</label><select id="cust_agent">' + agOpts + '</select></div><div class="form-group"><label>' + tUi('col_expeditor', 'login экспедитора') + '</label><select id="cust_expeditor">' + exOpts + '</select></div>' + num(tUi('col_lat', 'Широта'), 'cust_lat', c.latitude) + num(tUi('col_lon', 'Долгота'), 'cust_lon', c.longitude) + f(tUi('col_pinfl', 'ПИНФЛ'), 'cust_pinfl', c.PINFL) + f(tUi('col_contract_no', 'Договор №'), 'cust_contract_no', c.contract_no) + f(tUi('col_account_no', 'Р/С'), 'cust_account_no', c.account_no) + f(tUi('col_bank', 'Банк'), 'cust_bank', c.bank) + f(tUi('col_mfo', 'МФО'), 'cust_mfo', c.MFO) + f(tUi('col_oked', 'ОКЭД'), 'cust_oked', c.OKED) + f(tUi('col_vat_code', 'Регистрационный код плательщика НДС'), 'cust_vat_code', c.VAT_code);
       }
       function custFormBody() {
         var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
@@ -2356,6 +2387,13 @@
         var cityId = citySelect && citySelect.value ? parseInt(citySelect.value, 10) : null;
         var territoryId = territorySelect && territorySelect.value ? parseInt(territorySelect.value, 10) : null;
         return { name_client: g('cust_name') || null, firm_name: g('cust_firm') || null, category_client: g('cust_category') || null, address: g('cust_address') || null, city_id: cityId, territory_id: territoryId, landmark: g('cust_landmark') || null, phone: g('cust_phone') || null, contact_person: g('cust_contact') || null, tax_id: g('cust_tax_id') || null, status: g('cust_status') || null, login_agent: document.getElementById('cust_agent') ? document.getElementById('cust_agent').value || null : null, login_expeditor: document.getElementById('cust_expeditor') ? document.getElementById('cust_expeditor').value || null : null, latitude: gn('cust_lat'), longitude: gn('cust_lon'), PINFL: g('cust_pinfl') || null, contract_no: g('cust_contract_no') || null, account_no: g('cust_account_no') || null, bank: g('cust_bank') || null, MFO: g('cust_mfo') || null, OKED: g('cust_oked') || null, VAT_code: g('cust_vat_code') || null };
+      }
+      function validateCustomerCreateRequired(body) {
+        if (!body || !body.name_client) return 'Поле «Название клиента» обязательно.';
+        if (body.city_id == null) return 'Поле «Город» обязательно.';
+        if (body.territory_id == null) return 'Поле «Территория» обязательно.';
+        if (!body.login_agent) return 'Поле «login агента» обязательно.';
+        return '';
       }
       function loadSectionCustomers() {
         api('/api/v1/dictionary/user-logins').catch(function () { return []; }).then(function (userList) {
@@ -2637,7 +2675,10 @@
             loadCitiesAndTerritories().then(function () {
               var bodyHtml = custEditFormHtml({ status: 'Активный' }, userList);
               showModal(tr('ui.customers.add', tUi('add_customer', 'Добавить клиента')), bodyHtml, function (errEl) {
-                return api('/api/v1/customers', { method: 'POST', body: JSON.stringify(custFormBody()) }).then(function () { loadSectionCustomers(); });
+                var body = custFormBody();
+                var validationErr = validateCustomerCreateRequired(body);
+                if (validationErr) throw { data: { detail: validationErr } };
+                return api('/api/v1/customers', { method: 'POST', body: JSON.stringify(body) }).then(function () { loadSectionCustomers(); });
               });
             });
           };
@@ -3172,17 +3213,8 @@
             var statusCodeLower = String(status_code || '').toLowerCase();
             var isDeliveryStatus = ['2', 'delivery', 'доставка'].indexOf(statusCodeLower) >= 0 || /достав|deliver|shipping/.test((statusLabel + ' ' + statusCodeLower).toLowerCase());
             var payment_type_code = document.getElementById('orderCreatePaymentType').value || null;
-            if (!customer_id) { if (errEl) errEl.textContent = 'Выберите клиента.'; return; }
-            var rows = tbody.querySelectorAll('tr');
-            var items = []; var total = 0;
-            for (var i = 0; i < rows.length; i++) {
-              var product = rows[i].querySelector('.order-item-product').value;
-              var qty = parseInt(rows[i].querySelector('.order-item-qty').value, 10) || 0;
-              var priceVal = rows[i].querySelector('.order-item-price').value.trim();
-              var price = priceVal !== '' ? parseFloat(priceVal) : null;
-              if (product && qty > 0) { items.push({ product_code: product, quantity: qty, price: price, itemId: rows[i].getAttribute('data-item-id') || null }); total += qty * (price || 0); }
-            }
-            if (!items.length) { if (errEl) errEl.textContent = 'Добавьте хотя бы одну позицию с товаром и количеством.'; return; }
+            var currentRole = ((currentUser && currentUser.role) ? currentUser.role : '').toLowerCase();
+            var isExpeditorEdit = !!(isEdit && currentRole === 'expeditor');
             function errText(e) {
               if (!e) return 'Неизвестная ошибка';
               var d = e.data;
@@ -3194,6 +3226,30 @@
               if (d) return JSON.stringify(d);
               return (e.message || e.status || 'Ошибка соединения или сервера') + '';
             }
+            if (isExpeditorEdit) {
+              saveBtn.disabled = true;
+              saveBtn.textContent = 'Сохранение...';
+              api('/api/v1/orders/' + orderId, { method: 'PATCH', body: JSON.stringify({ status_code: status_code }) }).then(function () {
+                if (msgEl) { msgEl.textContent = 'Статус заказа обновлён.'; msgEl.style.display = 'block'; }
+                setTimeout(function () { loadSectionOrders(); }, 1200);
+              }).catch(function (e) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = tUi('save_order_btn', 'Сохранить заказ');
+                if (errEl) errEl.textContent = errText(e);
+              });
+              return;
+            }
+            if (!customer_id) { if (errEl) errEl.textContent = 'Выберите клиента.'; return; }
+            var rows = tbody.querySelectorAll('tr');
+            var items = []; var total = 0;
+            for (var i = 0; i < rows.length; i++) {
+              var product = rows[i].querySelector('.order-item-product').value;
+              var qty = parseInt(rows[i].querySelector('.order-item-qty').value, 10) || 0;
+              var priceVal = rows[i].querySelector('.order-item-price').value.trim();
+              var price = priceVal !== '' ? parseFloat(priceVal) : null;
+              if (product && qty > 0) { items.push({ product_code: product, quantity: qty, price: price, itemId: rows[i].getAttribute('data-item-id') || null }); total += qty * (price || 0); }
+            }
+            if (!items.length) { if (errEl) errEl.textContent = 'Добавьте хотя бы одну позицию с товаром и количеством.'; return; }
             var login_agent = document.getElementById('orderCreateAgent').value || null;
             var login_expeditor = document.getElementById('orderCreateExpeditor').value || null;
             var schedInput = document.getElementById('orderScheduledDelivery');
@@ -5771,6 +5827,8 @@
               formHtml += '<div class="form-group"><label>Кассир <span style="color:#c00">*</span></label><select id="cr_cashier"></select></div>';
               formHtml += '<div class="form-group"><label>Комментарий</label><input type="text" id="cr_comment" placeholder="необяз."></div>';
               showModal('Приём наличных в кассу', formHtml, function (errEl) { return Promise.resolve(); });
+              var defaultSaveBtn = document.querySelector('#modalContainer .modal.show [id$="_save"]');
+              if (defaultSaveBtn) defaultSaveBtn.remove();
               api('/api/v1/dictionary/user-logins').catch(function () { return []; }).then(function (userList) {
                 var sel = document.getElementById('cr_cashier');
                 if (sel) {
@@ -5859,17 +5917,32 @@
           var sorted = data.slice().sort(function (a, b) {
             return tableSortCompare(a, b, crSortCol, crSortDir, function (r, c) {
               if (c === 'amount') return (r.amount != null ? String(Number(r.amount)).padStart(20, '0') : '');
+              if (c === 'payment_type_name') return (r.payment_type_name || r.payment_type_code || '').toString().toLowerCase();
               return (r[c] || '').toString().toLowerCase();
             });
           });
           var arrow = crSortDir > 0 ? ' ▲' : ' ▼';
           var th = function (col, lbl) { return '<th class="sortable" data-col="' + col + '" style="cursor:pointer">' + lbl + (crSortCol === col ? arrow : '') + '</th>'; };
-          var t = '<div style="overflow-x:auto"><table><thead><tr>' + th('operation_number', '№ операции') + th('amount', 'Сумма') + th('payment_type_code', 'Тип оплаты') + th('cashier_login', 'Кассир') + '<th>Источник</th>' + th('operation_date', 'Дата') + '</tr></thead><tbody>';
+          var t = '<div style="overflow-x:auto"><table><thead><tr>'
+            + th('operation_number', tUi('cash_col_operation_no', '№ операции'))
+            + th('order_id', tUi('cash_col_order_no', '№ заказа'))
+            + th('customer_name', tUi('cash_col_customer', 'Клиент'))
+            + th('tax_id', tUi('cash_col_tax_id', 'ИНН'))
+            + th('amount', tUi('col_amount', 'Сумма'))
+            + th('payment_type_name', tUi('col_payment_type', 'Тип оплаты'))
+            + th('cashier_login', tUi('cash_col_cashier', 'Кассир'))
+            + '<th>' + tUi('cash_col_source', 'Источник') + '</th>'
+            + th('operation_date', tUi('cash_col_date', 'Дата'))
+            + '</tr></thead><tbody>';
           sorted.forEach(function (r) {
             var amt = (r.amount != null) ? Number(r.amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : '—';
             var dt = r.operation_date ? formatDateOnly(r.operation_date) : '—';
-            var source = r.expeditor_login ? ('от экспедитора ' + r.expeditor_login) : (r.customer_id != null ? 'от клиента (ID ' + r.customer_id + ')' : 'от клиента');
-            t += '<tr><td>' + escAttr(r.operation_number || '') + '</td><td style="text-align:right;font-weight:600">' + amt + '</td><td>' + escAttr(r.payment_type_code || '') + '</td><td>' + escAttr(r.cashier_login || '') + '</td><td>' + escAttr(source) + '</td><td>' + dt + '</td></tr>';
+            var source = r.expeditor_login
+              ? ('от экспедитора ' + r.expeditor_login)
+              : (r.customer_name
+                ? ('от клиента ' + r.customer_name)
+                : (r.customer_id != null ? 'от клиента (ID ' + r.customer_id + ')' : 'от клиента'));
+            t += '<tr><td>' + escAttr(r.operation_number || '') + '</td><td>' + escAttr(r.order_id || '—') + '</td><td>' + escAttr(r.customer_name || '—') + '</td><td>' + escAttr(r.tax_id || '—') + '</td><td style="text-align:right;font-weight:600">' + amt + '</td><td>' + escAttr(r.payment_type_name || r.payment_type_code || '') + '</td><td>' + escAttr(r.cashier_login || '') + '</td><td>' + escAttr(source) + '</td><td>' + dt + '</td></tr>';
           });
           t += '</tbody></table></div><p style="margin-top:12px;font-weight:600">Итого за период: ' + lastCrTotal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' сум</p>';
           div.innerHTML = t;
@@ -5973,14 +6046,54 @@
           if (cofDf) window.flatpickr(cofDf, { locale: 'ru', dateFormat: 'Y-m-d', altInput: true, altFormat: 'd.m.Y', allowInput: true });
           if (cofDt) window.flatpickr(cofDt, { locale: 'ru', dateFormat: 'Y-m-d', altInput: true, altFormat: 'd.m.Y', allowInput: true });
         }
+        var cofSortCol = 'order_no';
+        var cofSortDir = -1;
+        var lastCofData = [];
+        function cofSortKey(r, col) {
+          if (col === 'order_no') return Number(r.order_no || 0);
+          if (col === 'customer_name') return (r.customer_name || '').toString().toLowerCase();
+          if (col === 'tax_id') return (r.tax_id || '').toString().toLowerCase();
+          if (col === 'account_no') return (r.account_no || '').toString().toLowerCase();
+          if (col === 'agent_name') return (r.agent_name || r.login_agent || '').toString().toLowerCase();
+          if (col === 'expeditor_name') return (r.expeditor_name || r.login_expeditor || '').toString().toLowerCase();
+          if (col === 'total_amount') return Number(r.total_amount || 0);
+          if (col === 'payment_type_name') return (r.payment_type_name || r.payment_type_code || '').toString().toLowerCase();
+          if (col === 'status_name') return (r.status_name || r.status_code || '').toString().toLowerCase();
+          if (col === 'scheduled_delivery_at') {
+            try {
+              var d = parseBackendDate(r.scheduled_delivery_at);
+              return d ? d.getTime() : 0;
+            } catch (e) { return 0; }
+          }
+          if (col === 'payment_confirmed') return r.payment_confirmed ? 1 : 0;
+          return (r[col] || '').toString().toLowerCase();
+        }
         function renderCashierOrdersTable(data) {
           if (!div) return;
           if (!data || !data.length) {
             div.innerHTML = '<p style="color:#666">Нет заказов с типом оплаты.</p>';
             return;
           }
-          var t = '<div style="overflow-x:auto"><table><thead><tr><th>№ заказа</th><th>Клиент</th><th>ИНН</th><th>Р/С</th><th>Агент</th><th>Экспедитор</th><th>Сумма</th><th>Тип оплаты</th><th>Статус</th><th>Дата поставки заказа</th><th>Оплата подтверждена</th><th>Действия</th></tr></thead><tbody>';
-          data.forEach(function (r) {
+          lastCofData = (data || []).slice();
+          var sorted = (data || []).slice().sort(function (a, b) {
+            return tableSortCompare(a, b, cofSortCol, cofSortDir, cofSortKey);
+          });
+          var arrow = cofSortDir > 0 ? ' ▲' : ' ▼';
+          var th = function (col, lbl) { return '<th class="sortable" data-col="' + col + '" style="cursor:pointer">' + lbl + (cofSortCol === col ? arrow : '') + '</th>'; };
+          var t = '<div style="overflow-x:auto"><table><thead><tr>'
+            + th('order_no', '№ заказа')
+            + th('customer_name', 'Клиент')
+            + th('tax_id', 'ИНН')
+            + th('account_no', 'Р/С')
+            + th('agent_name', 'Агент')
+            + th('expeditor_name', 'Экспедитор')
+            + th('total_amount', 'Сумма')
+            + th('payment_type_name', 'Тип оплаты')
+            + th('status_name', 'Статус')
+            + th('scheduled_delivery_at', 'Дата поставки заказа')
+            + th('payment_confirmed', 'Оплата подтверждена')
+            + '<th>Действия</th></tr></thead><tbody>';
+          sorted.forEach(function (r) {
             var amt = (r.total_amount != null) ? Number(r.total_amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : '—';
             var payConfirmed = r.payment_confirmed ? '<span class="status-badge status-badge--completed">Подтверждено</span>' : '<span class="status-badge status-badge--pending">Не подтверждено</span>';
             var confirmBtn = r.payment_confirmed ? '' : '<button type="button" class="btn btn-primary btn-small" data-order-no="' + escAttr(r.order_no) + '" data-customer-id="' + (r.customer_id || '') + '" data-amount="' + (r.total_amount != null ? r.total_amount : '') + '" data-payment-type="' + escAttr(r.payment_type_code || '') + '">Подтвердить оплату</button>';
@@ -5996,6 +6109,15 @@
           });
           t += '</tbody></table></div>';
           div.innerHTML = t;
+          div.querySelectorAll('th.sortable').forEach(function (thEl) {
+            thEl.onclick = function () {
+              var col = thEl.getAttribute('data-col');
+              if (!col) return;
+              if (cofSortCol === col) cofSortDir = -cofSortDir;
+              else { cofSortCol = col; cofSortDir = 1; }
+              renderCashierOrdersTable(lastCofData);
+            };
+          });
           div.querySelectorAll('button[data-order-no]').forEach(function (btn) {
             btn.onclick = function () {
               var orderNo = parseInt(btn.getAttribute('data-order-no'), 10);
