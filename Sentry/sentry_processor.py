@@ -9,6 +9,15 @@ import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 
+# Avoid UnicodeEncodeError on Windows consoles with cp1252.
+import sys
+for _stream in (getattr(sys, "stdout", None), getattr(sys, "stderr", None)):
+    try:
+        if _stream and hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
+
 # Константы в коде
 SENTRY_TOKEN = os.getenv("SENTRY_TOKEN", "").strip()
 ORG_SLUG = "zakharenkov"

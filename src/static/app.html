@@ -1917,6 +1917,42 @@
       }
 
       function escAttr(s) { var str = (s == null || s === undefined) ? '' : String(s); return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+      function localizedPaymentTypeName(code, name) {
+        var byCode = {
+          bank_sum: 'Безналичный перевод (UZS)',
+          cash_sum: 'Наличные (UZS)',
+          card_sum: 'Банковская карта (UZS)'
+        };
+        var key = (code || '').toString().trim().toLowerCase();
+        return byCode[key] || name || '';
+      }
+      function localizedProductTypeName(name) {
+        var byName = {
+          Yogurt: 'Йогурт',
+          Tvorog: 'Творог',
+          Tara: 'Тара',
+          Milk: 'Молоко',
+          Kefir: 'Кефир',
+          Smetana: 'Сметана',
+          Maslo: 'Масло'
+        };
+        return byName[name] || name || '';
+      }
+      function localizedOperationTypeName(code, name) {
+        var byCode = {
+          allocation: 'Выдача экспедитору',
+          delivery: 'Доставка клиенту',
+          warehouse_receipt: 'Приход на склад',
+          transfer: 'Перемещение',
+          write_off: 'Списание',
+          promotional_sample: 'Промо-образцы',
+          payment_receipt_from_customer: 'Приём оплаты от клиента',
+          cash_handover_from_expeditor: 'Передача наличных от экспедитора',
+          cash_receipt: 'Приём наличных'
+        };
+        var key = (code || '').toString().trim().toLowerCase();
+        return byCode[key] || name || '';
+      }
       function tableSortCompare(a, b, sortCol, sortDir, getVal) {
         getVal = getVal || function (r, c) { return (r[c] || '').toString().toLowerCase(); };
         var va = getVal(a, sortCol);
@@ -1971,7 +2007,8 @@
             sorted.forEach(function (r) {
               var c = escAttr(r.code), n = escAttr(r.name), d = escAttr(r.description);
               var act = (r.active === false ? 'Нет' : 'Да');
-              t += '<tr><td>' + (r.code || '') + '</td><td>' + (r.name || '') + '</td><td>' + (r.description || '') + '</td><td>' + act + '</td><td>';
+              var localizedName = localizedPaymentTypeName(r.code, r.name);
+              t += '<tr><td>' + (r.code || '') + '</td><td>' + (localizedName || '') + '</td><td>' + (r.description || '') + '</td><td>' + act + '</td><td>';
               if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-edit data-code="' + c + '" data-name="' + n + '" data-desc="' + d + '" data-active="' + (r.active === false ? 'false' : 'true') + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-del data-code="' + c + '">Удалить</button>';
               t += '</td></tr>';
             });
@@ -2112,7 +2149,8 @@
             var t = '<table><thead><tr>' + sortableTh('name', 'Название', sortCol, sortDir) + sortableTh('description', 'Описание', sortCol, sortDir) + '<th>Действия</th></tr></thead><tbody>';
             sorted.forEach(function (r) {
               var n = escAttr(r.name), d = escAttr(r.description);
-              t += '<tr><td>' + (r.name || '') + '</td><td>' + (r.description || '') + '</td><td>';
+              var localizedName = localizedProductTypeName(r.name);
+              t += '<tr><td>' + (localizedName || '') + '</td><td>' + (r.description || '') + '</td><td>';
               if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-edit data-name="' + n + '" data-desc="' + d + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-del data-name="' + n + '">Удалить</button>';
               t += '</td></tr>';
             });
@@ -2140,7 +2178,7 @@
           var btn = document.getElementById('refAdd');
           if (!btn || !isAdmin()) return;
           btn.onclick = function () {
-            showModal('Добавить тип продукта', '<div class="form-group"><label>Название</label><input type="text" id="rp_name" placeholder="например Yogurt"></div><div class="form-group"><label>Описание</label><input type="text" id="rp_desc" placeholder="Описание"></div>', function (errEl) {
+            showModal('Добавить тип продукта', '<div class="form-group"><label>Название</label><input type="text" id="rp_name" placeholder="например Йогурт"></div><div class="form-group"><label>Описание</label><input type="text" id="rp_desc" placeholder="Описание"></div>', function (errEl) {
               return api('/api/v1/dictionary/products/types', { method: 'POST', body: JSON.stringify({ name: document.getElementById('rp_name').value.trim(), description: document.getElementById('rp_desc').value.trim() || null }) }).then(function () { loadSectionRefProducts(); });
             });
           };
@@ -2183,7 +2221,8 @@
               var c = escAttr(r.code), n = escAttr(r.name), d = escAttr(r.description), rr = (r.role || '').toLowerCase();
               var actText = (r.active === true ? 'Да' : 'Нет');
               var actAttr = (r.active === true ? 'true' : 'false');
-              t += '<tr><td>' + (r.code || '') + '</td><td>' + (r.name || '') + '</td><td>' + (r.description || '') + '</td><td>' + (ROLE_LABELS[rr] || rr || '—') + '</td><td>' + actText + '</td><td>';
+              var localizedName = localizedOperationTypeName(r.code, r.name);
+              t += '<tr><td>' + (r.code || '') + '</td><td>' + (localizedName || '') + '</td><td>' + (r.description || '') + '</td><td>' + (ROLE_LABELS[rr] || rr || '—') + '</td><td>' + actText + '</td><td>';
               if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-edit data-code="' + c + '" data-name="' + n + '" data-desc="' + d + '" data-role="' + escAttr(rr) + '" data-active="' + actAttr + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-del data-code="' + c + '">Удалить</button>';
               t += '</td></tr>';
             });
@@ -2252,7 +2291,7 @@
         var skOpts = optsAll.replace('value="' + escSk + '"', 'value="' + escSk + '" selected');
         var agOpts = optsAll.replace('value="' + escAg + '"', 'value="' + escAg + '" selected');
         var exOpts = optsExp.replace('value="' + escEx + '"', 'value="' + escEx + '" selected');
-        return '<div class="form-group"><label>Кладовщик</label><select id="wh_sk">' + skOpts + '</select></div><div class="form-group"><label>Агент</label><select id="wh_agent">' + agOpts + '</select></div><div class="form-group"><label>Экспедитор (login)</label><select id="wh_exp">' + exOpts + '</select></div>';
+        return '<div class="form-group"><label>Кладовщик</label><select id="wh_sk">' + skOpts + '</select></div><div class="form-group"><label>Агент</label><select id="wh_agent">' + agOpts + '</select></div><div class="form-group"><label>Экспедитор (логин)</label><select id="wh_exp">' + exOpts + '</select></div>';
       }
       function loadSectionWarehouses() {
         Promise.all([
@@ -2272,7 +2311,7 @@
           var sortDir = 1;
           function renderWhTable(data) {
             var sorted = data.slice().sort(function (a, b) { return tableSortCompare(a, b, sortCol, sortDir); });
-            var t = '<table><thead><tr>' + sortableTh('code', 'Код', sortCol, sortDir) + sortableTh('name', 'Название', sortCol, sortDir) + sortableTh('type', 'Тип', sortCol, sortDir) + sortableTh('storekeeper', 'Кладовщик', sortCol, sortDir) + sortableTh('agent', 'Агент', sortCol, sortDir) + sortableTh('expeditor_login', 'Экспедитор (login)', sortCol, sortDir) + '<th>Действия</th></tr></thead><tbody>';
+            var t = '<table><thead><tr>' + sortableTh('code', 'Код', sortCol, sortDir) + sortableTh('name', 'Название', sortCol, sortDir) + sortableTh('type', 'Тип', sortCol, sortDir) + sortableTh('storekeeper', 'Кладовщик', sortCol, sortDir) + sortableTh('agent', 'Агент', sortCol, sortDir) + sortableTh('expeditor_login', 'Экспедитор (логин)', sortCol, sortDir) + '<th>Действия</th></tr></thead><tbody>';
             sorted.forEach(function (w) {
               var c = escAttr(w.code), n = escAttr(w.name), ty = escAttr(w.type), sk = escAttr(w.storekeeper), ag = escAttr(w.agent), ex = escAttr(w.expeditor_login);
               t += '<tr><td>' + (w.code || '') + '</td><td>' + (w.name || '') + '</td><td>' + (w.type || '') + '</td><td>' + (w.storekeeper || '') + '</td><td>' + (w.agent || '') + '</td><td>' + (w.expeditor_login || '') + '</td><td>';

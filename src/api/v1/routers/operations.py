@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from src.database.connection import get_db_session
-from src.database.models import Operation, Customer, Product, Order, OperationConfig, OperationType, Batch, Item, Status
+from src.database.models import Operation, Customer, Product, Order, OperationConfig, OperationType, Batch, Item, Status, Warehouse
 from src.core.deps import get_current_user, require_admin
 from src.core.pagination import PaginatedResponse, PaginationParams
 from src.database.models import User
@@ -1050,6 +1050,29 @@ async def create_operation_from_config(
                     status_code=400,
                     detail="Ð—Ð°ÐºÐ°Ð· ÑƒÐ¶Ðµ Ð´Ð¾ÑÑ‚Ð°Ð²Ð»ÐµÐ½. ÐÐµÐ»ÑŒÐ·Ñ ÑÐ¾Ð·Ð´Ð°Ñ‚ÑŒ ÐµÑ‰Ñ‘ Ð¾Ð´Ð½Ñƒ Ð¾Ð¿ÐµÑ€Ð°Ñ†Ð¸ÑŽ Ð´Ð¾ÑÑ‚Ð°Ð²ÐºÐ¸ Ð¿Ð¾ ÑÑ‚Ð¾Ð¼Ñƒ Ð·Ð°ÐºÐ°Ð·Ñƒ.",
                 )
+        expeditor_login = (str(data.get("expeditor_login") or "")).strip()
+        if expeditor_login:
+            wh_result = await session.execute(
+                select(Warehouse.code)
+                .where(Warehouse.expeditor_login == expeditor_login)
+                .order_by(Warehouse.code)
+                .limit(1)
+            )
+            expeditor_warehouse = wh_result.scalar_one_or_none()
+            if not expeditor_warehouse:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Ð”Ð»Ñ ÑÐºÑÐ¿ÐµÐ´Ð¸Ñ‚Ð¾Ñ€Ð° Â«{expeditor_login}Â» Ð½Ðµ Ð½Ð°Ð·Ð½Ð°Ñ‡ÐµÐ½ ÑÐºÐ»Ð°Ð´.",
+                )
+            requested_warehouse = (str(data.get("warehouse_from") or "")).strip()
+            if requested_warehouse and requested_warehouse != expeditor_warehouse:
+                logger.warning(
+                    "Delivery warehouse_from overridden from %s to expeditor warehouse %s for %s",
+                    requested_warehouse,
+                    expeditor_warehouse,
+                    expeditor_login,
+                )
+            data["warehouse_from"] = expeditor_warehouse
         wh_from = data.get("warehouse_from")
         pc = data.get("product_code")
         bc = data.get("batch_code")
@@ -1125,6 +1148,17 @@ async def create_operation_from_config(
     if operation_type == "promotional_sample":
         data["amount"] = 0
     
+    if data.get("warehouse_from") is not None:
+        data["warehouse_from"] = str(data["warehouse_from"]).strip()
+    if data.get("warehouse_to") is not None:
+        data["warehouse_to"] = str(data["warehouse_to"]).strip()
+    if data.get("product_code") is not None:
+        data["product_code"] = str(data["product_code"]).strip()
+    if data.get("batch_code") is not None:
+        data["batch_code"] = str(data["batch_code"]).strip()
+    if data.get("expeditor_login") is not None:
+        data["expeditor_login"] = str(data["expeditor_login"]).strip()
+
     op = Operation(
         operation_number=operation_number,
         type_code=operation_type,

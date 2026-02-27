@@ -1,0 +1,3804 @@
+{
+  "metadata": {
+    "organization": "zakharenkov",
+    "project_filter": "sales",
+    "total_issues": 7,
+    "fetched_at": "2026-02-27T14:20:35.216100+00:00",
+    "period": "14d unresolved + historical merged",
+    "by_project": {
+      "sales": 7
+    }
+  },
+  "errors": [
+    {
+      "id": "7296136308",
+      "title": "DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.NumericValueOutOfRangeError'>: numeric field overflow",
+      "status": "unresolved",
+      "level": "error",
+      "count": 3,
+      "first_seen": "2026-02-27T10:23:20Z",
+      "last_seen": "2026-02-27T10:23:33Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7296136308/",
+      "stacktrace": {
+        "exception_type": "NumericValueOutOfRangeError",
+        "exception_value": "numeric field overflow",
+        "frames": [
+          {
+            "filename": "sqlalchemy/dialects/postgresql/asyncpg.py",
+            "line_number": 550,
+            "function": "_prepare_and_execute",
+            "code_context": [
+              [
+                545,
+                ""
+              ],
+              [
+                546,
+                "                if self.server_side:"
+              ],
+              [
+                547,
+                "                    self._cursor = await prepared_stmt.cursor(*parameters)"
+              ],
+              [
+                548,
+                "                    self.rowcount = -1"
+              ],
+              [
+                549,
+                "                else:"
+              ],
+              [
+                550,
+                "                    self._rows = deque(await prepared_stmt.fetch(*parameters))"
+              ],
+              [
+                551,
+                "                    status = prepared_stmt.get_statusmsg()"
+              ],
+              [
+                552,
+                ""
+              ],
+              [
+                553,
+                "                    reg = re.match("
+              ],
+              [
+                554,
+                "                        r\"(?:SELECT|UPDATE|DELETE|INSERT \\d+) (\\d+)\","
+              ],
+              [
+                555,
+                "                        status or \"\","
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/prepared_stmt.py",
+            "line_number": 177,
+            "function": "fetch",
+            "code_context": [
+              [
+                172,
+                "        :param args: Query arguments"
+              ],
+              [
+                173,
+                "        :param float timeout: Optional timeout value in seconds."
+              ],
+              [
+                174,
+                ""
+              ],
+              [
+                175,
+                "        :return: A list of :class:`Record` instances."
+              ],
+              [
+                176,
+                "        \"\"\""
+              ],
+              [
+                177,
+                "        data = await self.__bind_execute(args, 0, timeout)"
+              ],
+              [
+                178,
+                "        return data"
+              ],
+              [
+                179,
+                ""
+              ],
+              [
+                180,
+                "    @connresource.guarded"
+              ],
+              [
+                181,
+                "    async def fetchval(self, *args, column=0, timeout=None):"
+              ],
+              [
+                182,
+                "        \"\"\"Execute the statement and return a value in the first row."
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/prepared_stmt.py",
+            "line_number": 268,
+            "function": "__bind_execute",
+            "code_context": [
+              [
+                263,
+                "            # invalidate themselves (unfortunately, clearing caches again)."
+              ],
+              [
+                264,
+                "            self._state.mark_closed()"
+              ],
+              [
+                265,
+                "            raise"
+              ],
+              [
+                266,
+                ""
+              ],
+              [
+                267,
+                "    async def __bind_execute(self, args, limit, timeout):"
+              ],
+              [
+                268,
+                "        data, status, _ = await self.__do_execute("
+              ],
+              [
+                269,
+                "            lambda protocol: protocol.bind_execute("
+              ],
+              [
+                270,
+                "                self._state, args, '', limit, True, timeout))"
+              ],
+              [
+                271,
+                "        self._last_status = status"
+              ],
+              [
+                272,
+                "        return data"
+              ],
+              [
+                273,
+                ""
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/prepared_stmt.py",
+            "line_number": 257,
+            "function": "__do_execute",
+            "code_context": [
+              [
+                252,
+                "            ))"
+              ],
+              [
+                253,
+                ""
+              ],
+              [
+                254,
+                "    async def __do_execute(self, executor):"
+              ],
+              [
+                255,
+                "        protocol = self._connection._protocol"
+              ],
+              [
+                256,
+                "        try:"
+              ],
+              [
+                257,
+                "            return await executor(protocol)"
+              ],
+              [
+                258,
+                "        except exceptions.OutdatedSchemaCacheError:"
+              ],
+              [
+                259,
+                "            await self._connection.reload_schema_state()"
+              ],
+              [
+                260,
+                "            # We can not find all manually created prepared statements, so just"
+              ],
+              [
+                261,
+                "            # drop known cached ones in the `self._connection`."
+              ],
+              [
+                262,
+                "            # Other manually created prepared statements will fail and"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/protocol/protocol.pyx",
+            "line_number": 205,
+            "function": "bind_execute",
+            "code_context": [
+              [
+                200,
+                "            self.queries_count += 1"
+              ],
+              [
+                201,
+                "        except Exception as ex:"
+              ],
+              [
+                202,
+                "            waiter.set_exception(ex)"
+              ],
+              [
+                203,
+                "            self._coreproto_error()"
+              ],
+              [
+                204,
+                "        finally:"
+              ],
+              [
+                205,
+                "            return await waiter"
+              ],
+              [
+                206,
+                ""
+              ],
+              [
+                207,
+                "    async def bind_execute_many("
+              ],
+              [
+                208,
+                "        self,"
+              ],
+              [
+                209,
+                "        state: PreparedStatementState,"
+              ],
+              [
+                210,
+                "        args,"
+              ]
+            ]
+          }
+        ]
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": "95.214.210.254"
+        },
+        "tags": {
+          "browser": "Chrome 145",
+          "browser.name": "Chrome",
+          "client_os": "Windows",
+          "client_os.name": "Windows",
+          "environment": "production",
+          "handled": "yes",
+          "level": "error",
+          "logger": "src.core.exception_handlers",
+          "mechanism": "logging",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-api",
+          "transaction": "/api/v1/customers",
+          "url": "http://sales.zakharenkov.ru/api/v1/customers",
+          "user": "ip:95.214.210.254"
+        }
+      },
+      "comment": ""
+    },
+    {
+      "id": "7275717149",
+      "title": "Database session error: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.NumericValueOutOfRangeError'>: numeric field overflow",
+      "status": "unresolved",
+      "level": "error",
+      "count": 128,
+      "first_seen": "2026-02-19T05:35:27Z",
+      "last_seen": "2026-02-27T10:23:33Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7275717149/",
+      "stacktrace": {
+        "exception_type": "Unknown",
+        "exception_value": "Unknown",
+        "frames": []
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": "95.214.210.254"
+        },
+        "tags": {
+          "browser": "Chrome 145",
+          "browser.name": "Chrome",
+          "client_os": "Windows",
+          "client_os.name": "Windows",
+          "environment": "production",
+          "level": "error",
+          "logger": "src.database.connection",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-api",
+          "transaction": "/api/v1/customers",
+          "url": "http://sales.zakharenkov.ru/api/v1/customers",
+          "user": "ip:95.214.210.254"
+        }
+      },
+      "comment": ""
+    },
+    {
+      "id": "7278760989",
+      "title": "RuntimeError: Database connection failed",
+      "status": "unresolved",
+      "level": "error",
+      "count": 5,
+      "first_seen": "2026-02-20T08:32:38Z",
+      "last_seen": "2026-02-27T06:08:21Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7278760989/",
+      "stacktrace": {
+        "exception_type": "RuntimeError",
+        "exception_value": "Database connection failed",
+        "frames": [
+          {
+            "filename": "starlette/applications.py",
+            "line_number": 112,
+            "function": "__call__",
+            "code_context": [
+              [
+                107,
+                ""
+              ],
+              [
+                108,
+                "    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:"
+              ],
+              [
+                109,
+                "        scope[\"app\"] = self"
+              ],
+              [
+                110,
+                "        if self.middleware_stack is None:"
+              ],
+              [
+                111,
+                "            self.middleware_stack = self.build_middleware_stack()"
+              ],
+              [
+                112,
+                "        await self.middleware_stack(scope, receive, send)"
+              ],
+              [
+                113,
+                ""
+              ],
+              [
+                114,
+                "    def on_event(self, event_type: str) -> typing.Callable:  # type: ignore[type-arg]"
+              ],
+              [
+                115,
+                "        return self.router.on_event(event_type)  # pragma: no cover"
+              ],
+              [
+                116,
+                ""
+              ],
+              [
+                117,
+                "    def mount(self, path: str, app: ASGIApp, name: str | None = None) -> None:"
+              ]
+            ]
+          },
+          {
+            "filename": "starlette/middleware/errors.py",
+            "line_number": 152,
+            "function": "__call__",
+            "code_context": [
+              [
+                147,
+                "        self.handler = handler"
+              ],
+              [
+                148,
+                "        self.debug = debug"
+              ],
+              [
+                149,
+                ""
+              ],
+              [
+                150,
+                "    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:"
+              ],
+              [
+                151,
+                "        if scope[\"type\"] != \"http\":"
+              ],
+              [
+                152,
+                "            await self.app(scope, receive, send)"
+              ],
+              [
+                153,
+                "            return"
+              ],
+              [
+                154,
+                ""
+              ],
+              [
+                155,
+                "        response_started = False"
+              ],
+              [
+                156,
+                ""
+              ],
+              [
+                157,
+                "        async def _send(message: Message) -> None:"
+              ]
+            ]
+          },
+          {
+            "filename": "starlette/middleware/base.py",
+            "line_number": 100,
+            "function": "__call__",
+            "code_context": [
+              [
+                95,
+                "        self.app = app"
+              ],
+              [
+                96,
+                "        self.dispatch_func = self.dispatch if dispatch is None else dispatch"
+              ],
+              [
+                97,
+                ""
+              ],
+              [
+                98,
+                "    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:"
+              ],
+              [
+                99,
+                "        if scope[\"type\"] != \"http\":"
+              ],
+              [
+                100,
+                "            await self.app(scope, receive, send)"
+              ],
+              [
+                101,
+                "            return"
+              ],
+              [
+                102,
+                ""
+              ],
+              [
+                103,
+                "        request = _CachedRequest(scope, receive)"
+              ],
+              [
+                104,
+                "        wrapped_receive = request.wrapped_receive"
+              ],
+              [
+                105,
+                "        response_sent = anyio.Event()"
+              ]
+            ]
+          },
+          {
+            "filename": "starlette/middleware/base.py",
+            "line_number": 100,
+            "function": "__call__",
+            "code_context": [
+              [
+                95,
+                "        self.app = app"
+              ],
+              [
+                96,
+                "        self.dispatch_func = self.dispatch if dispatch is None else dispatch"
+              ],
+              [
+                97,
+                ""
+              ],
+              [
+                98,
+                "    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:"
+              ],
+              [
+                99,
+                "        if scope[\"type\"] != \"http\":"
+              ],
+              [
+                100,
+                "            await self.app(scope, receive, send)"
+              ],
+              [
+                101,
+                "            return"
+              ],
+              [
+                102,
+                ""
+              ],
+              [
+                103,
+                "        request = _CachedRequest(scope, receive)"
+              ],
+              [
+                104,
+                "        wrapped_receive = request.wrapped_receive"
+              ],
+              [
+                105,
+                "        response_sent = anyio.Event()"
+              ]
+            ]
+          },
+          {
+            "filename": "starlette/middleware/cors.py",
+            "line_number": 77,
+            "function": "__call__",
+            "code_context": [
+              [
+                72,
+                "        self.simple_headers = simple_headers"
+              ],
+              [
+                73,
+                "        self.preflight_headers = preflight_headers"
+              ],
+              [
+                74,
+                ""
+              ],
+              [
+                75,
+                "    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:"
+              ],
+              [
+                76,
+                "        if scope[\"type\"] != \"http\":  # pragma: no cover"
+              ],
+              [
+                77,
+                "            await self.app(scope, receive, send)"
+              ],
+              [
+                78,
+                "            return"
+              ],
+              [
+                79,
+                ""
+              ],
+              [
+                80,
+                "        method = scope[\"method\"]"
+              ],
+              [
+                81,
+                "        headers = Headers(scope=scope)"
+              ],
+              [
+                82,
+                "        origin = headers.get(\"origin\")"
+              ]
+            ]
+          },
+          {
+            "filename": "starlette/middleware/base.py",
+            "line_number": 100,
+            "function": "__call__",
+            "code_context": [
+              [
+                95,
+                "        self.app = app"
+              ],
+              [
+                96,
+                "        self.dispatch_func = self.dispatch if dispatch is None else dispatch"
+              ],
+              [
+                97,
+                ""
+              ],
+              [
+                98,
+                "    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:"
+              ],
+              [
+                99,
+                "        if scope[\"type\"] != \"http\":"
+              ],
+              [
+                100,
+                "            await self.app(scope, receive, send)"
+              ],
+              [
+                101,
+                "            return"
+              ],
+              [
+                102,
+                ""
+              ],
+              [
+                103,
+                "        request = _CachedRequest(scope, receive)"
+              ],
+              [
+                104,
+                "        wrapped_receive = request.wrapped_receive"
+              ],
+              [
+                105,
+                "        response_sent = anyio.Event()"
+              ]
+            ]
+          },
+          {
+            "filename": "starlette/middleware/exceptions.py",
+            "line_number": 48,
+            "function": "__call__",
+            "code_context": [
+              [
+                43,
+                "            assert issubclass(exc_class_or_status_code, Exception)"
+              ],
+              [
+                44,
+                "            self._exception_handlers[exc_class_or_status_code] = handler"
+              ],
+              [
+                45,
+                ""
+              ],
+              [
+                46,
+                "    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:"
+              ],
+              [
+                47,
+                "        if scope[\"type\"] not in (\"http\", \"websocket\"):"
+              ],
+              [
+                48,
+                "            await self.app(scope, receive, send)"
+              ],
+              [
+                49,
+                "            return"
+              ],
+              [
+                50,
+                ""
+              ],
+              [
+                51,
+                "        scope[\"starlette.exception_handlers\"] = ("
+              ],
+              [
+                52,
+                "            self._exception_handlers,"
+              ],
+              [
+                53,
+                "            self._status_handlers,"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/middleware/asyncexitstack.py",
+            "line_number": 18,
+            "function": "__call__",
+            "code_context": [
+              [
+                13,
+                "        self.context_name = context_name"
+              ],
+              [
+                14,
+                ""
+              ],
+              [
+                15,
+                "    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:"
+              ],
+              [
+                16,
+                "        async with AsyncExitStack() as stack:"
+              ],
+              [
+                17,
+                "            scope[self.context_name] = stack"
+              ],
+              [
+                18,
+                "            await self.app(scope, receive, send)"
+              ]
+            ]
+          },
+          {
+            "filename": "starlette/routing.py",
+            "line_number": 714,
+            "function": "__call__",
+            "code_context": [
+              [
+                709,
+                ""
+              ],
+              [
+                710,
+                "    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:"
+              ],
+              [
+                711,
+                "        \"\"\""
+              ],
+              [
+                712,
+                "        The main entry point to the Router class."
+              ],
+              [
+                713,
+                "        \"\"\""
+              ],
+              [
+                714,
+                "        await self.middleware_stack(scope, receive, send)"
+              ],
+              [
+                715,
+                ""
+              ],
+              [
+                716,
+                "    async def app(self, scope: Scope, receive: Receive, send: Send) -> None:"
+              ],
+              [
+                717,
+                "        assert scope[\"type\"] in (\"http\", \"websocket\", \"lifespan\")"
+              ],
+              [
+                718,
+                ""
+              ],
+              [
+                719,
+                "        if \"router\" not in scope:"
+              ]
+            ]
+          },
+          {
+            "filename": "starlette/routing.py",
+            "line_number": 723,
+            "function": "app",
+            "code_context": [
+              [
+                718,
+                ""
+              ],
+              [
+                719,
+                "        if \"router\" not in scope:"
+              ],
+              [
+                720,
+                "            scope[\"router\"] = self"
+              ],
+              [
+                721,
+                ""
+              ],
+              [
+                722,
+                "        if scope[\"type\"] == \"lifespan\":"
+              ],
+              [
+                723,
+                "            await self.lifespan(scope, receive, send)"
+              ],
+              [
+                724,
+                "            return"
+              ],
+              [
+                725,
+                ""
+              ],
+              [
+                726,
+                "        partial = None"
+              ],
+              [
+                727,
+                ""
+              ],
+              [
+                728,
+                "        for route in self.routes:"
+              ]
+            ]
+          },
+          {
+            "filename": "starlette/routing.py",
+            "line_number": 692,
+            "function": "lifespan",
+            "code_context": [
+              [
+                687,
+                "        \"\"\""
+              ],
+              [
+                688,
+                "        started = False"
+              ],
+              [
+                689,
+                "        app: typing.Any = scope.get(\"app\")"
+              ],
+              [
+                690,
+                "        await receive()"
+              ],
+              [
+                691,
+                "        try:"
+              ],
+              [
+                692,
+                "            async with self.lifespan_context(app) as maybe_state:"
+              ],
+              [
+                693,
+                "                if maybe_state is not None:"
+              ],
+              [
+                694,
+                "                    if \"state\" not in scope:"
+              ],
+              [
+                695,
+                "                        raise RuntimeError('The server does not support \"state\" in the lifespan scope.')"
+              ],
+              [
+                696,
+                "                    scope[\"state\"].update(maybe_state)"
+              ],
+              [
+                697,
+                "                await send({\"type\": \"lifespan.startup.complete\"})"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "fastapi/routing.py",
+            "line_number": 211,
+            "function": "merged_lifespan",
+            "code_context": [
+              [
+                206,
+                ") -> Lifespan[Any]:"
+              ],
+              [
+                207,
+                "    @asynccontextmanager"
+              ],
+              [
+                208,
+                "    async def merged_lifespan("
+              ],
+              [
+                209,
+                "        app: AppType,"
+              ],
+              [
+                210,
+                "    ) -> AsyncIterator[Optional[Mapping[str, Any]]]:"
+              ],
+              [
+                211,
+                "        async with original_context(app) as maybe_original_state:"
+              ],
+              [
+                212,
+                "            async with nested_context(app) as maybe_nested_state:"
+              ],
+              [
+                213,
+                "                if maybe_nested_state is None and maybe_original_state is None:"
+              ],
+              [
+                214,
+                "                    yield None  # old ASGI compatibility"
+              ],
+              [
+                215,
+                "                else:"
+              ],
+              [
+                216,
+                "                    yield {**(maybe_nested_state or {}), **(maybe_original_state or {})}"
+              ]
+            ]
+          },
+          {
+            "filename": "contextlib.py",
+            "line_number": 210,
+            "function": "__aenter__",
+            "code_context": [
+              [
+                205,
+                "    async def __aenter__(self):"
+              ],
+              [
+                206,
+                "        # do not keep args and kwds alive unnecessarily"
+              ],
+              [
+                207,
+                "        # they are only needed for recreation, which is not possible anymore"
+              ],
+              [
+                208,
+                "        del self.args, self.kwds, self.func"
+              ],
+              [
+                209,
+                "        try:"
+              ],
+              [
+                210,
+                "            return await anext(self.gen)"
+              ],
+              [
+                211,
+                "        except StopAsyncIteration:"
+              ],
+              [
+                212,
+                "            raise RuntimeError(\"generator didn't yield\") from None"
+              ],
+              [
+                213,
+                ""
+              ],
+              [
+                214,
+                "    async def __aexit__(self, typ, value, traceback):"
+              ],
+              [
+                215,
+                "        if typ is None:"
+              ]
+            ]
+          },
+          {
+            "filename": "src/main.py",
+            "line_number": 62,
+            "function": "lifespan",
+            "code_context": [
+              [
+                57,
+                "        settings.sentry_environment,"
+              ],
+              [
+                58,
+                "    )"
+              ],
+              [
+                59,
+                "    ok = await test_connection()"
+              ],
+              [
+                60,
+                "    if not ok:"
+              ],
+              [
+                61,
+                "        logger.critical(\"Cannot start without database connection\")"
+              ],
+              [
+                62,
+                "        raise RuntimeError(\"Database connection failed\")"
+              ],
+              [
+                63,
+                "    log_pool_status()"
+              ],
+              [
+                64,
+                "    await verify_postgres_max_connections()"
+              ],
+              [
+                65,
+                "    await get_schema_info()"
+              ],
+              [
+                66,
+                "    await check_data_integrity()"
+              ],
+              [
+                67,
+                "    logger.info(\"Application startup complete\")"
+              ]
+            ]
+          }
+        ]
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": null
+        },
+        "tags": {
+          "environment": "production",
+          "handled": "no",
+          "level": "error",
+          "mechanism": "starlette",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-api"
+        }
+      },
+      "comment": ""
+    },
+    {
+      "id": "7278760957",
+      "title": "Application startup failed. Exiting.",
+      "status": "unresolved",
+      "level": "error",
+      "count": 5,
+      "first_seen": "2026-02-20T08:32:38Z",
+      "last_seen": "2026-02-27T06:08:21Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7278760957/",
+      "stacktrace": {
+        "exception_type": "Unknown",
+        "exception_value": "Unknown",
+        "frames": []
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": null
+        },
+        "tags": {
+          "environment": "production",
+          "level": "error",
+          "logger": "uvicorn.error",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-api"
+        }
+      },
+      "comment": ""
+    },
+    {
+      "id": "7279725195",
+      "title": "Traceback (most recent call last):",
+      "status": "unresolved",
+      "level": "error",
+      "count": 4,
+      "first_seen": "2026-02-20T15:44:17Z",
+      "last_seen": "2026-02-27T06:08:20Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7279725195/",
+      "stacktrace": {
+        "exception_type": "Unknown",
+        "exception_value": "Unknown",
+        "frames": []
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": null
+        },
+        "tags": {
+          "environment": "production",
+          "level": "error",
+          "logger": "uvicorn.error",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-api"
+        }
+      },
+      "comment": ""
+    },
+    {
+      "id": "7278760963",
+      "title": "Database connection failed: [Errno 111] Connection refused",
+      "status": "unresolved",
+      "level": "error",
+      "count": 5,
+      "first_seen": "2026-02-20T08:32:37Z",
+      "last_seen": "2026-02-27T06:08:19Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7278760963/",
+      "stacktrace": {
+        "exception_type": "Unknown",
+        "exception_value": "Unknown",
+        "frames": []
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": null
+        },
+        "tags": {
+          "environment": "production",
+          "level": "error",
+          "logger": "src.database.connection",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-api"
+        }
+      },
+      "comment": ""
+    },
+    {
+      "id": "7279797572",
+      "title": "ConnectionRefusedError: [Errno 111] Connect call failed ('45.141.76.83', 5433)",
+      "status": "unresolved",
+      "level": "error",
+      "count": 7,
+      "first_seen": "2026-02-20T16:09:03Z",
+      "last_seen": "2026-02-27T06:08:16Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7279797572/",
+      "stacktrace": {
+        "exception_type": "ConnectionRefusedError",
+        "exception_value": "[Errno 111] Connect call failed ('45.141.76.83', 5433)",
+        "frames": [
+          {
+            "filename": "<frozen runpy>",
+            "line_number": 198,
+            "function": "_run_module_as_main",
+            "code_context": []
+          },
+          {
+            "filename": "<frozen runpy>",
+            "line_number": 88,
+            "function": "_run_code",
+            "code_context": []
+          },
+          {
+            "filename": "bot.py",
+            "line_number": 171,
+            "function": "<module>",
+            "code_context": [
+              [
+                166,
+                "    logger.info(\"Bot handlers registered. Starting polling...\")"
+              ],
+              [
+                167,
+                "    app.run_polling(drop_pending_updates=True)"
+              ],
+              [
+                168,
+                ""
+              ],
+              [
+                169,
+                ""
+              ],
+              [
+                170,
+                "if __name__ == \"__main__\":"
+              ],
+              [
+                171,
+                "    run_bot()"
+              ]
+            ]
+          },
+          {
+            "filename": "bot.py",
+            "line_number": 167,
+            "function": "run_bot",
+            "code_context": [
+              [
+                162,
+                "    register_expeditor_handlers(app)"
+              ],
+              [
+                163,
+                "    register_agent_handlers(app)"
+              ],
+              [
+                164,
+                "    app.add_error_handler(on_bot_error)"
+              ],
+              [
+                165,
+                ""
+              ],
+              [
+                166,
+                "    logger.info(\"Bot handlers registered. Starting polling...\")"
+              ],
+              [
+                167,
+                "    app.run_polling(drop_pending_updates=True)"
+              ],
+              [
+                168,
+                ""
+              ],
+              [
+                169,
+                ""
+              ],
+              [
+                170,
+                "if __name__ == \"__main__\":"
+              ],
+              [
+                171,
+                "    run_bot()"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/ext/_application.py",
+            "line_number": 873,
+            "function": "run_polling",
+            "code_context": [
+              [
+                868,
+                "            )"
+              ],
+              [
+                869,
+                ""
+              ],
+              [
+                870,
+                "        def error_callback(exc: TelegramError) -> None:"
+              ],
+              [
+                871,
+                "            self.create_task(self.process_error(error=exc, update=None))"
+              ],
+              [
+                872,
+                ""
+              ],
+              [
+                873,
+                "        return self.__run("
+              ],
+              [
+                874,
+                "            updater_coroutine=self.updater.start_polling("
+              ],
+              [
+                875,
+                "                poll_interval=poll_interval,"
+              ],
+              [
+                876,
+                "                timeout=timeout,"
+              ],
+              [
+                877,
+                "                bootstrap_retries=bootstrap_retries,"
+              ],
+              [
+                878,
+                "                read_timeout=read_timeout,"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/ext/_application.py",
+            "line_number": 1089,
+            "function": "__run",
+            "code_context": [
+              [
+                1084,
+                "            )"
+              ],
+              [
+                1085,
+                ""
+              ],
+              [
+                1086,
+                "        try:"
+              ],
+              [
+                1087,
+                "            loop.run_until_complete(self._bootstrap_initialize(max_retries=bootstrap_retries))"
+              ],
+              [
+                1088,
+                "            if self.post_init:"
+              ],
+              [
+                1089,
+                "                loop.run_until_complete(self.post_init(self))"
+              ],
+              [
+                1090,
+                "            if self.__stop_running_marker.is_set():"
+              ],
+              [
+                1091,
+                "                _LOGGER.info(\"Application received stop signal via `stop_running`. Shutting down.\")"
+              ],
+              [
+                1092,
+                "                return"
+              ],
+              [
+                1093,
+                "            loop.run_until_complete(updater_coroutine)  # one of updater.start_webhook/polling"
+              ],
+              [
+                1094,
+                "            loop.run_until_complete(self.start())"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncio/base_events.py",
+            "line_number": 687,
+            "function": "run_until_complete",
+            "code_context": [
+              [
+                682,
+                "        finally:"
+              ],
+              [
+                683,
+                "            future.remove_done_callback(_run_until_complete_cb)"
+              ],
+              [
+                684,
+                "        if not future.done():"
+              ],
+              [
+                685,
+                "            raise RuntimeError('Event loop stopped before Future completed.')"
+              ],
+              [
+                686,
+                ""
+              ],
+              [
+                687,
+                "        return future.result()"
+              ],
+              [
+                688,
+                ""
+              ],
+              [
+                689,
+                "    def stop(self):"
+              ],
+              [
+                690,
+                "        \"\"\"Stop running the event loop."
+              ],
+              [
+                691,
+                ""
+              ],
+              [
+                692,
+                "        Every callback already scheduled will still run.  This simply informs"
+              ]
+            ]
+          },
+          {
+            "filename": "bot.py",
+            "line_number": 103,
+            "function": "post_init",
+            "code_context": [
+              [
+                98,
+                ""
+              ],
+              [
+                99,
+                ""
+              ],
+              [
+                100,
+                "async def post_init(application: Application):"
+              ],
+              [
+                101,
+                "    if not BOT_DB_DSN:"
+              ],
+              [
+                102,
+                "        raise RuntimeError(\"Bot DB DSN is not configured\")"
+              ],
+              [
+                103,
+                "    await init_pool(BOT_DB_DSN)"
+              ],
+              [
+                104,
+                "    logger.info(\"Telegram bot initialized, DB pool ready\")"
+              ],
+              [
+                105,
+                ""
+              ],
+              [
+                106,
+                ""
+              ],
+              [
+                107,
+                "async def post_shutdown(application: Application):"
+              ],
+              [
+                108,
+                "    await close_pool()"
+              ]
+            ]
+          },
+          {
+            "filename": "src/telegram_bot/session.py",
+            "line_number": 21,
+            "function": "init_pool",
+            "code_context": [
+              [
+                16,
+                "_pool: asyncpg.Pool | None = None"
+              ],
+              [
+                17,
+                ""
+              ],
+              [
+                18,
+                ""
+              ],
+              [
+                19,
+                "async def init_pool(dsn: str):"
+              ],
+              [
+                20,
+                "    global _pool"
+              ],
+              [
+                21,
+                "    _pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=10)"
+              ],
+              [
+                22,
+                "    logger.info(\"Telegram bot DB pool created\")"
+              ],
+              [
+                23,
+                ""
+              ],
+              [
+                24,
+                ""
+              ],
+              [
+                25,
+                "async def close_pool():"
+              ],
+              [
+                26,
+                "    global _pool"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/pool.py",
+            "line_number": 439,
+            "function": "_async__init__",
+            "code_context": [
+              [
+                434,
+                "                'pool is being initialized in another task')"
+              ],
+              [
+                435,
+                "        if self._closed:"
+              ],
+              [
+                436,
+                "            raise exceptions.InterfaceError('pool is closed')"
+              ],
+              [
+                437,
+                "        self._initializing = True"
+              ],
+              [
+                438,
+                "        try:"
+              ],
+              [
+                439,
+                "            await self._initialize()"
+              ],
+              [
+                440,
+                "            return self"
+              ],
+              [
+                441,
+                "        finally:"
+              ],
+              [
+                442,
+                "            self._initializing = False"
+              ],
+              [
+                443,
+                "            self._initialized = True"
+              ],
+              [
+                444,
+                ""
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/pool.py",
+            "line_number": 466,
+            "function": "_initialize",
+            "code_context": [
+              [
+                461,
+                "            # `self._holders` in reverse."
+              ],
+              [
+                462,
+                ""
+              ],
+              [
+                463,
+                "            # Connect the first connection holder in the queue so that"
+              ],
+              [
+                464,
+                "            # any connection issues are visible early."
+              ],
+              [
+                465,
+                "            first_ch = self._holders[-1]  # type: PoolConnectionHolder"
+              ],
+              [
+                466,
+                "            await first_ch.connect()"
+              ],
+              [
+                467,
+                ""
+              ],
+              [
+                468,
+                "            if self._minsize > 1:"
+              ],
+              [
+                469,
+                "                connect_tasks = []"
+              ],
+              [
+                470,
+                "                for i, ch in enumerate(reversed(self._holders[:-1])):"
+              ],
+              [
+                471,
+                "                    # `minsize - 1` because we already have first_ch"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/pool.py",
+            "line_number": 153,
+            "function": "connect",
+            "code_context": [
+              [
+                148,
+                "        if self._con is not None:"
+              ],
+              [
+                149,
+                "            raise exceptions.InternalClientError("
+              ],
+              [
+                150,
+                "                'PoolConnectionHolder.connect() called while another '"
+              ],
+              [
+                151,
+                "                'connection already exists')"
+              ],
+              [
+                152,
+                ""
+              ],
+              [
+                153,
+                "        self._con = await self._pool._get_new_connection()"
+              ],
+              [
+                154,
+                "        self._generation = self._pool._generation"
+              ],
+              [
+                155,
+                "        self._maybe_cancel_inactive_callback()"
+              ],
+              [
+                156,
+                "        self._setup_inactive_callback()"
+              ],
+              [
+                157,
+                ""
+              ],
+              [
+                158,
+                "    async def acquire(self) -> PoolConnectionProxy:"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/pool.py",
+            "line_number": 538,
+            "function": "_get_new_connection",
+            "code_context": [
+              [
+                533,
+                ""
+              ],
+              [
+                534,
+                "        self._connect_args = [dsn]"
+              ],
+              [
+                535,
+                "        self._connect_kwargs = connect_kwargs"
+              ],
+              [
+                536,
+                ""
+              ],
+              [
+                537,
+                "    async def _get_new_connection(self):"
+              ],
+              [
+                538,
+                "        con = await self._connect("
+              ],
+              [
+                539,
+                "            *self._connect_args,"
+              ],
+              [
+                540,
+                "            loop=self._loop,"
+              ],
+              [
+                541,
+                "            connection_class=self._connection_class,"
+              ],
+              [
+                542,
+                "            record_class=self._record_class,"
+              ],
+              [
+                543,
+                "            **self._connect_kwargs,"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connection.py",
+            "line_number": 2443,
+            "function": "connect",
+            "code_context": [
+              [
+                2438,
+                ""
+              ],
+              [
+                2439,
+                "    if loop is None:"
+              ],
+              [
+                2440,
+                "        loop = asyncio.get_event_loop()"
+              ],
+              [
+                2441,
+                ""
+              ],
+              [
+                2442,
+                "    async with compat.timeout(timeout):"
+              ],
+              [
+                2443,
+                "        return await connect_utils._connect("
+              ],
+              [
+                2444,
+                "            loop=loop,"
+              ],
+              [
+                2445,
+                "            connection_class=connection_class,"
+              ],
+              [
+                2446,
+                "            record_class=record_class,"
+              ],
+              [
+                2447,
+                "            dsn=dsn,"
+              ],
+              [
+                2448,
+                "            host=host,"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connect_utils.py",
+            "line_number": 1249,
+            "function": "_connect",
+            "code_context": [
+              [
+                1244,
+                "                _close_candidates(candidates, chosen_connection))"
+              ],
+              [
+                1245,
+                ""
+              ],
+              [
+                1246,
+                "    if chosen_connection:"
+              ],
+              [
+                1247,
+                "        return chosen_connection"
+              ],
+              [
+                1248,
+                ""
+              ],
+              [
+                1249,
+                "    raise last_error or exceptions.TargetServerAttributeNotMatched("
+              ],
+              [
+                1250,
+                "        'None of the hosts match the target attribute requirement '"
+              ],
+              [
+                1251,
+                "        '{!r}'.format(target_attr)"
+              ],
+              [
+                1252,
+                "    )"
+              ],
+              [
+                1253,
+                ""
+              ],
+              [
+                1254,
+                ""
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connect_utils.py",
+            "line_number": 1218,
+            "function": "_connect",
+            "code_context": [
+              [
+                1213,
+                "    chosen_connection = None"
+              ],
+              [
+                1214,
+                "    last_error = None"
+              ],
+              [
+                1215,
+                "    try:"
+              ],
+              [
+                1216,
+                "        for addr in addrs:"
+              ],
+              [
+                1217,
+                "            try:"
+              ],
+              [
+                1218,
+                "                conn = await _connect_addr("
+              ],
+              [
+                1219,
+                "                    addr=addr,"
+              ],
+              [
+                1220,
+                "                    loop=loop,"
+              ],
+              [
+                1221,
+                "                    params=params,"
+              ],
+              [
+                1222,
+                "                    config=config,"
+              ],
+              [
+                1223,
+                "                    connection_class=connection_class,"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connect_utils.py",
+            "line_number": 1054,
+            "function": "_connect_addr",
+            "code_context": [
+              [
+                1049,
+                "        # skip retry if we don't have to"
+              ],
+              [
+                1050,
+                "        return await __connect_addr(params, False, *args)"
+              ],
+              [
+                1051,
+                ""
+              ],
+              [
+                1052,
+                "    # first attempt"
+              ],
+              [
+                1053,
+                "    try:"
+              ],
+              [
+                1054,
+                "        return await __connect_addr(params, True, *args)"
+              ],
+              [
+                1055,
+                "    except _RetryConnectSignal:"
+              ],
+              [
+                1056,
+                "        pass"
+              ],
+              [
+                1057,
+                ""
+              ],
+              [
+                1058,
+                "    # second attempt"
+              ],
+              [
+                1059,
+                "    return await __connect_addr(params_retry, False, *args)"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connect_utils.py",
+            "line_number": 1099,
+            "function": "__connect_addr",
+            "code_context": [
+              [
+                1094,
+                "            proto_factory, *addr, loop=loop, ssl_context=params.ssl,"
+              ],
+              [
+                1095,
+                "            ssl_is_advisory=params.sslmode == SSLMode.prefer)"
+              ],
+              [
+                1096,
+                "    else:"
+              ],
+              [
+                1097,
+                "        connector = loop.create_connection(proto_factory, *addr)"
+              ],
+              [
+                1098,
+                ""
+              ],
+              [
+                1099,
+                "    tr, pr = await connector"
+              ],
+              [
+                1100,
+                ""
+              ],
+              [
+                1101,
+                "    try:"
+              ],
+              [
+                1102,
+                "        await connected"
+              ],
+              [
+                1103,
+                "    except ("
+              ],
+              [
+                1104,
+                "        exceptions.InvalidAuthorizationSpecificationError,"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connect_utils.py",
+            "line_number": 969,
+            "function": "_create_ssl_connection",
+            "code_context": [
+              [
+                964,
+                "    loop: asyncio.AbstractEventLoop,"
+              ],
+              [
+                965,
+                "    ssl_context: ssl_module.SSLContext,"
+              ],
+              [
+                966,
+                "    ssl_is_advisory: bool = False,"
+              ],
+              [
+                967,
+                ") -> typing.Tuple[asyncio.Transport, _ProctolFactoryR]:"
+              ],
+              [
+                968,
+                ""
+              ],
+              [
+                969,
+                "    tr, pr = await loop.create_connection("
+              ],
+              [
+                970,
+                "        lambda: TLSUpgradeProto(loop, host, port,"
+              ],
+              [
+                971,
+                "                                ssl_context, ssl_is_advisory),"
+              ],
+              [
+                972,
+                "        host, port)"
+              ],
+              [
+                973,
+                ""
+              ],
+              [
+                974,
+                "    tr.write(struct.pack('!ll', 8, 80877103))  # SSLRequest message."
+              ]
+            ]
+          },
+          {
+            "filename": "asyncio/base_events.py",
+            "line_number": 1122,
+            "function": "create_connection",
+            "code_context": [
+              [
+                1117,
+                "                exceptions = [exc for sub in exceptions for exc in sub]"
+              ],
+              [
+                1118,
+                "                try:"
+              ],
+              [
+                1119,
+                "                    if all_errors:"
+              ],
+              [
+                1120,
+                "                        raise ExceptionGroup(\"create_connection failed\", exceptions)"
+              ],
+              [
+                1121,
+                "                    if len(exceptions) == 1:"
+              ],
+              [
+                1122,
+                "                        raise exceptions[0]"
+              ],
+              [
+                1123,
+                "                    else:"
+              ],
+              [
+                1124,
+                "                        # If they all have the same str(), raise one."
+              ],
+              [
+                1125,
+                "                        model = str(exceptions[0])"
+              ],
+              [
+                1126,
+                "                        if all(str(exc) == model for exc in exceptions):"
+              ],
+              [
+                1127,
+                "                            raise exceptions[0]"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncio/base_events.py",
+            "line_number": 1104,
+            "function": "create_connection",
+            "code_context": [
+              [
+                1099,
+                "            exceptions = []"
+              ],
+              [
+                1100,
+                "            if happy_eyeballs_delay is None:"
+              ],
+              [
+                1101,
+                "                # not using happy eyeballs"
+              ],
+              [
+                1102,
+                "                for addrinfo in infos:"
+              ],
+              [
+                1103,
+                "                    try:"
+              ],
+              [
+                1104,
+                "                        sock = await self._connect_sock("
+              ],
+              [
+                1105,
+                "                            exceptions, addrinfo, laddr_infos)"
+              ],
+              [
+                1106,
+                "                        break"
+              ],
+              [
+                1107,
+                "                    except OSError:"
+              ],
+              [
+                1108,
+                "                        continue"
+              ],
+              [
+                1109,
+                "            else:  # using happy eyeballs"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncio/base_events.py",
+            "line_number": 1007,
+            "function": "_connect_sock",
+            "code_context": [
+              [
+                1002,
+                "                else:  # all bind attempts failed"
+              ],
+              [
+                1003,
+                "                    if my_exceptions:"
+              ],
+              [
+                1004,
+                "                        raise my_exceptions.pop()"
+              ],
+              [
+                1005,
+                "                    else:"
+              ],
+              [
+                1006,
+                "                        raise OSError(f\"no matching local address with {family=} found\")"
+              ],
+              [
+                1007,
+                "            await self.sock_connect(sock, address)"
+              ],
+              [
+                1008,
+                "            return sock"
+              ],
+              [
+                1009,
+                "        except OSError as exc:"
+              ],
+              [
+                1010,
+                "            my_exceptions.append(exc)"
+              ],
+              [
+                1011,
+                "            if sock is not None:"
+              ],
+              [
+                1012,
+                "                sock.close()"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncio/selector_events.py",
+            "line_number": 651,
+            "function": "sock_connect",
+            "code_context": [
+              [
+                646,
+                "            _, _, _, _, address = resolved[0]"
+              ],
+              [
+                647,
+                ""
+              ],
+              [
+                648,
+                "        fut = self.create_future()"
+              ],
+              [
+                649,
+                "        self._sock_connect(fut, sock, address)"
+              ],
+              [
+                650,
+                "        try:"
+              ],
+              [
+                651,
+                "            return await fut"
+              ],
+              [
+                652,
+                "        finally:"
+              ],
+              [
+                653,
+                "            # Needed to break cycles when an exception occurs."
+              ],
+              [
+                654,
+                "            fut = None"
+              ],
+              [
+                655,
+                ""
+              ],
+              [
+                656,
+                "    def _sock_connect(self, fut, sock, address):"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncio/selector_events.py",
+            "line_number": 691,
+            "function": "_sock_connect_cb",
+            "code_context": [
+              [
+                686,
+                ""
+              ],
+              [
+                687,
+                "        try:"
+              ],
+              [
+                688,
+                "            err = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)"
+              ],
+              [
+                689,
+                "            if err != 0:"
+              ],
+              [
+                690,
+                "                # Jump to any except clause below."
+              ],
+              [
+                691,
+                "                raise OSError(err, f'Connect call failed {address}')"
+              ],
+              [
+                692,
+                "        except (BlockingIOError, InterruptedError):"
+              ],
+              [
+                693,
+                "            # socket is still registered, the callback will be retried later"
+              ],
+              [
+                694,
+                "            pass"
+              ],
+              [
+                695,
+                "        except (SystemExit, KeyboardInterrupt):"
+              ],
+              [
+                696,
+                "            raise"
+              ]
+            ]
+          }
+        ]
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": null
+        },
+        "tags": {
+          "environment": "production",
+          "handled": "no",
+          "level": "error",
+          "mechanism": "excepthook",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-telegram-bot"
+        }
+      },
+      "comment": ""
+    }
+  ]
+}

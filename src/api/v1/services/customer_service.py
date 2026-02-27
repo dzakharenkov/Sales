@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, time
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import select, text
@@ -191,6 +192,23 @@ class CustomerService:
     def _is_blank(value: object | None) -> bool:
         return value is None or (isinstance(value, str) and not value.strip())
 
+    @staticmethod
+    def _normalize_coordinate(value: Any, *, field: str) -> float | None:
+        if value is None:
+            return None
+        try:
+            num = float(value)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"Поле '{field}' должно быть числом.")
+
+        if field == "latitude":
+            if num < -90 or num > 90:
+                raise HTTPException(status_code=400, detail="Поле 'latitude' должно быть в диапазоне [-90, 90].")
+        elif field == "longitude":
+            if num < -180 or num > 180:
+                raise HTTPException(status_code=400, detail="Поле 'longitude' должно быть в диапазоне [-180, 180].")
+        return num
+
     async def _validate_create_required_fields(self, payload: dict) -> None:
         if self._is_blank(payload.get("name_client")):
             raise HTTPException(status_code=400, detail="Поле «Название клиента» обязательно.")
@@ -217,6 +235,8 @@ class CustomerService:
         await self._validate_create_required_fields(payload)
         await self.validate_city_territory_refs(payload.get("city_id"), payload.get("territory_id"))
         await self._validate_login_agent(str(payload.get("login_agent")))
+        latitude = self._normalize_coordinate(payload.get("latitude"), field="latitude")
+        longitude = self._normalize_coordinate(payload.get("longitude"), field="longitude")
 
         customer = Customer(
             name_client=payload.get("name_client"),
@@ -232,8 +252,8 @@ class CustomerService:
             status=payload.get("status") or "активен",
             login_agent=payload.get("login_agent"),
             login_expeditor=payload.get("login_expeditor"),
-            latitude=payload.get("latitude"),
-            longitude=payload.get("longitude"),
+            latitude=latitude,
+            longitude=longitude,
             PINFL=payload.get("PINFL"),
             contract_no=payload.get("contract_no"),
             account_no=payload.get("account_no"),
@@ -338,6 +358,11 @@ class CustomerService:
             )
             if not is_own_client:
                 raise ForbiddenError("Агент может редактировать только своих клиентов")
+
+        if "latitude" in updates:
+            updates["latitude"] = self._normalize_coordinate(updates.get("latitude"), field="latitude")
+        if "longitude" in updates:
+            updates["longitude"] = self._normalize_coordinate(updates.get("longitude"), field="longitude")
 
         for key, value in updates.items():
             if hasattr(customer, key):

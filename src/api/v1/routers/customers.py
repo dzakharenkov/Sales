@@ -241,6 +241,16 @@ def _parse_float(s: str | None):
         return None
 
 
+def _normalize_coordinate(value: float | None, *, field: str) -> float | None:
+    if value is None:
+        return None
+    if field == "latitude" and not (-90 <= value <= 90):
+        return None
+    if field == "longitude" and not (-180 <= value <= 180):
+        return None
+    return value
+
+
 @router.post("/customers/import", response_model=EntityModel | list[EntityModel])
 async def import_customers_csv(
     file: UploadFile = File(..., description="CSV файл (разделитель ;), структура как в выгрузке"),
@@ -277,8 +287,8 @@ async def import_customers_csv(
             pk = int(row_id) if row_id.isdigit() else None
         except ValueError:
             pk = None
-        lat = _parse_float(values[14])
-        lon = _parse_float(values[15])
+        lat = _normalize_coordinate(_parse_float(values[14]), field="latitude")
+        lon = _normalize_coordinate(_parse_float(values[15]), field="longitude")
         def _v(i):
             x = values[i] if i < len(values) else ""
             return x.strip() if x else None

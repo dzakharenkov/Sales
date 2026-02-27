@@ -7,6 +7,14 @@ from datetime import datetime
 from pathlib import Path
 import subprocess
 
+# Avoid UnicodeEncodeError on Windows consoles with cp1252.
+for _stream in (getattr(sys, "stdout", None), getattr(sys, "stderr", None)):
+    try:
+        if _stream and hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
+
 # Set up logging to D:\Python\Sales\deploy_to_ubuntu_and_copy.log and console
 LOG_FILE = r"D:\Python\Sales\deploy_to_ubuntu_and_copy.log"
 logging.basicConfig(
@@ -193,7 +201,7 @@ def deploy():
             logging.error(f"Recent bot logs:\n{logs_after_restart.strip()}")
             raise Exception("Python error detected in bot logs.")
             
-        logging.info("✅ Telegram bot started successfully and is running!")
+        logging.info("Telegram bot started successfully and is running.")
 
         logging.info("=== Deployment successfully completed ===")
 

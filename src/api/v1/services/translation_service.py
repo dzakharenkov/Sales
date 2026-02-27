@@ -37,6 +37,32 @@ class TranslationService:
             return self.default_language
         return lang
 
+    @staticmethod
+    def _normalize_category(category: str | None) -> str | None:
+        value = (category or "").strip()
+        return value or None
+
+    @staticmethod
+    def _infer_category(translation_key: str) -> str:
+        key = (translation_key or "").strip().lower()
+        if not key:
+            return "general"
+        first = key.split(".", 1)[0]
+        mapped = {
+            "telegram": "telegram",
+            "ui": "ui",
+            "menu": "menu",
+            "button": "buttons",
+            "buttons": "buttons",
+            "field": "fields",
+            "fields": "fields",
+            "status": "statuses",
+            "statuses": "statuses",
+            "operation_type": "operations",
+            "payment_type": "payments",
+        }.get(first)
+        return mapped or first or "general"
+
     async def resolve_key(self, translation_key: str, language: str | None) -> str:
         lang = self.normalize_language(language)
         cached = self._cache_get(translation_key, lang)
@@ -180,11 +206,13 @@ class TranslationService:
                 f"Unsupported language_code '{payload.get('language_code')}'. "
                 f"Allowed: {', '.join(self.enabled_languages)}"
             )
+        key = payload["translation_key"].strip()
+        category = self._normalize_category(payload.get("category")) or self._infer_category(key)
         entity = Translation(
-            translation_key=payload["translation_key"].strip(),
+            translation_key=key,
             language_code=payload["language_code"].strip().lower(),
             translation_text=payload["translation_text"],
-            category=payload.get("category"),
+            category=category,
             notes=payload.get("notes"),
             created_by=payload.get("created_by"),
         )
@@ -205,7 +233,9 @@ class TranslationService:
         if "notes" in payload:
             entity.notes = payload["notes"]
         if "category" in payload:
-            entity.category = payload["category"]
+            entity.category = self._normalize_category(payload["category"]) or self._infer_category(entity.translation_key)
+        elif not self._normalize_category(entity.category):
+            entity.category = self._infer_category(entity.translation_key)
         if "updated_by" in payload:
             entity.updated_by = payload["updated_by"]
 
