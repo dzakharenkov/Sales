@@ -23,6 +23,28 @@ from src.database.models import User, Operation
 
 router = APIRouter()
 
+PAYMENT_CONFIRMED_SQL = """
+(
+    EXISTS (
+        SELECT 1
+        FROM "Sales".operations op
+        WHERE op.type_code = 'cash_receipt'
+          AND op.status = 'completed'
+          AND op.order_id = o.order_no
+    )
+    OR (
+        o.payment_type_code = 'cash_sum'
+        AND EXISTS (
+            SELECT 1
+            FROM "Sales".operations op
+            WHERE op.type_code = 'cash_handover_from_expeditor'
+              AND op.status = 'completed'
+              AND op.order_id = o.order_no
+        )
+    )
+)
+"""
+
 
 def _parse_date_to_iso(s: str | None) -> str | None:
     """Приводит дату к YYYY-MM-DD. Поддерживает Y-m-d и d.m.Y."""
@@ -367,8 +389,7 @@ async def export_orders_for_confirmation_excel(
                c.tax_id, c.account_no, ua.fio AS agent_fio, ue.fio AS expeditor_fio,
                o.total_amount, pt.name AS payment_type_name, s.name AS status_name,
                o.scheduled_delivery_at,
-               EXISTS (SELECT 1 FROM "Sales".operations op WHERE op.type_code = 'cash_receipt'
-                 AND op.status = 'completed' AND op.order_id = o.order_no) AS payment_confirmed
+               """ + PAYMENT_CONFIRMED_SQL + """ AS payment_confirmed
         FROM "Sales".orders o
         LEFT JOIN "Sales".customers c ON o.customer_id = c.id
         LEFT JOIN "Sales".payment_type pt ON o.payment_type_code = pt.code
@@ -384,14 +405,8 @@ async def export_orders_for_confirmation_excel(
           AND (:has_delivery_to = FALSE OR o.scheduled_delivery_at::date <= :scheduled_delivery_to)
           AND (
             CAST(:payment_confirmed_filter AS text) = ''
-            OR (CAST(:payment_confirmed_filter AS text) = 'true' AND EXISTS (
-                SELECT 1 FROM "Sales".operations op
-                WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no
-            ))
-            OR (CAST(:payment_confirmed_filter AS text) = 'false' AND NOT EXISTS (
-                SELECT 1 FROM "Sales".operations op
-                WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no
-            ))
+            OR (CAST(:payment_confirmed_filter AS text) = 'true' AND """ + PAYMENT_CONFIRMED_SQL + """)
+            OR (CAST(:payment_confirmed_filter AS text) = 'false' AND NOT """ + PAYMENT_CONFIRMED_SQL + """)
           )
         ORDER BY o.scheduled_delivery_at DESC NULLS LAST, o.order_date DESC
         """
@@ -475,11 +490,7 @@ async def get_orders_for_cashier_confirmation(
                s.name AS status_name,
                ua.fio AS agent_fio,
                ue.fio AS expeditor_fio,
-               EXISTS (
-                 SELECT 1 FROM "Sales".operations op
-                 WHERE op.type_code = 'cash_receipt' AND op.status = 'completed'
-                   AND op.order_id = o.order_no
-               ) AS payment_confirmed
+               """ + PAYMENT_CONFIRMED_SQL + """ AS payment_confirmed
         FROM "Sales".orders o
         LEFT JOIN "Sales".customers c ON o.customer_id = c.id
         LEFT JOIN "Sales".payment_type pt ON o.payment_type_code = pt.code
@@ -495,14 +506,8 @@ async def get_orders_for_cashier_confirmation(
           AND (:has_delivery_to = FALSE OR o.scheduled_delivery_at::date <= :scheduled_delivery_to)
           AND (
             CAST(:payment_confirmed_filter AS text) = ''
-            OR (CAST(:payment_confirmed_filter AS text) = 'true' AND EXISTS (
-                SELECT 1 FROM "Sales".operations op
-                WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no
-            ))
-            OR (CAST(:payment_confirmed_filter AS text) = 'false' AND NOT EXISTS (
-                SELECT 1 FROM "Sales".operations op
-                WHERE op.type_code = 'cash_receipt' AND op.status = 'completed' AND op.order_id = o.order_no
-            ))
+            OR (CAST(:payment_confirmed_filter AS text) = 'true' AND """ + PAYMENT_CONFIRMED_SQL + """)
+            OR (CAST(:payment_confirmed_filter AS text) = 'false' AND NOT """ + PAYMENT_CONFIRMED_SQL + """)
           )
         ORDER BY o.scheduled_delivery_at DESC NULLS LAST, o.order_date DESC
         """
