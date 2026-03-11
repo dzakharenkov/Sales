@@ -82,7 +82,7 @@ async def _get_auth(update: Update) -> tuple:
     tg_id = q.from_user.id
     session = await get_session(tg_id)
     if not session:
-        await q.edit_message_text("Сессия истекла. Нажмите /start.")
+        await _edit_loc(q, update, None, "Сессия истекла. Нажмите /start.")
         return None, None
     await touch_session(tg_id)
     return session, session.jwt_token
@@ -856,12 +856,22 @@ async def cb_exp_pay_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_order"] = o
     amount = o.get("total_amount", 0)
     buttons = [
-        [InlineKeyboardButton(f"✅ Полная сумма ({fmt_money(amount)})", callback_data=f"exp_payfull_{order_no}")],
-        [InlineKeyboardButton("💬 Другая сумма", callback_data=f"exp_payother_{order_no}")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="exp_payment")],
+        [InlineKeyboardButton(f"✅ {await t(update, context, 'telegram.expeditor.full_amount', fallback='Полная сумма')} ({fmt_money(amount)})", callback_data=f"exp_payfull_{order_no}")],
+        [InlineKeyboardButton(await t(update, context, "telegram.expeditor.other_amount", fallback="💬 Другая сумма"), callback_data=f"exp_payother_{order_no}")],
+        [InlineKeyboardButton(await t(update, context, "telegram.button.back", fallback="◀️ Назад"), callback_data="exp_payment")],
     ]
-    await q.edit_message_text(
-        f"💰 Заказ №{order_no}\nСумма: {fmt_money(amount)}\n\nВы получили полную сумму?",
+    await _edit_loc(
+        q,
+        update,
+        context,
+        await t(
+            update,
+            context,
+            "telegram.expeditor.payment_full_question",
+            fallback="💰 Заказ №{order_no}\nСумма: {amount}\n\nВы получили полную сумму?",
+            order_no=order_no,
+            amount=fmt_money(amount),
+        ),
         reply_markup=InlineKeyboardMarkup(buttons),
     )
 
@@ -881,9 +891,17 @@ async def cb_exp_pay_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         paid_order_ids = await _get_paid_order_ids(token, session.login)
         if order_no in paid_order_ids:
-            await q.edit_message_text(
-                f"⚠️ По заказу №{order_no} оплата уже была зафиксирована ранее.\n"
-                f"Повторное получение оплаты запрещено.",
+            await _edit_loc(
+                q,
+                update,
+                context,
+                await t(
+                    update,
+                    context,
+                    "telegram.expeditor.payment_already_recorded",
+                    fallback="⚠️ По заказу №{order_no} оплата уже была зафиксирована ранее.\nПовторное получение оплаты запрещено.",
+                    order_no=order_no,
+                ),
                 reply_markup=back_button("exp_payment"),
             )
             return
@@ -900,7 +918,10 @@ async def cb_exp_pay_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lbl_success_top = await t(update, context, "telegram.expeditor.payment_recorded", fallback="✅ Оплата зафиксирована по заказу №")
         lbl_sum = await t(update, context, "telegram.expeditor.sum", fallback="Сумма")
         lbl_status_not_changed = await t(update, context, "telegram.expeditor.status_not_changed", fallback="Статус заказа не изменён.")
-        await q.edit_message_text(
+        await _edit_loc(
+            q,
+            update,
+            context,
             f"{lbl_success_top}{order_no}.\n{lbl_sum}: {fmt_money(amount)}\n{lbl_status_not_changed}",
             parse_mode="Markdown",
         )
@@ -924,8 +945,17 @@ async def cb_exp_pay_other(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     order_no = int(q.data.replace("exp_payother_", ""))
     context.user_data["pay_other_order"] = order_no
-    await q.edit_message_text(
-        f"Введите полученную сумму по заказу №{order_no}:",
+    await _edit_loc(
+        q,
+        update,
+        context,
+        await t(
+            update,
+            context,
+            "telegram.expeditor.enter_received_amount",
+            fallback="Введите полученную сумму по заказу №{order_no}:",
+            order_no=order_no,
+        ),
         reply_markup=back_button("exp_payment"),
     )
 
@@ -944,17 +974,36 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         amount = float(text)
     except ValueError:
-        await _reply_loc(update.message, update, context, "❌ Введите число > 0:")
+        await _reply_loc(
+            update.message,
+            update,
+            context,
+            await t(update, context, "telegram.expeditor.enter_positive_number", fallback="❌ Введите число > 0:"),
+        )
         return
     if amount <= 0:
-        await _reply_loc(update.message, update, context, "❌ Сумма должна быть > 0:")
+        await _reply_loc(
+            update.message,
+            update,
+            context,
+            await t(update, context, "telegram.expeditor.amount_must_be_positive", fallback="❌ Сумма должна быть > 0:"),
+        )
         return
 
     o = context.user_data.get("current_order") or context.user_data.get("pay_order") or {}
     planned = float(o.get("total_amount", 0))
     if planned > 0 and amount > planned * 1.1:
-        await update.message.reply_text(
-            f"❌ Сумма не может превышать {fmt_money(planned * 1.1)}. Введите снова:"
+        await _reply_loc(
+            update.message,
+            update,
+            context,
+            await t(
+                update,
+                context,
+                "telegram.expeditor.amount_limit_exceeded",
+                fallback="❌ Сумма не может превышать {amount}. Введите снова:",
+                amount=fmt_money(planned * 1.1),
+            ),
         )
         return
 
@@ -964,9 +1013,17 @@ async def msg_exp_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE)
         paid_order_ids = await _get_paid_order_ids(session.jwt_token, session.login)
         if order_no in paid_order_ids:
             context.user_data.pop("pay_other_order", None)
-            await update.message.reply_text(
-                f"⚠️ По заказу №{order_no} оплата уже была зафиксирована ранее.\n"
-                f"Повторное получение оплаты запрещено."
+            await _reply_loc(
+                update.message,
+                update,
+                context,
+                await t(
+                    update,
+                    context,
+                    "telegram.expeditor.payment_already_recorded",
+                    fallback="⚠️ По заказу №{order_no} оплата уже была зафиксирована ранее.\nПовторное получение оплаты запрещено.",
+                    order_no=order_no,
+                ),
             )
             return
         if customer_id and amount > 0:

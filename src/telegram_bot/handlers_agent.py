@@ -1147,9 +1147,18 @@ async def cb_agent_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _clear_agent_state(context)
     context.user_data["order_search"] = True
     context.user_data["order_cart"] = []
-    await q.edit_message_text(
-        "🛒 *Создать заказ*\n\nВведите название клиента или ИНН для поиска:",
-        reply_markup=back_button(), parse_mode="Markdown",
+    await _edit_loc(
+        q,
+        update,
+        context,
+        await t(
+            update,
+            context,
+            "telegram.agent.order_search_prompt",
+            fallback="🛒 *Создать заказ*\n\nВведите название клиента или ИНН для поиска:",
+        ),
+        reply_markup=back_button(),
+        parse_mode="Markdown",
     )
 
 
@@ -1450,18 +1459,34 @@ async def _show_order_confirm(update, context, is_callback: bool):
     ]
     for item in cart:
         lines.append(f"• {item['name']}: {item['qty']} × {fmt_money(item['price'])}")
-    lines.append(f"\n*Итого:* {fmt_money(total)}")
-    lines.append(f"*Оплата:* {pay_name}")
+    total_lbl = await t(update, context, "telegram.agent.total", fallback="Итого:")
+    payment_lbl = await t(update, context, "telegram.agent.payment_label", fallback="Оплата:")
+    lines.append(f"\n*{total_lbl}* {fmt_money(total)}")
+    lines.append(f"*{payment_lbl}* {pay_name}")
 
     buttons = [
-        [InlineKeyboardButton("✅ Подтвердить", callback_data="agent_orderconfirm")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="agent_ordercheckout")],
+        [InlineKeyboardButton(await t(update, context, "telegram.agent.confirm", fallback="✅ Подтвердить"), callback_data="agent_orderconfirm")],
+        [InlineKeyboardButton(await t(update, context, "telegram.button.back", fallback="◀️ Назад"), callback_data="agent_ordercheckout")],
     ]
     text = "\n".join(lines)
     if is_callback:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _edit_loc(
+            update.callback_query,
+            update,
+            context,
+            text,
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode="Markdown",
+        )
     else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _reply_loc(
+            update.message,
+            update,
+            context,
+            text,
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode="Markdown",
+        )
 
 
 async def cb_agent_order_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -1427,8 +1427,12 @@ async def select_expeditor(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     # Отправить reply-клавиатуру с кнопкой геолокации
     await q.message.reply_text(
-        "📎 *Нажмите на кнопку Скрепка 📎 для отправки локации клиента:*",
-        reply_markup=_location_keyboard(),
+        await _localize_customer_text(
+            update,
+            context,
+            "📎 *Нажмите на кнопку Скрепка 📎 для отправки локации клиента:*",
+        ),
+        reply_markup=await _localize_reply_markup(update, context, _location_keyboard()),
         parse_mode="Markdown",
     )
 
@@ -1527,8 +1531,8 @@ async def ask_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
         # Отправить reply-клавиатуру снова
         await update.effective_chat.send_message(
-            "👇 *Нажмите кнопку для отправки координат:*",
-            reply_markup=_location_keyboard(),
+            await _localize_customer_text(update, context, "👇 *Нажмите кнопку для отправки координат:*"),
+            reply_markup=await _localize_reply_markup(update, context, _location_keyboard()),
             parse_mode="Markdown",
         )
 
@@ -1598,8 +1602,12 @@ async def back_to_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     # Отправить reply-клавиатуру с кнопкой геолокации
     await q.message.reply_text(
-        "📎 *Нажмите на кнопку Скрепка 📎 для отправки локации клиента:*",
-        reply_markup=_location_keyboard(),
+        await _localize_customer_text(
+            update,
+            context,
+            "📎 *Нажмите на кнопку Скрепка 📎 для отправки локации клиента:*",
+        ),
+        reply_markup=await _localize_reply_markup(update, context, _location_keyboard()),
         parse_mode="Markdown",
     )
 

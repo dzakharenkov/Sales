@@ -51,6 +51,7 @@ _LITERAL_KEY_MAP: dict[str, str] = {
     "❌ Отметить не выполнено": "telegram.agent.visit_mark_not_done",
     "✅ Оформить заказ": "telegram.agent.order_checkout",
     "🛒 Оформить заказ": "telegram.button.create_order",
+    "🛒 *Создать заказ*\n\nВведите название клиента или ИНН для поиска:": "telegram.agent.order_search_prompt",
     "✅ Создать визит": "telegram.visit_create.create_visit_btn",
     "🆕 *Создать визит*\n\nВведите название клиента или ИНН для поиска:": "telegram.visit_create.create_visit_search_prompt",
     "❌ Неверный формат даты. Введите дату в формате ДД.ММ.ГГГГ (например, 25.12.2024):": "telegram.visit_create.invalid_date_format",
