@@ -7,8 +7,6 @@ import logging
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    KeyboardButton,
-    ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
     Update,
 )
@@ -46,6 +44,10 @@ async def _role_label(update: Update, context: ContextTypes.DEFAULT_TYPE, role: 
 
 async def _menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(await t(update, context, key), callback_data=key)
+
+
+AUTH_EDIT_LOGIN = "auth_edit_login"
+AUTH_CANCEL = "auth_cancel"
 
 
 def _language_keyboard() -> InlineKeyboardMarkup:
@@ -164,13 +166,16 @@ async def show_main_menu(
         await update.effective_message.reply_text(text, reply_markup=kb, parse_mode="Markdown")
 
 
-async def _auth_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> ReplyKeyboardMarkup:
+async def _auth_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
     edit_text = await t(update, context, "telegram.button.edit_login")
     cancel_text = await t(update, context, "telegram.button.cancel")
-    return ReplyKeyboardMarkup(
-        [[KeyboardButton(f"✏️ {edit_text}"), KeyboardButton(f"❌ {cancel_text}")]],
-        resize_keyboard=True,
-        one_time_keyboard=True,
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(f"✏️ {edit_text}", callback_data=AUTH_EDIT_LOGIN),
+                InlineKeyboardButton(f"❌ {cancel_text}", callback_data=AUTH_CANCEL),
+            ]
+        ]
     )
 
 
@@ -343,6 +348,23 @@ async def ask_password(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return ConversationHandler.END
 
 
+async def cb_auth_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    q = update.callback_query
+    await q.answer()
+
+    if q.data == AUTH_EDIT_LOGIN:
+        context.user_data.pop("login", None)
+        await q.message.reply_text(await t(update, context, "telegram.auth.enter_login"), reply_markup=ReplyKeyboardRemove())
+        return ASK_LOGIN
+
+    if q.data == AUTH_CANCEL:
+        context.user_data.clear()
+        await q.message.reply_text(await t(update, context, "telegram.auth.canceled"), reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
+
+    return ASK_PASSWORD
+
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
     await update.message.reply_text(await t(update, context, "telegram.auth.canceled"), reply_markup=ReplyKeyboardRemove())
@@ -457,7 +479,10 @@ def register_auth_handlers(app) -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, ask_language_fallback),
             ],
             ASK_LOGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_login)],
-            ASK_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_password)],
+            ASK_PASSWORD: [
+                CallbackQueryHandler(cb_auth_action, pattern=r"^auth_(edit_login|cancel)$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_password),
+            ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
