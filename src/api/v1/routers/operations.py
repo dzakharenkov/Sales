@@ -36,6 +36,14 @@ OUTFLOW_OPERATION_TYPES = {
 }
 
 
+def _product_label(product_code: str, product_name: str) -> str:
+    code = (product_code or "").strip()
+    name = (product_name or code or "").strip()
+    if code and name and name != code:
+        return f"{name} (код {code})"
+    return name or code
+
+
 def _parse_delivery_date_input(raw: str) -> date:
     """Parse delivery date from yyyy-mm-dd or dd.mm.yyyy."""
     value = (raw or "").strip()
@@ -198,7 +206,7 @@ async def suggest_allocation_items_by_delivery_date(
             "no_orders": True,
             "matched_orders_count": 0,
             "matched_order_ids": [],
-            "message": f"ÐÐ° Ð²Ñ‹Ð±Ñ€Ð°Ð½Ð½ÑƒÑŽ Ð´Ð°Ñ‚Ñƒ Ð½ÐµÑ‚ Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ñ… Ð·Ð°ÐºÐ°Ð·Ð¾Ð² Ð´Ð»Ñ Ð´Ð¾ÑÑ‚Ð°Ð²ÐºÐ¸ ÑÐºÑÐ¿ÐµÐ´Ð¸Ñ‚Ð¾Ñ€Ð¾Ð¼ {expeditor_login}.",
+            "message": f"На выбранную дату нет активных заказов для доставки экспедитором {expeditor_login}.",
             "items": [],
             "warnings": [],
         }
@@ -285,20 +293,27 @@ async def suggest_allocation_items_by_delivery_date(
             exp_date = expiry_by_batch.get(row.get("batch_id"))
             row["expiry_date"] = exp_date
             row["days_until_expiry"] = (exp_date - today).days if exp_date else None
-        stock_list.sort(
+
+        product_meta = product_info.get(
+            product_code,
+            {"product_name": product_code, "unit_price": 0.0, "weight_g": 0},
+        )
+        product_label = _product_label(product_code, product_meta["product_name"])
+
+        valid_stock_list = [
+            row for row in stock_list
+            if row["days_until_expiry"] is None or row["days_until_expiry"] > 0
+        ]
+        valid_stock_list.sort(
             key=lambda r: (r["days_until_expiry"] if r["days_until_expiry"] is not None else 10**9)
         )
 
         remaining = int(required_qty or 0)
         allocated_total = 0
-        available_total = sum(int(r.get("available_qty") or 0) for r in stock_list)
-        product_meta = product_info.get(
-            product_code,
-            {"product_name": product_code, "unit_price": 0.0, "weight_g": 0},
-        )
+        available_total = sum(int(r.get("available_qty") or 0) for r in valid_stock_list)
 
         allocations: list[dict] = []
-        for st in stock_list:
+        for st in valid_stock_list:
             if remaining <= 0:
                 break
             available = int(st.get("available_qty") or 0)
@@ -323,10 +338,15 @@ async def suggest_allocation_items_by_delivery_date(
             )
 
         shortage_qty = max(0, int(required_qty or 0) - allocated_total)
+        excluded_expired = len(valid_stock_list) != len(stock_list)
+        if excluded_expired and shortage_qty > 0:
+            warnings.append(
+                f"Для товара '{product_label}' просроченные партии исключены из выдачи."
+            )
         if shortage_qty > 0:
             warnings.append(
-                f"Ð¢Ð¾Ð²Ð°Ñ€ '{product_meta['product_name']}' Ð½ÐµÐ´Ð¾ÑÑ‚Ð°Ñ‚Ð¾Ñ‡Ð½Ð¾ Ð½Ð° ÑÐºÐ»Ð°Ð´Ðµ: "
-                f"Ñ‚Ñ€ÐµÐ±ÑƒÐµÑ‚ÑÑ {int(required_qty or 0)} ÑˆÑ‚., Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ð¾ {available_total} ÑˆÑ‚., Ð·Ð°Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¾ {allocated_total} ÑˆÑ‚."
+                f"Товара '{product_label}' недостаточно на складе: "
+                f"требуется {int(required_qty or 0)} шт., доступно {available_total} шт., заполнено {allocated_total} шт."
             )
 
         items.append(

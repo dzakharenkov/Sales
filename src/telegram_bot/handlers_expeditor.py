@@ -18,6 +18,15 @@ from .i18n import t, localize_literal, localize_reply_markup
 logger = logging.getLogger(__name__)
 
 
+def _list_payload(data):
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        items = data.get("data")
+        return items if isinstance(items, list) else []
+    return []
+
+
 async def _loc(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> str:
     return await localize_literal(update, context, text)
 
@@ -73,7 +82,7 @@ async def _get_auth(update: Update) -> tuple:
     tg_id = q.from_user.id
     session = await get_session(tg_id)
     if not session:
-        await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start.")
+        await q.edit_message_text("Сессия истекла. Нажмите /start.")
         return None, None
     await touch_session(tg_id)
     return session, session.jwt_token
@@ -99,7 +108,7 @@ async def _get_paid_order_ids(token: str, login: str) -> set[int]:
     except SDSApiError:
         return set()
 
-    op_list = operations if isinstance(operations, list) else (operations.get("data") if isinstance(operations, dict) else [])
+    op_list = _list_payload(operations)
     paid_order_ids: set[int] = set()
     for op in (op_list or []):
         if not isinstance(op, dict):
@@ -321,15 +330,31 @@ async def cb_exp_route(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     points = []
     point_names = []
+    skipped_orders = []
     for o in orders:
         cid = o.get("customer_id")
         if not cid:
+            skipped_orders.append(
+                {
+                    "order_no": o.get("order_no"),
+                    "client": o.get("customer_name") or f"#{cid or '—'}",
+                    "reason": "missing_customer_id",
+                }
+            )
             continue
         lat, lon, addr = await _fetch_customer_coords(token, cid)
         if lat and lon:
             points.append((lat, lon))
             client = o.get("customer_name") or f"#{cid}"
             point_names.append(f"📍 {client} ({addr}) [{lat:.6f}, {lon:.6f}]")
+        else:
+            skipped_orders.append(
+                {
+                    "order_no": o.get("order_no"),
+                    "client": o.get("customer_name") or f"#{cid}",
+                    "reason": "missing_coords",
+                }
+            )
 
     chosen_date = context.user_data.get("exp_date", date.today().isoformat())
 
@@ -358,9 +383,21 @@ async def cb_exp_route(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(points) > 1:
         lbl_route_built = await t(update, context, "telegram.expeditor.route_built_all", fallback="Маршрут построен через все точки по порядку списка.")
         lines.append(lbl_route_built)
+    if skipped_orders:
+        lbl_skipped = await t(
+            update,
+            context,
+            "telegram.expeditor.route_skipped_no_coords",
+            fallback="Не вошли в маршрут из-за отсутствия координат:",
+        )
+        lines.append(f"\n⚠️ {lbl_skipped}")
+        for item in skipped_orders:
+            order_no = item.get("order_no") or "—"
+            client = item.get("client") or "—"
+            lines.append(f"• №{order_no} | {client}")
 
     await log_action(q.from_user.id, session.login, session.role, "route_built",
-                     f"date={chosen_date}, points={len(points)}", "success")
+                     f"date={chosen_date}, points={len(points)}, skipped={len(skipped_orders)}", "success")
 
     lbl_open_map = await t(update, context, "telegram.expeditor.open_map", fallback="🗺 Открыть в Яндекс.Картах")
     buttons = [
@@ -559,12 +596,22 @@ async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        existing_ops = await api.get_operations(token, type_code="delivery", created_by=session.login)
-        existing_for_order = [
-            op for op in (existing_ops or [])
-            if int(op.get("order_id") or 0) == order_no
-            and (op.get("status") or "").strip().lower() not in ("cancelled", "canceled")
-        ]
+        existing_ops = _list_payload(
+            await api.get_operations(token, type_code="delivery", created_by=session.login)
+        )
+        existing_for_order = []
+        for op in existing_ops:
+            if not isinstance(op, dict):
+                continue
+            try:
+                op_order_no = int(op.get("order_id") or 0)
+            except (TypeError, ValueError):
+                continue
+            if op_order_no != order_no:
+                continue
+            if (op.get("status") or "").strip().lower() in ("cancelled", "canceled"):
+                continue
+            existing_for_order.append(op)
         if existing_for_order:
             await q.edit_message_text(
                 f"ℹ️ По заказу №{order_no} уже есть операции «Доставка клиенту».\n"
@@ -682,12 +729,10 @@ async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ Заказ №{order_no} доставлен.\n\n"
             f"Создано операций «Доставка клиенту»: {created}.\n"
             f"Списание выполнено со склада: {warehouse_from}.\n"
-            "Статус заказа обновлён на «Завершён».",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💰 Получить оплату", callback_data="exp_payment")],
-                [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")],
-            ]),
+            "Статус заказа обновлён на «Доставлен».",
         )
+        from .handlers_auth import show_main_menu
+        await show_main_menu(update, context, session, force_reply=True)
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
@@ -697,6 +742,21 @@ async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
                          f"order={order_no}", "error", e.detail)
         await q.edit_message_text(
             await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
+            reply_markup=back_button(),
+        )
+    except Exception as e:
+        logger.exception("Unexpected error during delivery confirmation for order %s", order_no)
+        await log_action(
+            q.from_user.id,
+            session.login,
+            session.role,
+            "order_delivered",
+            f"order={order_no}",
+            "error",
+            str(e),
+        )
+        await q.edit_message_text(
+            "❌ Не удалось подтвердить заказ из-за внутренней ошибки. Попробуйте ещё раз.",
             reply_markup=back_button(),
         )
     finally:
@@ -842,9 +902,10 @@ async def cb_exp_pay_full(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lbl_status_not_changed = await t(update, context, "telegram.expeditor.status_not_changed", fallback="Статус заказа не изменён.")
         await q.edit_message_text(
             f"{lbl_success_top}{order_no}.\n{lbl_sum}: {fmt_money(amount)}\n{lbl_status_not_changed}",
-            reply_markup=back_button(),
             parse_mode="Markdown",
         )
+        from .handlers_auth import show_main_menu
+        await show_main_menu(update, context, session, force_reply=True)
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
@@ -957,6 +1018,11 @@ async def cb_exp_received_payments(update: Update, context: ContextTypes.DEFAULT
             type_code="payment_receipt_from_customer",
             created_by=session.login,
         )
+        handovers = await api.get_operations(
+            token,
+            type_code="cash_handover_from_expeditor",
+            created_by=session.login,
+        )
     except SDSApiError as e:
         if e.status == 401:
             await delete_session(q.from_user.id)
@@ -969,9 +1035,24 @@ async def cb_exp_received_payments(update: Update, context: ContextTypes.DEFAULT
         return
 
     # Не показываем отменённые операции в блоке "Полученная оплата"
-    op_list = operations if isinstance(operations, list) else (operations.get("data") if isinstance(operations, dict) else [])
+    op_list = _list_payload(operations)
+    handover_list = _list_payload(handovers)
+    handover_by_receipt_id = {}
+    for handover in (handover_list or []):
+        if not isinstance(handover, dict):
+            continue
+        related_id = str(handover.get("related_operation_id") or "").strip()
+        if not related_id:
+            continue
+        handover_by_receipt_id[related_id] = handover
     visible_operations = [
-        op for op in (op_list or []) if isinstance(op, dict) and (op.get("status") or "").strip().lower() not in ("cancelled", "canceled")
+        op for op in (op_list or [])
+        if isinstance(op, dict)
+        and (op.get("status") or "").strip().lower() not in ("cancelled", "canceled")
+        and (
+            not handover_by_receipt_id.get(str(op.get("id") or "").strip())
+            or (handover_by_receipt_id.get(str(op.get("id") or "").strip(), {}).get("status") or "").strip().lower() == "pending"
+        )
     ]
 
     lbl_title = await t(update, context, "telegram.expeditor.rcv_payment_title", fallback="Полученная оплата")
@@ -988,20 +1069,16 @@ async def cb_exp_received_payments(update: Update, context: ContextTypes.DEFAULT
     lbl_order_num = await t(update, context, "telegram.expeditor.order_num", fallback="Заказ №")
     
     lbl_status_pending = await t(update, context, "telegram.expeditor.status_pending", fallback="Ожидает передачи")
-    lbl_status_completed = await t(update, context, "telegram.expeditor.status_completed", fallback="Передано")
-    lbl_status_cancelled = await t(update, context, "telegram.expeditor.status_cancelled", fallback="Отменено")
 
     lines = [f"💵 *{lbl_title_full}*\n"]
     for op in visible_operations:
         op_num = op.get("operation_number", "—")
         amount = op.get("amount", 0)
-        status = op.get("status", "")
-        status_ru = {"pending": lbl_status_pending, "completed": lbl_status_completed, "cancelled": lbl_status_cancelled}.get(status, status)
         order_id = op.get("order_id") or "—"
         op_date = op.get("operation_date", "")
         date_str = fmt_date(op_date[:10]) if op_date else "—"
 
-        lines.append(f"• {op_num} | {lbl_order_num}{order_id} | {fmt_money(amount)} | {status_ru} | {date_str}")
+        lines.append(f"• {op_num} | {lbl_order_num}{order_id} | {fmt_money(amount)} | {lbl_status_pending} | {date_str}")
 
     await q.edit_message_text(
         "\n".join(lines),

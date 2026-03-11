@@ -273,6 +273,10 @@ async def execute_operation_flow_atomic(
     created: list[dict[str, str]] = []
     sorted_steps = sorted(steps, key=_lock_sort_key)
 
+    ok, msg = await check_batch_expiry(session, dt.batch_code)
+    if not ok:
+        raise error_400("EXPIRED_BATCH", msg, {"batch_code": dt.batch_code})
+
     try:
         async with session.begin():
             for step in sorted_steps:

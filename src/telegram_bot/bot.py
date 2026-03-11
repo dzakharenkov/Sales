@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from telegram.error import Conflict
+from telegram.error import Conflict, NetworkError
 from telegram.ext import Application
 
 from src.core.sentry_setup import init_sentry
@@ -123,6 +123,9 @@ async def on_bot_error(update, context):
                 await context.application.stop()
             except Exception as stop_error:
                 logger.debug("application.stop failed: %s", stop_error)
+        return
+    if isinstance(err, NetworkError) or "Bad Gateway" in str(err):
+        logger.warning("Transient Telegram network error: %s", err)
         return
     logger.exception("Unhandled bot error", exc_info=err)
 

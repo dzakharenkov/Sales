@@ -708,7 +708,10 @@ async def save_visit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             f"⏰ *Время:* {visit_time}\n"
         )
 
-        await _edit_i18n(q, update, context, text, parse_mode="Markdown")
+        await q.message.reply_text(
+            await _localize_visit_text(update, context, text),
+            parse_mode="Markdown",
+        )
 
         # Очистка данных
         keys_to_clear = [k for k in context.user_data.keys() if k.startswith(PREFIX)]
@@ -719,7 +722,7 @@ async def save_visit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         # Показать главное меню
         from .handlers_auth import show_main_menu
-        await show_main_menu(update, context, session)
+        await show_main_menu(update, context, session, force_reply=True)
 
         return ConversationHandler.END
 

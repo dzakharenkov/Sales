@@ -4050,6 +4050,7 @@
             window.flatpickr(allocDeliveryDateEl, { locale: 'ru', dateFormat: 'd.m.Y', allowInput: true });
           }
           var stockCache = null;
+          var allocationExtraProducts = {};
           var lastAllocDeliveryDateValue = allocDeliveryDateEl ? (allocDeliveryDateEl.value || '') : '';
 
           function hasAllocationRowsData() {
@@ -4102,13 +4103,14 @@
           }
           function buildProductOptionsFromStock() {
             var opts = '<option value="">' + tr('ui.op.form.select_product', '— Выберите товар —') + '</option>';
-            if (!stockCache || !stockCache.length) return opts;
             var withStock = {};
-            stockCache.forEach(function (s) {
-              if (s.product_code) withStock[s.product_code] = true;
-            });
+            if (stockCache && stockCache.length) {
+              stockCache.forEach(function (s) {
+                if (s.product_code) withStock[s.product_code] = true;
+              });
+            }
             productsList.forEach(function (p) {
-              if (withStock[p.code]) {
+              if (withStock[p.code] || allocationExtraProducts[p.code]) {
                 opts += '<option value="' + escAttr(p.code) + '">' + escAttr((p.code || '') + ' — ' + (p.name || '')) + '</option>';
               }
             });
@@ -4352,8 +4354,13 @@
 
               var renderPrefill = function () {
                 var prefillRows = [];
+                allocationExtraProducts = {};
                 (resp.items || []).forEach(function (item) {
-                  (item.allocations || []).forEach(function (a) {
+                  var allocations = Array.isArray(item.allocations) ? item.allocations : [];
+                  if (item && item.product_code && (!allocations.length || (parseInt(item.shortage_qty || '0', 10) || 0) > 0)) {
+                    allocationExtraProducts[item.product_code] = true;
+                  }
+                  allocations.forEach(function (a) {
                     var qty = parseInt(a.allocated_qty || '0', 10) || 0;
                     if (qty <= 0) return;
                     prefillRows.push({
@@ -4362,6 +4369,12 @@
                       quantity: qty
                     });
                   });
+                  if (!allocations.length && item && item.product_code) {
+                    prefillRows.push({
+                      product_code: item.product_code,
+                      quantity: parseInt(item.required_qty || '0', 10) || 0
+                    });
+                  }
                 });
                 clearAllocationRows();
                 if (prefillRows.length) {
@@ -4371,22 +4384,25 @@
                 }
                 updateTotals();
 
-                if (resp.warnings && resp.warnings.length) {
-                  if (errEl) errEl.textContent = resp.warnings.join(' | ');
-                } else if (msgEl) {
-                  var orderInfoText = '';
-                  if (resp.matched_orders_count != null) {
-                    var orderIds = Array.isArray(resp.matched_order_ids) ? resp.matched_order_ids : [];
-                    var orderIdsHtml = orderIds.length
-                      ? orderIds.map(function (id) {
-                        return '<a href="#" data-alloc-order-id="' + escAttr(id) + '" style="margin-right:6px">\u2116' + escAttr(id) + '</a>';
-                      }).join('')
-                      : '—';
-                    orderInfoText = ' <span>' + tr('ui.alloc.form.loaded_from', 'Подтянуто из заказов:') + ' ' + resp.matched_orders_count + ' (' + orderIdsHtml + ')</span>.';
-                  }
+                var orderInfoText = '';
+                if (resp.matched_orders_count != null) {
+                  var orderIds = Array.isArray(resp.matched_order_ids) ? resp.matched_order_ids : [];
+                  var orderIdsHtml = orderIds.length
+                    ? orderIds.map(function (id) {
+                      return '<a href="#" data-alloc-order-id="' + escAttr(id) + '" style="margin-right:6px">\u2116' + escAttr(id) + '</a>';
+                    }).join('')
+                    : '—';
+                  orderInfoText = ' <span>' + tr('ui.alloc.form.loaded_from', 'Подтянуто из заказов:') + ' ' + resp.matched_orders_count + ' (' + orderIdsHtml + ')</span>.';
+                }
+                if (msgEl) {
                   msgEl.innerHTML = tr('ui.alloc.form.products_loaded', 'Товары успешно подтянуты по дате поставки.') + orderInfoText;
                   msgEl.style.display = 'block';
                   bindMatchedOrderLinks();
+                }
+                if (resp.warnings && resp.warnings.length) {
+                  if (errEl) errEl.textContent = resp.warnings.join(' | ');
+                } else if (errEl) {
+                  errEl.textContent = '';
                 }
               };
               loadStock(whFrom).then(renderPrefill).catch(renderPrefill);

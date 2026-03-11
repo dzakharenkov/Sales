@@ -50,6 +50,20 @@ def fmt_date_ru(d: date) -> str:
     return f"{d.day} {MONTHS_RU[d.month]} {d.year}"
 
 
+def fmt_product_name(product: dict[str, Any] | None) -> str:
+    if not product:
+        return "?"
+    name = str(product.get("name") or "?").strip()
+    weight_g = product.get("weight_g")
+    if weight_g in (None, ""):
+        return name
+    try:
+        weight_val = int(weight_g)
+    except (TypeError, ValueError):
+        return name
+    return f"{name}, {weight_val} г"
+
+
 # ---------- Кэш справочников ----------
 
 _cache: dict[str, tuple[float, Any]] = {}

@@ -51,7 +51,8 @@ async def create_visit(
 ):
     """Создание нового визита."""
     response, notification = await VisitService(session).create_visit(body.model_dump(), user.login)
-    schedule_notification(notify_new_visit(**notification))
+    if notification:
+        schedule_notification(notify_new_visit(**notification))
     return response
 @router.get("/visits/search", response_model=PaginatedResponse[EntityModel])
 async def search_visits(

@@ -1718,11 +1718,14 @@ async def save_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
         logger.info(f"[SAVE API SUCCESS] User {tg_id}: Customer created, ID={customer_id}")
 
-        await _safe_edit_message(update, context, 
-            q,
-            f"✅ *Клиент успешно создан!*\n\n"
-            f"ID: *{customer_id}*\n"
-            f"Название: *{_escape_markdown(customer_data['name_client'])}*",
+        await q.message.reply_text(
+            await _localize_customer_text(
+                update,
+                context,
+                f"✅ *Клиент успешно создан!*\n\n"
+                f"ID: *{customer_id}*\n"
+                f"Название: *{_escape_markdown(customer_data['name_client'])}*",
+            ),
             parse_mode="Markdown",
         )
 
@@ -1737,7 +1740,7 @@ async def save_customer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 
         from .handlers_auth import show_main_menu
-        await show_main_menu(update, context, session)
+        await show_main_menu(update, context, session, force_reply=True)
 
         return ConversationHandler.END
 

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 _bot: Bot | None = None
 _user_notifications_column_exists: bool | None = None
+_user_language_column_exists: bool | None = None
 
 
 def get_bot() -> Bot:
@@ -172,9 +173,27 @@ async def notify_order_status_changed(
 
 
 async def _get_user_language(login: str) -> str:
-    from src.database.connection import async_session
-    from sqlalchemy import text
+    global _user_language_column_exists
     async with async_session() as session:
+        if _user_language_column_exists is None:
+            result = await session.execute(
+                text(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'Sales'
+                          AND table_name = 'users'
+                          AND column_name = 'language_code'
+                    )
+                    """
+                )
+            )
+            _user_language_column_exists = bool(result.scalar())
+
+        if not _user_language_column_exists:
+            return "ru"
+
         row = await session.execute(
             text('SELECT language_code FROM "Sales".users WHERE login = :login'),
             {"login": login},

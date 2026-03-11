@@ -15,7 +15,7 @@ class VisitService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_visit(self, payload: dict, created_by: str) -> tuple[dict, dict]:
+    async def create_visit(self, payload: dict, created_by: str) -> tuple[dict, dict | None]:
         customer_result = await self.db.execute(select(Customer).where(Customer.id == payload["customer_id"]))
         customer = customer_result.scalar_one_or_none()
         if not customer:
@@ -46,12 +46,14 @@ class VisitService:
         await self.db.refresh(visit)
 
         customer_name = (customer.name_client or customer.firm_name or "").strip() or f"Клиент #{customer.id}"
-        notify_payload = {
-            "visit_id": visit.id,
-            "customer_name": customer_name,
-            "visit_date": visit.visit_date,
-            "responsible_login": visit.responsible_login or created_by,
-        }
+        notify_payload = None
+        if (visit.responsible_login or created_by) != created_by:
+            notify_payload = {
+                "visit_id": visit.id,
+                "customer_name": customer_name,
+                "visit_date": visit.visit_date,
+                "responsible_login": visit.responsible_login or created_by,
+            }
 
         return ({"id": visit.id, "message": "created"}, notify_payload)
 

@@ -3,8 +3,8 @@
 ## Общая информация
 
 **Проект:** sales  
-**ID Ошибки:** 7296136308  
-**Ссылка в Sentry:** https://zakharenkov.sentry.io/issues/7296136308/  
+**ID Ошибки:** 7323450449  
+**Ссылка в Sentry:** https://zakharenkov.sentry.io/issues/7323450449/  
 **Статус:** ❌ НЕ ИСПРАВЛЕНО  
 
 ---
@@ -12,15 +12,15 @@
 ## Описание проблемы
 
 **Название ошибки:**
-DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.NumericValueOutOfRangeError'>: numeric field overflow
+ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column "language_code" does not exist
 
-**Тип исключения:** NumericValueOutOfRangeError  
-**Сообщение об ошибке:** numeric field overflow  
+**Тип исключения:** UndefinedColumnError  
+**Сообщение об ошибке:** column "language_code" does not exist  
 
 **Статистика:**
-- Кол-во возникновений: **3**
-- Первое появление: 2026-02-27T10:23:20Z
-- Последнее появление: 2026-02-27T10:23:33Z
+- Кол-во возникновений: **1**
+- Первое появление: 2026-03-10T04:50:11Z
+- Последнее появление: 2026-03-10T04:50:11Z
 - Серьёзность: **ERROR**
 
 ---
@@ -28,109 +28,129 @@ DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.excep
 ## Стектрейс (Stack Trace)
 
 ### Основная строка ошибки:
-`asyncpg/protocol/protocol.pyx:205`
-в функции: `bind_execute`
+`asyncpg/protocol/protocol.pyx:165`
+в функции: `prepare`
 
 ### Полный стектрейс:
 
-#### Фрейм 5
+#### Фрейм 6
 - **Файл:** `asyncpg/protocol/protocol.pyx`
-- **Строка:** 205
-- **Функция:** `bind_execute`
+- **Строка:** 165
+- **Функция:** `prepare`
 - **Контекст кода:**
 
 ```python
-            self.queries_count += 1
+            self.statement = state
         except Exception as ex:
             waiter.set_exception(ex)
             self._coreproto_error()
         finally:
             return await waiter
 
-    async def bind_execute_many(
+    async def bind_execute(
         self,
         state: PreparedStatementState,
         args,
 ```
 
-#### Фрейм 4
-- **Файл:** `asyncpg/prepared_stmt.py`
-- **Строка:** 257
-- **Функция:** `__do_execute`
+#### Фрейм 5
+- **Файл:** `asyncpg/connection.py`
+- **Строка:** 443
+- **Функция:** `_get_statement`
 - **Контекст кода:**
 
 ```python
-            ))
+        elif use_cache or named:
+            stmt_name = self._get_unique_id('stmt')
+        else:
+            stmt_name = ''
 
-    async def __do_execute(self, executor):
-        protocol = self._connection._protocol
-        try:
-            return await executor(protocol)
-        except exceptions.OutdatedSchemaCacheError:
-            await self._connection.reload_schema_state()
-            # We can not find all manually created prepared statements, so just
-            # drop known cached ones in the `self._connection`.
-            # Other manually created prepared statements will fail and
+        statement = await self._protocol.prepare(
+            stmt_name,
+            query,
+            timeout,
+            record_class=record_class,
+            ignore_custom_codec=ignore_custom_codec,
+```
+
+#### Фрейм 4
+- **Файл:** `asyncpg/connection.py`
+- **Строка:** 657
+- **Функция:** `_prepare`
+- **Контекст кода:**
+
+```python
+        record_class=None
+    ):
+        self._check_open()
+        if name is None:
+            name = self._stmt_cache_enabled
+        stmt = await self._get_statement(
+            query,
+            timeout,
+            named=name,
+            use_cache=use_cache,
+            record_class=record_class,
 ```
 
 #### Фрейм 3
-- **Файл:** `asyncpg/prepared_stmt.py`
-- **Строка:** 268
-- **Функция:** `__bind_execute`
+- **Файл:** `asyncpg/connection.py`
+- **Строка:** 638
+- **Функция:** `prepare`
 - **Контекст кода:**
 
 ```python
-            # invalidate themselves (unfortunately, clearing caches again).
-            self._state.mark_closed()
-            raise
+            Added the *record_class* parameter.
 
-    async def __bind_execute(self, args, limit, timeout):
-        data, status, _ = await self.__do_execute(
-            lambda protocol: protocol.bind_execute(
-                self._state, args, '', limit, True, timeout))
-        self._last_status = status
-        return data
-
+        .. versionchanged:: 0.25.0
+            Added the *name* parameter.
+        """
+        return await self._prepare(
+            query,
+            name=name,
+            timeout=timeout,
+            record_class=record_class,
+        )
 ```
 
 #### Фрейм 2
-- **Файл:** `asyncpg/prepared_stmt.py`
-- **Строка:** 177
-- **Функция:** `fetch`
+- **Файл:** `sqlalchemy/dialects/postgresql/asyncpg.py`
+- **Строка:** 773
+- **Функция:** `_prepare`
 - **Контекст кода:**
 
 ```python
-        :param args: Query arguments
-        :param float timeout: Optional timeout value in seconds.
+            # changes such as size of a VARCHAR changing, so there is also
+            # a cross-connection invalidation timestamp
+            if cached_timestamp > invalidate_timestamp:
+                return prepared_stmt, attributes
 
-        :return: A list of :class:`Record` instances.
-        """
-        data = await self.__bind_execute(args, 0, timeout)
-        return data
+        prepared_stmt = await self._connection.prepare(
+            operation, name=self._prepared_statement_name_func()
+        )
+        attributes = prepared_stmt.get_attributes()
+        cache[operation] = (prepared_stmt, attributes, time.time())
 
-    @connresource.guarded
-    async def fetchval(self, *args, column=0, timeout=None):
-        """Execute the statement and return a value in the first row.
 ```
 
 #### Фрейм 1
 - **Файл:** `sqlalchemy/dialects/postgresql/asyncpg.py`
-- **Строка:** 550
+- **Строка:** 526
 - **Функция:** `_prepare_and_execute`
 - **Контекст кода:**
 
 ```python
 
-                if self.server_side:
-                    self._cursor = await prepared_stmt.cursor(*parameters)
-                    self.rowcount = -1
-                else:
-                    self._rows = deque(await prepared_stmt.fetch(*parameters))
-                    status = prepared_stmt.get_statusmsg()
+            if parameters is None:
+                parameters = ()
 
-                    reg = re.match(
-                        r"(?:SELECT|UPDATE|DELETE|INSERT \d+) (\d+)",
-                        status or "",
+            try:
+                prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+
+                if attributes:
+                    self.description = [
 ```
 
 ---
@@ -140,26 +160,22 @@ DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.excep
 ### Информация о пользователе
 - **User ID:** None
 - **Email:** None
-- **IP Address:** 95.214.210.254
+- **IP Address:** 45.141.76.83
 
 ### Теги
 ```json
 {
-  "browser": "Chrome 145",
-  "browser.name": "Chrome",
-  "client_os": "Windows",
-  "client_os.name": "Windows",
   "environment": "production",
   "handled": "yes",
   "level": "error",
-  "logger": "src.core.exception_handlers",
+  "logger": "src.core.notifications",
   "mechanism": "logging",
   "runtime": "CPython 3.12.3",
   "runtime.name": "CPython",
   "server_name": "sales-api",
-  "transaction": "/api/v1/customers",
-  "url": "http://sales.zakharenkov.ru/api/v1/customers",
-  "user": "ip:95.214.210.254"
+  "transaction": "/api/v1/visits",
+  "url": "http://sales.zakharenkov.ru/api/v1/visits",
+  "user": "ip:45.141.76.83"
 }
 ```
 
@@ -210,4 +226,4 @@ DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.excep
 Комментарий решения: 
 
 
-Создано: 2026-02-27 19:20:35
+Создано: 2026-03-10 10:04:24

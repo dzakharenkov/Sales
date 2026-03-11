@@ -12,7 +12,7 @@ from .session import get_session, touch_session, log_action, delete_session
 from .sds_api import api, SDSApiError
 from .helpers import (
     fmt_money, fmt_date, date_picker_keyboard, calendar_keyboard,
-    back_button, get_cached_products, get_cached_payment_types,
+    back_button, get_cached_products, get_cached_payment_types, fmt_product_name,
 )
 from .i18n import t, localize_literal, localize_reply_markup
 from .handlers_agent_v3_add_customer import get_add_customer_v3_handler
@@ -1224,7 +1224,7 @@ async def _show_products_page(q, context, session):
     buttons = []
     for p in page_items:
         code = p.get("code")
-        name = p.get("name", "?")
+        name = fmt_product_name(p)
         price = p.get("price", 0)
         buttons.append([InlineKeyboardButton(
             f"{name} — {fmt_money(price)}", callback_data=f"agent_prod_{code}"
@@ -1273,8 +1273,9 @@ async def cb_agent_prod_select(update: Update, context: ContextTypes.DEFAULT_TYP
     _clear_agent_state(context)
     context.user_data["adding_product"] = product
     enter_qty = await t(update, context, "telegram.agent.enter_qty", fallback="Введите количество:")
+    product_name = fmt_product_name(product)
     await q.edit_message_text(
-        f"📦 *{product['name']}*\nЦена: {fmt_money(product.get('price', 0))}\n\n{enter_qty}",
+        f"📦 *{product_name}*\nЦена: {fmt_money(product.get('price', 0))}\n\n{enter_qty}",
         parse_mode="Markdown",
     )
 
@@ -1294,9 +1295,10 @@ async def _handle_product_qty(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _reply_loc(update.message, update, context, "❌ Введите целое число > 0:")
         return True
     cart = context.user_data.get("order_cart", [])
+    product_name = fmt_product_name(product)
     cart.append({
         "product_code": product.get("code"),
-        "name": product.get("name", "?"),
+        "name": product_name,
         "price": float(product.get("price", 0)),
         "qty": qty,
     })
@@ -1324,7 +1326,7 @@ async def _handle_product_qty(update: Update, context: ContextTypes.DEFAULT_TYPE
     added_lbl = await t(update, context, "telegram.agent.added", fallback="Добавлено:")
     add_more_lbl = await t(update, context, "telegram.agent.add_more", fallback="Добавить ещё товар?")
     await update.message.reply_text(
-        f"✅ {added_lbl} {product['name']} × {qty}\n\n{cart_text}\n\n{add_more_lbl}",
+        f"✅ {added_lbl} {product_name} × {qty}\n\n{cart_text}\n\n{add_more_lbl}",
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode="Markdown",
     )
@@ -1479,6 +1481,8 @@ async def cb_agent_order_confirm(update: Update, context: ContextTypes.DEFAULT_T
             "customer_id": cid,
             "status_code": "open",
             "payment_type_code": pay_code,
+            # Expeditor bot screens are date-based; default new Telegram orders to today's route.
+            "scheduled_delivery_at": date.today().isoformat(),
         })
         order_no = order.get("order_no") or order.get("id")
 

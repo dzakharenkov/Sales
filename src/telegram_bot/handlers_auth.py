@@ -140,7 +140,13 @@ async def main_menu_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE,
     return InlineKeyboardMarkup(buttons)
 
 
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, session: UserSession) -> None:
+async def show_main_menu(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    session: UserSession,
+    *,
+    force_reply: bool = False,
+) -> None:
     role_label = await _role_label(update, context, session.role)
     title = await t(update, context, "telegram.menu.main")
     text = await t(
@@ -152,7 +158,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, ses
         role=role_label,
     )
     kb = await main_menu_keyboard(update, context, session.role)
-    if update.callback_query:
+    if update.callback_query and not force_reply:
         await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
     else:
         await update.effective_message.reply_text(text, reply_markup=kb, parse_mode="Markdown")
@@ -463,4 +469,3 @@ def register_auth_handlers(app) -> None:
     app.add_handler(CallbackQueryHandler(cb_change_lang_menu, pattern="^change_lang$"))
     app.add_handler(CallbackQueryHandler(cb_logout, pattern="^logout$"))
     app.add_handler(CallbackQueryHandler(cb_logout_confirm, pattern="^logout_confirm$"))
-

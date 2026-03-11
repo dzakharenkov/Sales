@@ -94,6 +94,7 @@ class OperationService:
                     "comment": operation.comment,
                     "order_id": operation.order_id,
                     "created_by": operation.created_by,
+                    "related_operation_id": str(operation.related_operation_id) if operation.related_operation_id else None,
                 }
             )
 

@@ -2,14 +2,971 @@
   "metadata": {
     "organization": "zakharenkov",
     "project_filter": "sales",
-    "total_issues": 11,
-    "fetched_at": "2026-02-26T15:17:19.422560+00:00",
+    "total_issues": 15,
+    "fetched_at": "2026-03-10T05:31:02.811175+00:00",
     "period": "14d unresolved + historical merged",
     "by_project": {
-      "sales": 11
+      "sales": 15
     }
   },
   "errors": [
+    {
+      "id": "7284965351",
+      "title": "[SEND ERROR] Traceback: Traceback (most recent call last):",
+      "status": "resolved",
+      "level": "error",
+      "count": 1,
+      "first_seen": "2026-03-10T04:52:14Z",
+      "last_seen": "2026-03-10T04:52:14Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7284965351/",
+      "stacktrace": {
+        "exception_type": "Unknown",
+        "exception_value": "Unknown",
+        "frames": []
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": null
+        },
+        "tags": {
+          "environment": "production",
+          "level": "error",
+          "logger": "src.telegram_bot.handlers_agent_v3_add_customer",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-telegram-bot"
+        }
+      },
+      "comment": "Исправлено в проекте, задача закрыта и синхронизирована в Sentry."
+    },
+    {
+      "id": "7278462695",
+      "title": "[SEND ERROR] Unexpected error: 'CallbackQuery' object has no attribute 'reply_text'",
+      "status": "resolved",
+      "level": "error",
+      "count": 1,
+      "first_seen": "2026-03-10T04:52:14Z",
+      "last_seen": "2026-03-10T04:52:14Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7278462695/",
+      "stacktrace": {
+        "exception_type": "Unknown",
+        "exception_value": "Unknown",
+        "frames": []
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": null
+        },
+        "tags": {
+          "environment": "production",
+          "level": "error",
+          "logger": "src.telegram_bot.handlers_agent_v3_add_customer",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-telegram-bot"
+        }
+      },
+      "comment": "Исправлено в проекте, задача закрыта и синхронизирована в Sentry."
+    },
+    {
+      "id": "7323450449",
+      "title": "ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column \"language_code\" does not exist",
+      "status": "resolved",
+      "level": "error",
+      "count": 1,
+      "first_seen": "2026-03-10T04:50:11Z",
+      "last_seen": "2026-03-10T04:50:11Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7323450449/",
+      "stacktrace": {
+        "exception_type": "UndefinedColumnError",
+        "exception_value": "column \"language_code\" does not exist",
+        "frames": [
+          {
+            "filename": "sqlalchemy/dialects/postgresql/asyncpg.py",
+            "line_number": 526,
+            "function": "_prepare_and_execute",
+            "code_context": [
+              [
+                521,
+                ""
+              ],
+              [
+                522,
+                "            if parameters is None:"
+              ],
+              [
+                523,
+                "                parameters = ()"
+              ],
+              [
+                524,
+                ""
+              ],
+              [
+                525,
+                "            try:"
+              ],
+              [
+                526,
+                "                prepared_stmt, attributes = await adapt_connection._prepare("
+              ],
+              [
+                527,
+                "                    operation, self._invalidate_schema_cache_asof"
+              ],
+              [
+                528,
+                "                )"
+              ],
+              [
+                529,
+                ""
+              ],
+              [
+                530,
+                "                if attributes:"
+              ],
+              [
+                531,
+                "                    self.description = ["
+              ]
+            ]
+          },
+          {
+            "filename": "sqlalchemy/dialects/postgresql/asyncpg.py",
+            "line_number": 773,
+            "function": "_prepare",
+            "code_context": [
+              [
+                768,
+                "            # changes such as size of a VARCHAR changing, so there is also"
+              ],
+              [
+                769,
+                "            # a cross-connection invalidation timestamp"
+              ],
+              [
+                770,
+                "            if cached_timestamp > invalidate_timestamp:"
+              ],
+              [
+                771,
+                "                return prepared_stmt, attributes"
+              ],
+              [
+                772,
+                ""
+              ],
+              [
+                773,
+                "        prepared_stmt = await self._connection.prepare("
+              ],
+              [
+                774,
+                "            operation, name=self._prepared_statement_name_func()"
+              ],
+              [
+                775,
+                "        )"
+              ],
+              [
+                776,
+                "        attributes = prepared_stmt.get_attributes()"
+              ],
+              [
+                777,
+                "        cache[operation] = (prepared_stmt, attributes, time.time())"
+              ],
+              [
+                778,
+                ""
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connection.py",
+            "line_number": 638,
+            "function": "prepare",
+            "code_context": [
+              [
+                633,
+                "            Added the *record_class* parameter."
+              ],
+              [
+                634,
+                ""
+              ],
+              [
+                635,
+                "        .. versionchanged:: 0.25.0"
+              ],
+              [
+                636,
+                "            Added the *name* parameter."
+              ],
+              [
+                637,
+                "        \"\"\""
+              ],
+              [
+                638,
+                "        return await self._prepare("
+              ],
+              [
+                639,
+                "            query,"
+              ],
+              [
+                640,
+                "            name=name,"
+              ],
+              [
+                641,
+                "            timeout=timeout,"
+              ],
+              [
+                642,
+                "            record_class=record_class,"
+              ],
+              [
+                643,
+                "        )"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connection.py",
+            "line_number": 657,
+            "function": "_prepare",
+            "code_context": [
+              [
+                652,
+                "        record_class=None"
+              ],
+              [
+                653,
+                "    ):"
+              ],
+              [
+                654,
+                "        self._check_open()"
+              ],
+              [
+                655,
+                "        if name is None:"
+              ],
+              [
+                656,
+                "            name = self._stmt_cache_enabled"
+              ],
+              [
+                657,
+                "        stmt = await self._get_statement("
+              ],
+              [
+                658,
+                "            query,"
+              ],
+              [
+                659,
+                "            timeout,"
+              ],
+              [
+                660,
+                "            named=name,"
+              ],
+              [
+                661,
+                "            use_cache=use_cache,"
+              ],
+              [
+                662,
+                "            record_class=record_class,"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/connection.py",
+            "line_number": 443,
+            "function": "_get_statement",
+            "code_context": [
+              [
+                438,
+                "        elif use_cache or named:"
+              ],
+              [
+                439,
+                "            stmt_name = self._get_unique_id('stmt')"
+              ],
+              [
+                440,
+                "        else:"
+              ],
+              [
+                441,
+                "            stmt_name = ''"
+              ],
+              [
+                442,
+                ""
+              ],
+              [
+                443,
+                "        statement = await self._protocol.prepare("
+              ],
+              [
+                444,
+                "            stmt_name,"
+              ],
+              [
+                445,
+                "            query,"
+              ],
+              [
+                446,
+                "            timeout,"
+              ],
+              [
+                447,
+                "            record_class=record_class,"
+              ],
+              [
+                448,
+                "            ignore_custom_codec=ignore_custom_codec,"
+              ]
+            ]
+          },
+          {
+            "filename": "asyncpg/protocol/protocol.pyx",
+            "line_number": 165,
+            "function": "prepare",
+            "code_context": [
+              [
+                160,
+                "            self.statement = state"
+              ],
+              [
+                161,
+                "        except Exception as ex:"
+              ],
+              [
+                162,
+                "            waiter.set_exception(ex)"
+              ],
+              [
+                163,
+                "            self._coreproto_error()"
+              ],
+              [
+                164,
+                "        finally:"
+              ],
+              [
+                165,
+                "            return await waiter"
+              ],
+              [
+                166,
+                ""
+              ],
+              [
+                167,
+                "    async def bind_execute("
+              ],
+              [
+                168,
+                "        self,"
+              ],
+              [
+                169,
+                "        state: PreparedStatementState,"
+              ],
+              [
+                170,
+                "        args,"
+              ]
+            ]
+          }
+        ]
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": "45.141.76.83"
+        },
+        "tags": {
+          "environment": "production",
+          "handled": "yes",
+          "level": "error",
+          "logger": "src.core.notifications",
+          "mechanism": "logging",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-api",
+          "transaction": "/api/v1/visits",
+          "url": "http://sales.zakharenkov.ru/api/v1/visits",
+          "user": "ip:45.141.76.83"
+        }
+      },
+      "comment": "Исправлено в проекте, задача закрыта и синхронизирована в Sentry."
+    },
+    {
+      "id": "7299667604",
+      "title": "NetworkError: Bad Gateway",
+      "status": "resolved",
+      "level": "error",
+      "count": 3,
+      "first_seen": "2026-02-28T23:22:48Z",
+      "last_seen": "2026-03-01T00:01:46Z",
+      "project": "sales",
+      "url": "https://zakharenkov.sentry.io/issues/7299667604/",
+      "stacktrace": {
+        "exception_type": "NetworkError",
+        "exception_value": "Bad Gateway",
+        "frames": [
+          {
+            "filename": "telegram/ext/_utils/networkloop.py",
+            "line_number": 115,
+            "function": "network_retry_loop",
+            "code_context": [
+              [
+                110,
+                "    _LOGGER.debug(\"%s Starting\", log_prefix)"
+              ],
+              [
+                111,
+                "    cur_interval = interval"
+              ],
+              [
+                112,
+                "    retries = 0"
+              ],
+              [
+                113,
+                "    while effective_is_running():"
+              ],
+              [
+                114,
+                "        try:"
+              ],
+              [
+                115,
+                "            if not await do_action():"
+              ],
+              [
+                116,
+                "                break"
+              ],
+              [
+                117,
+                "        except RetryAfter as exc:"
+              ],
+              [
+                118,
+                "            slack_time = 0.5"
+              ],
+              [
+                119,
+                "            _LOGGER.info("
+              ],
+              [
+                120,
+                "                \"%s %s. Adding %s seconds to the specified time.\", log_prefix, exc, slack_time"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/ext/_utils/networkloop.py",
+            "line_number": 108,
+            "function": "do_action",
+            "code_context": [
+              [
+                103,
+                ""
+              ],
+              [
+                104,
+                "        if stop_task in done:"
+              ],
+              [
+                105,
+                "            _LOGGER.debug(\"%s Cancelled\", log_prefix)"
+              ],
+              [
+                106,
+                "            return False"
+              ],
+              [
+                107,
+                ""
+              ],
+              [
+                108,
+                "        return action_cb_task.result()"
+              ],
+              [
+                109,
+                ""
+              ],
+              [
+                110,
+                "    _LOGGER.debug(\"%s Starting\", log_prefix)"
+              ],
+              [
+                111,
+                "    cur_interval = interval"
+              ],
+              [
+                112,
+                "    retries = 0"
+              ],
+              [
+                113,
+                "    while effective_is_running():"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/ext/_updater.py",
+            "line_number": 376,
+            "function": "polling_action_cb",
+            "code_context": [
+              [
+                371,
+                ""
+              ],
+              [
+                372,
+                "        _LOGGER.debug(\"Bootstrap done\")"
+              ],
+              [
+                373,
+                ""
+              ],
+              [
+                374,
+                "        async def polling_action_cb() -> bool:"
+              ],
+              [
+                375,
+                "            try:"
+              ],
+              [
+                376,
+                "                updates = await self.bot.get_updates("
+              ],
+              [
+                377,
+                "                    offset=self._last_update_id,"
+              ],
+              [
+                378,
+                "                    timeout=timeout,"
+              ],
+              [
+                379,
+                "                    read_timeout=read_timeout,"
+              ],
+              [
+                380,
+                "                    connect_timeout=connect_timeout,"
+              ],
+              [
+                381,
+                "                    write_timeout=write_timeout,"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/ext/_extbot.py",
+            "line_number": 658,
+            "function": "get_updates",
+            "code_context": [
+              [
+                653,
+                "        write_timeout: ODVInput[float] = DEFAULT_NONE,"
+              ],
+              [
+                654,
+                "        connect_timeout: ODVInput[float] = DEFAULT_NONE,"
+              ],
+              [
+                655,
+                "        pool_timeout: ODVInput[float] = DEFAULT_NONE,"
+              ],
+              [
+                656,
+                "        api_kwargs: Optional[JSONDict] = None,"
+              ],
+              [
+                657,
+                "    ) -> tuple[Update, ...]:"
+              ],
+              [
+                658,
+                "        updates = await super().get_updates("
+              ],
+              [
+                659,
+                "            offset=offset,"
+              ],
+              [
+                660,
+                "            limit=limit,"
+              ],
+              [
+                661,
+                "            timeout=timeout,"
+              ],
+              [
+                662,
+                "            allowed_updates=allowed_updates,"
+              ],
+              [
+                663,
+                "            read_timeout=read_timeout,"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/_bot.py",
+            "line_number": 4605,
+            "function": "get_updates",
+            "code_context": [
+              [
+                4600,
+                "        # * Long polling poses a different problem: the connection might have been dropped while"
+              ],
+              [
+                4601,
+                "        #   waiting for the server to return and there's no way of knowing the connection had been"
+              ],
+              [
+                4602,
+                "        #   dropped in real time."
+              ],
+              [
+                4603,
+                "        result = cast("
+              ],
+              [
+                4604,
+                "            list[JSONDict],"
+              ],
+              [
+                4605,
+                "            await self._post("
+              ],
+              [
+                4606,
+                "                \"getUpdates\","
+              ],
+              [
+                4607,
+                "                data,"
+              ],
+              [
+                4608,
+                "                read_timeout=arg_read_timeout + timeout if timeout else arg_read_timeout,"
+              ],
+              [
+                4609,
+                "                write_timeout=write_timeout,"
+              ],
+              [
+                4610,
+                "                connect_timeout=connect_timeout,"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/_bot.py",
+            "line_number": 691,
+            "function": "_post",
+            "code_context": [
+              [
+                686,
+                "        self._insert_defaults(data)"
+              ],
+              [
+                687,
+                ""
+              ],
+              [
+                688,
+                "        # Drop any None values because Telegram doesn't handle them well"
+              ],
+              [
+                689,
+                "        data = {key: value for key, value in data.items() if value is not None}"
+              ],
+              [
+                690,
+                ""
+              ],
+              [
+                691,
+                "        return await self._do_post("
+              ],
+              [
+                692,
+                "            endpoint=endpoint,"
+              ],
+              [
+                693,
+                "            data=data,"
+              ],
+              [
+                694,
+                "            read_timeout=read_timeout,"
+              ],
+              [
+                695,
+                "            write_timeout=write_timeout,"
+              ],
+              [
+                696,
+                "            connect_timeout=connect_timeout,"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/ext/_extbot.py",
+            "line_number": 362,
+            "function": "_do_post",
+            "code_context": [
+              [
+                357,
+                "                \"`rate_limit_args` can only be used if a `ExtBot.rate_limiter` is set.\""
+              ],
+              [
+                358,
+                "            )"
+              ],
+              [
+                359,
+                ""
+              ],
+              [
+                360,
+                "        # getting updates should not be rate limited!"
+              ],
+              [
+                361,
+                "        if endpoint == \"getUpdates\" or not self.rate_limiter:"
+              ],
+              [
+                362,
+                "            return await super()._do_post("
+              ],
+              [
+                363,
+                "                endpoint=endpoint,"
+              ],
+              [
+                364,
+                "                data=data,"
+              ],
+              [
+                365,
+                "                write_timeout=write_timeout,"
+              ],
+              [
+                366,
+                "                connect_timeout=connect_timeout,"
+              ],
+              [
+                367,
+                "                pool_timeout=pool_timeout,"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/_bot.py",
+            "line_number": 720,
+            "function": "_do_post",
+            "code_context": [
+              [
+                715,
+                "        )"
+              ],
+              [
+                716,
+                ""
+              ],
+              [
+                717,
+                "        request = self._request[0] if endpoint == \"getUpdates\" else self._request[1]"
+              ],
+              [
+                718,
+                ""
+              ],
+              [
+                719,
+                "        self._LOGGER.debug(\"Calling Bot API endpoint `%s` with parameters `%s`\", endpoint, data)"
+              ],
+              [
+                720,
+                "        result = await request.post("
+              ],
+              [
+                721,
+                "            url=f\"{self._base_url}/{endpoint}\","
+              ],
+              [
+                722,
+                "            request_data=request_data,"
+              ],
+              [
+                723,
+                "            read_timeout=read_timeout,"
+              ],
+              [
+                724,
+                "            write_timeout=write_timeout,"
+              ],
+              [
+                725,
+                "            connect_timeout=connect_timeout,"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/request/_baserequest.py",
+            "line_number": 202,
+            "function": "post",
+            "code_context": [
+              [
+                197,
+                ""
+              ],
+              [
+                198,
+                "        Returns:"
+              ],
+              [
+                199,
+                "          The JSON response of the Bot API."
+              ],
+              [
+                200,
+                ""
+              ],
+              [
+                201,
+                "        \"\"\""
+              ],
+              [
+                202,
+                "        result = await self._request_wrapper("
+              ],
+              [
+                203,
+                "            url=url,"
+              ],
+              [
+                204,
+                "            method=\"POST\","
+              ],
+              [
+                205,
+                "            request_data=request_data,"
+              ],
+              [
+                206,
+                "            read_timeout=read_timeout,"
+              ],
+              [
+                207,
+                "            write_timeout=write_timeout,"
+              ]
+            ]
+          },
+          {
+            "filename": "telegram/request/_baserequest.py",
+            "line_number": 387,
+            "function": "_request_wrapper",
+            "code_context": [
+              [
+                382,
+                "        if code == HTTPStatus.BAD_REQUEST:  # 400"
+              ],
+              [
+                383,
+                "            raise BadRequest(message)"
+              ],
+              [
+                384,
+                "        if code == HTTPStatus.CONFLICT:  # 409"
+              ],
+              [
+                385,
+                "            raise Conflict(message)"
+              ],
+              [
+                386,
+                "        if code == HTTPStatus.BAD_GATEWAY:  # 502"
+              ],
+              [
+                387,
+                "            raise NetworkError(description or \"Bad Gateway\")"
+              ],
+              [
+                388,
+                "        raise NetworkError(f\"{message} ({code})\")"
+              ],
+              [
+                389,
+                ""
+              ],
+              [
+                390,
+                "    @staticmethod"
+              ],
+              [
+                391,
+                "    def parse_json_payload(payload: bytes) -> JSONDict:"
+              ],
+              [
+                392,
+                "        \"\"\"Parse the JSON returned from Telegram."
+              ]
+            ]
+          }
+        ]
+      },
+      "context": {
+        "request": {},
+        "user": {
+          "id": null,
+          "email": null,
+          "ip_address": null
+        },
+        "tags": {
+          "environment": "production",
+          "handled": "yes",
+          "level": "error",
+          "logger": "__main__",
+          "mechanism": "logging",
+          "runtime": "CPython 3.12.3",
+          "runtime.name": "CPython",
+          "server_name": "sales-telegram-bot"
+        }
+      },
+      "comment": "Исправлено в проекте, задача закрыта и синхронизирована в Sentry."
+    },
     {
       "id": "7294095442",
       "title": "IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.ForeignKeyViolationError'>: update or delete on table \"operation_types\" violates foreign key constraint \"operation_config_operation_type_code_fkey\" on table \"operation_co...",
