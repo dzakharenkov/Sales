@@ -104,9 +104,17 @@ async def cb_agent_add_customer(update: Update, context: ContextTypes.DEFAULT_TY
         return
     _clear_agent_state(context)
     context.user_data["add_cust_step"] = "name"
-    buttons = [[InlineKeyboardButton("❌ Отмена", callback_data="main_menu")]]
-    await q.edit_message_text(
-        "➕ *Добавить клиента*\n\nВведите *название клиента* (минимум 2 символа):",
+    buttons = [[InlineKeyboardButton(await t(update, context, "telegram.button.cancel", fallback="❌ Отмена"), callback_data="main_menu")]]
+    await _edit_loc(
+        q,
+        update,
+        context,
+        await t(
+            update,
+            context,
+            "telegram.agent.legacy_customer_start",
+            fallback="➕ *Добавить клиента*\n\nВведите *название клиента* (минимум 2 символа):",
+        ),
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode="Markdown",
     )
@@ -126,13 +134,27 @@ async def _handle_add_customer_text(update: Update, context: ContextTypes.DEFAUL
     if step == "name":
         name = update.message.text.strip()
         if len(name) < 2:
-            await _reply_loc(update.message, update, context, "❌ Название минимум 2 символа. Введите снова:")
+            await _reply_loc(
+                update.message,
+                update,
+                context,
+                await t(update, context, "telegram.agent.legacy_customer_name_min", fallback="❌ Название минимум 2 символа. Введите снова:"),
+            )
             return True
         context.user_data["add_cust_name"] = name
         context.user_data["add_cust_step"] = "inn"
-        buttons = [[InlineKeyboardButton("⏭ Пропустить", callback_data="agent_addcust_skip_inn")]]
-        await update.message.reply_text(
-            f"✅ Название: *{name}*\n\nВведите *ИНН* (9–12 цифр) или нажмите Пропустить:",
+        buttons = [[InlineKeyboardButton(await t(update, context, "telegram.button.skip", fallback="⏭ Пропустить"), callback_data="agent_addcust_skip_inn")]]
+        await _reply_loc(
+            update.message,
+            update,
+            context,
+            await t(
+                update,
+                context,
+                "telegram.agent.legacy_customer_name_ok_enter_inn",
+                fallback="✅ Название: *{name}*\n\nВведите *ИНН* (9–12 цифр) или нажмите Пропустить:",
+                name=name,
+            ),
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode="Markdown",
         )
@@ -144,10 +166,13 @@ async def _handle_add_customer_text(update: Update, context: ContextTypes.DEFAUL
         # Валидация ИНН: 9-12 цифр
         if not re.match(r"^\d{9,12}$", inn):
             logger.warning(f"Invalid INN format: {inn}")
-            await update.message.reply_text(
-                "❌ ИНН должен содержать от 9 до 12 цифр. Введите снова:",
+            await _reply_loc(
+                update.message,
+                update,
+                context,
+                await t(update, context, "telegram.agent.legacy_customer_inn_invalid", fallback="❌ ИНН должен содержать от 9 до 12 цифр. Введите снова:"),
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("⏭ Пропустить", callback_data="agent_addcust_skip_inn")],
+                    [InlineKeyboardButton(await t(update, context, "telegram.button.skip", fallback="⏭ Пропустить"), callback_data="agent_addcust_skip_inn")],
                 ]),
             )
             return True
@@ -222,28 +247,35 @@ async def _show_add_customer_fields_menu(update, context, is_callback: bool):
 
     logger.info(f"User {user_id}: Fields - name={bool(name)}, inn={bool(inn)}, address={bool(address)}")
 
-    lines = ["📋 *Заполните данные клиента*\nНажмите на поле, введите значение и отправьте. Для координат — отправьте геолокацию.\n"]
+    lines = [
+        await t(
+            update,
+            context,
+            "telegram.agent.legacy_customer_fields_intro",
+            fallback="📋 *Заполните данные клиента*\nНажмите на поле, введите значение и отправьте. Для координат — отправьте геолокацию.\n",
+        )
+    ]
     buttons = []
-    buttons.append(_field_btn("Название", "name", name))
-    buttons.append(_field_btn("ИНН", "inn", inn))
-    buttons.append(_field_btn("Название фирмы", "firm_name", firm_name))
-    buttons.append(_field_btn("Р/с", "account_no", account_no))
-    buttons.append(_field_btn("Адрес", "address", address))
-    buttons.append(_field_btn("Город", "city", city))
-    buttons.append(_field_btn("Территория", "territory", territory))
-    buttons.append(_field_btn("Телефон", "phone", phone))
-    buttons.append(_field_btn("Контактное лицо", "contact", contact))
-    buttons.append(_field_btn("📍 Координаты (геолокация)", "geo", has_geo))
-    buttons.append(_field_btn("📸 Фото", "photo", has_photo))
-    buttons.append([InlineKeyboardButton("✅ Завершить заведение клиента", callback_data="agent_addcust_finish")])
-    buttons.append([InlineKeyboardButton("❌ Отмена", callback_data="main_menu")])
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_name", fallback="Название"), "name", name))
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_inn", fallback="ИНН"), "inn", inn))
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_firm_name", fallback="Название фирмы"), "firm_name", firm_name))
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_account_no", fallback="Р/с"), "account_no", account_no))
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_address", fallback="Адрес"), "address", address))
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_city", fallback="Город"), "city", city))
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_territory", fallback="Территория"), "territory", territory))
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_phone", fallback="Телефон"), "phone", phone))
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_contact", fallback="Контактное лицо"), "contact", contact))
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_geo", fallback="📍 Координаты (геолокация)"), "geo", has_geo))
+    buttons.append(_field_btn(await t(update, context, "telegram.agent.legacy_customer.field_photo", fallback="📸 Фото"), "photo", has_photo))
+    buttons.append([InlineKeyboardButton(await t(update, context, "telegram.agent.customer_finish", fallback="✅ Завершить заведение клиента"), callback_data="agent_addcust_finish")])
+    buttons.append([InlineKeyboardButton(await t(update, context, "telegram.button.cancel", fallback="❌ Отмена"), callback_data="main_menu")])
 
     text = "\n".join(lines)
     kb = InlineKeyboardMarkup(buttons)
     if is_callback:
-        await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
+        await _edit_loc(update.callback_query, update, context, text, reply_markup=kb, parse_mode="Markdown")
     else:
-        await update.message.reply_text(text, reply_markup=kb, parse_mode="Markdown")
+        await _reply_loc(update.message, update, context, text, reply_markup=kb, parse_mode="Markdown")
 
 
 async def cb_agent_addcust_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -254,21 +286,21 @@ async def cb_agent_addcust_field(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["add_cust_editing_field"] = field
 
     prompts = {
-        "name": "Введите *название клиента* (минимум 2 символа):",
-        "inn": "Введите *ИНН* (9–12 цифр):",
-        "firm_name": "Введите *название фирмы*:",
-        "account_no": "Введите *расчётный счёт* (р/с):",
-        "address": "Введите *адрес*:",
-        "city": "Введите *город*:",
-        "territory": "Введите *территорию*:",
-        "phone": "Введите *телефон*:",
-        "contact": "Введите *контактное лицо*:",
-        "geo": "📍 Отправьте *геолокацию* (нажмите 📎 → Геолокация):",
-        "photo": "📸 Отправьте *фото* клиента (вывеска, магазин):",
+        "name": await t(update, context, "telegram.agent.legacy_customer.prompt_name", fallback="Введите *название клиента* (минимум 2 символа):"),
+        "inn": await t(update, context, "telegram.agent.legacy_customer.prompt_inn", fallback="Введите *ИНН* (9–12 цифр):"),
+        "firm_name": await t(update, context, "telegram.agent.legacy_customer.prompt_firm_name", fallback="Введите *название фирмы*:"),
+        "account_no": await t(update, context, "telegram.agent.legacy_customer.prompt_account_no", fallback="Введите *расчётный счёт* (р/с):"),
+        "address": await t(update, context, "telegram.agent.legacy_customer.prompt_address", fallback="Введите *адрес*:"),
+        "city": await t(update, context, "telegram.agent.legacy_customer.prompt_city", fallback="Введите *город*:"),
+        "territory": await t(update, context, "telegram.agent.legacy_customer.prompt_territory", fallback="Введите *территорию*:"),
+        "phone": await t(update, context, "telegram.agent.legacy_customer.prompt_phone", fallback="Введите *телефон*:"),
+        "contact": await t(update, context, "telegram.agent.legacy_customer.prompt_contact", fallback="Введите *контактное лицо*:"),
+        "geo": await t(update, context, "telegram.agent.legacy_customer.prompt_geo", fallback="📍 Отправьте *геолокацию* (нажмите 📎 → Геолокация):"),
+        "photo": await t(update, context, "telegram.agent.legacy_customer.prompt_photo", fallback="📸 Отправьте *фото* клиента (вывеска, магазин):"),
     }
-    prompt = prompts.get(field, "Введите значение:")
-    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад к меню полей", callback_data="agent_addcust_back_to_fields")]])
-    await q.edit_message_text(prompt, parse_mode="Markdown", reply_markup=back_kb)
+    prompt = prompts.get(field, await t(update, context, "telegram.common.enter_value", fallback="Введите значение:"))
+    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton(await t(update, context, "telegram.agent.back_to_fields", fallback="◀️ Назад к меню полей"), callback_data="agent_addcust_back_to_fields")]])
+    await _edit_loc(q, update, context, prompt, parse_mode="Markdown", reply_markup=back_kb)
 
 
 async def cb_agent_addcust_back_to_fields(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -328,9 +360,20 @@ async def cb_agent_addcust_finish(update: Update, context: ContextTypes.DEFAULT_
                 logger.warning("Не удалось загрузить фото нового клиента %s: %s", cid, e)
         await log_action(q.from_user.id, session.login, session.role, "customer_created", f"customer_id={cid}, name={name}", "success")
         _clear_agent_state(context)
-        await q.edit_message_text(
-            f"✅ *Клиент создан!*\n\n*ID:* {cid}\n*Название:* {name}",
-            reply_markup=back_button(), parse_mode="Markdown",
+        await _edit_loc(
+            q,
+            update,
+            context,
+            await t(
+                update,
+                context,
+                "telegram.agent.legacy_customer_created",
+                fallback="✅ *Клиент создан!*\n\n*ID:* {cid}\n*Название:* {name}",
+                cid=cid,
+                name=name,
+            ),
+            reply_markup=back_button(),
+            parse_mode="Markdown",
         )
     except SDSApiError as e:
         if e.status == 401:
@@ -385,10 +428,10 @@ async def _handle_add_customer_photo(update: Update, context: ContextTypes.DEFAU
             file = await doc.get_file()
             filename = doc.file_name or "photo.jpg"
         else:
-            await _reply_loc(update.message, update, context, "❌ Отправьте изображение (JPG, PNG, WEBP).")
+            await _reply_loc(update.message, update, context, await t(update, context, "telegram.agent.send_image_only", fallback="❌ Отправьте изображение (JPG, PNG, WEBP)."))
             return True
         if file.file_size and file.file_size > 10 * 1024 * 1024:
-            await _reply_loc(update.message, update, context, "❌ Файл слишком большой (макс. 10 МБ).")
+            await _reply_loc(update.message, update, context, await t(update, context, "telegram.agent.file_too_large_10mb", fallback="❌ Файл слишком большой (макс. 10 МБ)."))
             return True
         file_bytes = await file.download_as_bytearray()
         context.user_data["add_cust_photo_bytes"] = bytes(file_bytes)
@@ -407,10 +450,10 @@ async def _handle_add_customer_photo(update: Update, context: ContextTypes.DEFAU
         file = await doc.get_file()
         filename = doc.file_name or "photo.jpg"
     else:
-        await _reply_loc(update.message, update, context, "❌ Отправьте изображение (JPG, PNG, WEBP).")
+        await _reply_loc(update.message, update, context, await t(update, context, "telegram.agent.send_image_only", fallback="❌ Отправьте изображение (JPG, PNG, WEBP)."))
         return True
     if file.file_size and file.file_size > 10 * 1024 * 1024:
-        await _reply_loc(update.message, update, context, "❌ Файл слишком большой (макс. 10 МБ).")
+        await _reply_loc(update.message, update, context, await t(update, context, "telegram.agent.file_too_large_10mb", fallback="❌ Файл слишком большой (макс. 10 МБ)."))
         return True
     file_bytes = await file.download_as_bytearray()
     context.user_data["add_cust_photo_bytes"] = bytes(file_bytes)
@@ -434,22 +477,22 @@ async def _show_add_customer_confirm(update, context, is_callback: bool):
     lon = context.user_data.get("add_cust_lon")
     has_photo = context.user_data.get("add_cust_photo_bytes") is not None
     lines = [
-        "📋 *Подтверждение нового клиента:*\n",
-        f"*Название:* {name}",
-        f"*ИНН:* {inn}",
-        f"*Координаты:* {f'{lat:.6f}, {lon:.6f}' if lat else '—'}",
-        f"*Фото:* {'✅ Прикреплено' if has_photo else '—'}",
+        await t(update, context, "telegram.agent.legacy_customer_confirm_title", fallback="📋 *Подтверждение нового клиента:*\n"),
+        f"{await t(update, context, 'telegram.agent.legacy_customer.label_name', fallback='*Название:*')} {name}",
+        f"{await t(update, context, 'telegram.agent.legacy_customer.label_inn', fallback='*ИНН:*')} {inn}",
+        f"{await t(update, context, 'telegram.agent.legacy_customer.label_coords', fallback='*Координаты:*')} {f'{lat:.6f}, {lon:.6f}' if lat else '—'}",
+        f"{await t(update, context, 'telegram.agent.legacy_customer.label_photo', fallback='*Фото:*')} {(await t(update, context, 'telegram.agent.photo_attached', fallback='✅ Прикреплено')) if has_photo else '—'}",
     ]
     context.user_data["add_cust_step"] = "confirm"
     buttons = [
-        [InlineKeyboardButton("✅ Создать клиента", callback_data="agent_addcust_confirm")],
-        [InlineKeyboardButton("❌ Отмена", callback_data="main_menu")],
+        [InlineKeyboardButton(await t(update, context, "telegram.customer_create.create_btn", fallback="✅ Создать клиента"), callback_data="agent_addcust_confirm")],
+        [InlineKeyboardButton(await t(update, context, "telegram.button.cancel", fallback="❌ Отмена"), callback_data="main_menu")],
     ]
     text = "\n".join(lines)
     if is_callback:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _edit_loc(update.callback_query, update, context, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
     else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _reply_loc(update.message, update, context, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
 
 
 async def cb_agent_addcust_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -488,9 +531,20 @@ async def cb_agent_addcust_confirm(update: Update, context: ContextTypes.DEFAULT
         await log_action(q.from_user.id, session.login, session.role,
                          "customer_created", f"customer_id={cid}, name={name}{coord_info}", "success")
         _clear_agent_state(context)
-        await q.edit_message_text(
-            f"✅ *Клиент создан!*\n\n*ID:* {cid}\n*Название:* {name}",
-            reply_markup=back_button(), parse_mode="Markdown",
+        await _edit_loc(
+            q,
+            update,
+            context,
+            await t(
+                update,
+                context,
+                "telegram.agent.legacy_customer_created",
+                fallback="✅ *Клиент создан!*\n\n*ID:* {cid}\n*Название:* {name}",
+                cid=cid,
+                name=name,
+            ),
+            reply_markup=back_button(),
+            parse_mode="Markdown",
         )
     except SDSApiError as e:
         if e.status == 401:
@@ -580,13 +634,22 @@ async def cb_agent_visits_date(update: Update, context: ContextTypes.DEFAULT_TYP
 
     visits = data.get("data") or [] if isinstance(data, dict) else data
     if not visits:
-        await q.edit_message_text(
-            f"📋 Визиты на {fmt_date(chosen_date)}:\n\nНет визитов.",
+        await _edit_loc(
+            q,
+            update,
+            context,
+            await t(
+                update,
+                context,
+                "telegram.agent.visits_for_date_empty",
+                fallback="📋 Визиты на {date}:\n\nНет визитов.",
+                date=fmt_date(chosen_date),
+            ),
             reply_markup=back_button("agent_visits"),
         )
         return
 
-    lines = [f"📋 *Визиты на {fmt_date(chosen_date)}:*\n"]
+    lines = [await t(update, context, "telegram.agent.visits_for_date", fallback="📋 *Визиты на {date}:*\n", date=fmt_date(chosen_date))]
     buttons = []
     for v in visits:
         vid = v.get("id")
@@ -598,10 +661,8 @@ async def cb_agent_visits_date(update: Update, context: ContextTypes.DEFAULT_TYP
         buttons.append([InlineKeyboardButton(
             f"{time_str} — {client}", callback_data=f"agent_visit_{vid}"
         )])
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="agent_visits")])
-    await q.edit_message_text(
-        "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
-    )
+    buttons.append([InlineKeyboardButton(await t(update, context, "telegram.button.back", fallback="◀️ Назад"), callback_data="agent_visits")])
+    await _edit_loc(q, update, context, "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
 
 
 async def cb_agent_visit_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -946,9 +1007,9 @@ async def _show_create_visit_confirm(update, context, is_callback: bool):
     ]
     text = "\n".join(lines)
     if is_callback:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _edit_loc(update.callback_query, update, context, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
     else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await _reply_loc(update.message, update, context, text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
 
 
 async def cb_agent_create_visit_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -980,7 +1041,10 @@ async def cb_agent_create_visit_confirm(update: Update, context: ContextTypes.DE
                    "create_visit_date_input", "create_visit_time_input"]:
             context.user_data.pop(k, None)
 
-        await q.edit_message_text(
+        await _edit_loc(
+            q,
+            update,
+            context,
             await t(update, context, "telegram.visit_create.visit_created_ok", fallback=f"✅ *Визит создан!*\n\nВизит #{visit_id}\nКлиент: #{cid}\nДата: {fmt_date(visit_date)}\nВремя: {visit_time or '—'}", visit_id=visit_id, cid=cid, date=fmt_date(visit_date), time=visit_time or '—'),
             reply_markup=back_button(), parse_mode="Markdown",
         )
@@ -1004,8 +1068,11 @@ async def cb_agent_photo_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     await q.answer()
     _clear_agent_state(context)
     context.user_data["photo_search"] = True
-    await q.edit_message_text(
-        "📸 Введите название клиента или ИНН для поиска:",
+    await _edit_loc(
+        q,
+        update,
+        context,
+        await t(update, context, "telegram.agent.photo_search_prompt", fallback="📸 Введите название клиента или ИНН для поиска:"),
         reply_markup=back_button(),
     )
 
@@ -1187,9 +1254,9 @@ async def _handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYP
         tax_id = c.get("tax_id", "")
         display = f"{name}" + (f" ({tax_id})" if tax_id else "")
         buttons.append([InlineKeyboardButton(display, callback_data=f"agent_ordercust_{cid}")])
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
+    buttons.append([InlineKeyboardButton(await t(update, context, "telegram.button.back", fallback="◀️ Назад"), callback_data="main_menu")])
     context.user_data.pop("order_search", None)
-    await _reply_loc(update.message, update, context, "Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
+    await _reply_loc(update.message, update, context, await t(update, context, "telegram.common.select_customer", fallback="Выберите клиента:"), reply_markup=InlineKeyboardMarkup(buttons))
     return True
 
 
@@ -1229,7 +1296,17 @@ async def _show_products_page(q, context, session):
         cart_text = f"\n{cart_title}\n" + "\n".join(cart_lines) + f"\n*{total_lbl}* {fmt_money(total_sum)}\n"
 
     total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
-    lines = [f"📦 *Выберите товар* (стр. {page + 1}/{total_pages}){cart_text}\n"]
+    lines = [
+        await t(
+            q,
+            context,
+            "telegram.agent.products_choose_page",
+            fallback="📦 *Выберите товар* (стр. {page}/{pages}){cart}\n",
+            page=page + 1,
+            pages=total_pages,
+            cart=cart_text,
+        )
+    ]
     buttons = []
     for p in page_items:
         code = p.get("code")
@@ -1248,10 +1325,8 @@ async def _show_products_page(q, context, session):
     if cart:
         create_order_btn = await t(update, context, "telegram.button.create_order", fallback="🛒 Оформить заказ")
         buttons.append([InlineKeyboardButton(create_order_btn, callback_data="agent_ordercheckout")])
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
-    await q.edit_message_text(
-        "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
-    )
+    buttons.append([InlineKeyboardButton(await t(q, context, "telegram.button.back", fallback="◀️ Назад"), callback_data="main_menu")])
+    await _edit_loc(q, None, context, "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
 
 
 async def cb_agent_prodpage(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1283,8 +1358,11 @@ async def cb_agent_prod_select(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["adding_product"] = product
     enter_qty = await t(update, context, "telegram.agent.enter_qty", fallback="Введите количество:")
     product_name = fmt_product_name(product)
-    await q.edit_message_text(
-        f"📦 *{product_name}*\nЦена: {fmt_money(product.get('price', 0))}\n\n{enter_qty}",
+    await _edit_loc(
+        q,
+        update,
+        context,
+        f"📦 *{product_name}*\n{await t(update, context, 'telegram.agent.price', fallback='Цена:')} {fmt_money(product.get('price', 0))}\n\n{enter_qty}",
         parse_mode="Markdown",
     )
 
@@ -1301,7 +1379,7 @@ async def _handle_product_qty(update: Update, context: ContextTypes.DEFAULT_TYPE
         if qty <= 0:
             raise ValueError
     except ValueError:
-        await _reply_loc(update.message, update, context, "❌ Введите целое число > 0:")
+        await _reply_loc(update.message, update, context, await t(update, context, "telegram.agent.enter_positive_integer", fallback="❌ Введите целое число > 0:"))
         return True
     cart = context.user_data.get("order_cart", [])
     product_name = fmt_product_name(product)
@@ -1334,7 +1412,10 @@ async def _handle_product_qty(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     added_lbl = await t(update, context, "telegram.agent.added", fallback="Добавлено:")
     add_more_lbl = await t(update, context, "telegram.agent.add_more", fallback="Добавить ещё товар?")
-    await update.message.reply_text(
+    await _reply_loc(
+        update.message,
+        update,
+        context,
         f"✅ {added_lbl} {product_name} × {qty}\n\n{cart_text}\n\n{add_more_lbl}",
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode="Markdown",
@@ -1357,7 +1438,7 @@ async def cb_agent_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
         translated_name = await _payment_label(update, context, code)
         name = translated_name if translated_name != "—" else pt.get("name", code)
         buttons.append([InlineKeyboardButton(name, callback_data=f"agent_orderpay_{code}")])
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data=f"agent_ordercust_{context.user_data.get('order_customer_id', 0)}")])
+    buttons.append([InlineKeyboardButton(await t(update, context, "telegram.button.back", fallback="◀️ Назад"), callback_data=f"agent_ordercust_{context.user_data.get('order_customer_id', 0)}")])
 
     cart = context.user_data.get("order_cart", [])
     total = sum(i["qty"] * i["price"] for i in cart)
@@ -1368,9 +1449,7 @@ async def cb_agent_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"• {item['name']}: {item['qty']} × {fmt_money(item['price'])}")
     lines.append(f"\n*{total_lbl}* {fmt_money(total)}")
     lines.append("\n" + await t(update, context, "telegram.agent.choose_payment", fallback="Выберите *тип оплаты*:"))
-    await q.edit_message_text(
-        "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown"
-    )
+    await _edit_loc(q, update, context, "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
 
 
 async def cb_agent_order_pay(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1393,10 +1472,18 @@ async def _handle_order_location(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["order_lon"] = loc.longitude
     context.user_data.pop("order_geo_step", None)
     context.user_data["order_photo_step"] = True
-    await update.message.reply_text(
-        f"✅ Координаты: {loc.latitude:.6f}, {loc.longitude:.6f}\n\n"
-        f"📸 *Фото клиента* (обязательно)\n"
-        f"Отправьте фото (вывеска, точка доставки).",
+    await _reply_loc(
+        update.message,
+        update,
+        context,
+        await t(
+            update,
+            context,
+            "telegram.agent.order_location_received_photo_next",
+            fallback="✅ Координаты: {lat}, {lon}\n\n📸 *Фото клиента* (обязательно)\nОтправьте фото (вывеска, точка доставки).",
+            lat=f"{loc.latitude:.6f}",
+            lon=f"{loc.longitude:.6f}",
+        ),
         parse_mode="Markdown",
     )
     return True
@@ -1417,10 +1504,10 @@ async def _handle_order_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif doc and doc.mime_type and doc.mime_type.startswith("image/"):
         file = await doc.get_file()
     else:
-        await _reply_loc(update.message, update, context, "❌ Отправьте изображение (JPG, PNG, WEBP).")
+        await _reply_loc(update.message, update, context, await t(update, context, "telegram.agent.send_image_only", fallback="❌ Отправьте изображение (JPG, PNG, WEBP)."))
         return
     if file.file_size and file.file_size > 10 * 1024 * 1024:
-        await _reply_loc(update.message, update, context, "❌ Файл слишком большой (макс. 10 МБ).")
+        await _reply_loc(update.message, update, context, await t(update, context, "telegram.agent.file_too_large_10mb", fallback="❌ Файл слишком большой (макс. 10 МБ)."))
         return
 
     now = datetime.now()
@@ -1648,10 +1735,7 @@ async def cb_agent_update_location(update: Update, context: ContextTypes.DEFAULT
     _clear_agent_state(context)
     context.user_data["location_search"] = True
     title = await t(update, context, "telegram.agent.update_location_prompt", fallback="📍 *Обновить локацию клиента*\n\nВведите ИНН или название клиента для поиска:")
-    await q.edit_message_text(
-        title,
-        reply_markup=back_button(), parse_mode="Markdown",
-    )
+    await _edit_loc(q, update, context, title, reply_markup=back_button(), parse_mode="Markdown")
 
 
 async def _handle_location_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1680,7 +1764,7 @@ async def _handle_location_search(update: Update, context: ContextTypes.DEFAULT_
         tax_id = c.get("tax_id", "")
         display = f"{name}" + (f" ({tax_id})" if tax_id else "")
         buttons.append([InlineKeyboardButton(display, callback_data=f"agent_updloc_{cid}")])
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="main_menu")])
+    buttons.append([InlineKeyboardButton(await t(update, context, "telegram.button.back", fallback="◀️ Назад"), callback_data="main_menu")])
     context.user_data.pop("location_search", None)
     await _reply_loc(update.message, update, context, "Выберите клиента:", reply_markup=InlineKeyboardMarkup(buttons))
     return True
@@ -1700,7 +1784,10 @@ async def cb_agent_update_loc_customer(update: Update, context: ContextTypes.DEF
     prompt = await t(update, context, "telegram.agent.send_location_prompt", fallback="📍 *Отправьте геолокацию*\n\nНажмите кнопку 📎 → Геолокация для отправки координат")
     btn_back = await t(update, context, "telegram.button.back", fallback="◀️ Назад")
 
-    await q.edit_message_text(
+    await _edit_loc(
+        q,
+        update,
+        context,
         prompt,
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton(btn_back, callback_data="main_menu")],
@@ -1721,7 +1808,7 @@ async def _handle_update_location(update: Update, context: ContextTypes.DEFAULT_
 
     loc = update.message.location
     if not loc:
-        await _reply_loc(update.message, update, context, "❌ Пожалуйста, отправьте геолокацию через кнопку 📎")
+        await _reply_loc(update.message, update, context, await t(update, context, "telegram.agent.send_location_via_button", fallback="❌ Пожалуйста, отправьте геолокацию через кнопку 📎"))
         return True
 
     try:
@@ -1754,7 +1841,7 @@ async def _handle_update_location(update: Update, context: ContextTypes.DEFAULT_
         await log_action(update.effective_user.id, session.login, session.role,
                          "location_updated", f"customer={cid}, lat={loc.latitude}, lon={loc.longitude}", "success")
 
-        await update.message.reply_text(text, parse_mode="Markdown")
+        await _reply_loc(update.message, update, context, text, parse_mode="Markdown")
         from .handlers_auth import show_main_menu
         await show_main_menu(update, context, session)
     except SDSApiError as e:
@@ -1762,14 +1849,10 @@ async def _handle_update_location(update: Update, context: ContextTypes.DEFAULT_
             await delete_session(update.effective_user.id)
             await _reply_loc(update.message, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
             return True
-        await update.message.reply_text(
-            await t(update, context, "telegram.common.error_with_detail", detail=e.detail)
-        )
+        await _reply_loc(update.message, update, context, await t(update, context, "telegram.common.error_with_detail", detail=e.detail))
     except Exception as e:
         logger.error(f"Error updating location: {e}")
-        await update.message.reply_text(
-            await t(update, context, "telegram.agent.location_update_error", detail=str(e))
-        )
+        await _reply_loc(update.message, update, context, await t(update, context, "telegram.agent.location_update_error", detail=str(e)))
 
     return True
 

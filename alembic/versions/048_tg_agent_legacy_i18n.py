@@ -1,7 +1,7 @@
-"""add missing telegram internal dialog i18n keys
+"""complete telegram agent legacy i18n keys
 
-Revision ID: 047_tg_internal_dialogs_i18n
-Revises: 046_cash_received_columns_i18n
+Revision ID: 048_tg_agent_legacy_i18n
+Revises: 047_tg_internal_dialogs_i18n
 Create Date: 2026-03-11
 """
 
@@ -12,8 +12,8 @@ from typing import Sequence, Union
 from alembic import op
 
 
-revision: str = "047_tg_internal_dialogs_i18n"
-down_revision: Union[str, Sequence[str], None] = "046_cash_received_columns_i18n"
+revision: str = "048_tg_agent_legacy_i18n"
+down_revision: Union[str, Sequence[str], None] = "047_tg_internal_dialogs_i18n"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -29,33 +29,24 @@ def upgrade() -> None:
           x.language_code,
           x.translation_text,
           x.category,
-          'migration_047'
+          'migration_048'
         FROM (
           VALUES
-            ('telegram.agent.order_search_prompt', 'ru', '🛒 *Создать заказ*\n\nВведите название клиента или ИНН для поиска:', 'telegram'),
-            ('telegram.agent.order_search_prompt', 'uz', '🛒 *Buyurtma yaratish*\n\nQidirish uchun mijoz nomi yoki STIRni kiriting:', 'telegram'),
-            ('telegram.agent.order_search_prompt', 'en', '🛒 *Create order*\n\nEnter customer name or Tax ID to search:', 'telegram'),
-
             ('telegram.agent.legacy_customer_start', 'ru', '➕ *Добавить клиента*\n\nВведите *название клиента* (минимум 2 символа):', 'telegram'),
             ('telegram.agent.legacy_customer_start', 'uz', '➕ *Mijoz qo''shish*\n\n*Mijoz nomi*ni kiriting (kamida 2 belgi):', 'telegram'),
             ('telegram.agent.legacy_customer_start', 'en', '➕ *Add customer*\n\nEnter *customer name* (at least 2 characters):', 'telegram'),
-
             ('telegram.agent.legacy_customer_name_min', 'ru', '❌ Название минимум 2 символа. Введите снова:', 'telegram'),
             ('telegram.agent.legacy_customer_name_min', 'uz', '❌ Nom kamida 2 belgidan iborat bo''lishi kerak. Qayta kiriting:', 'telegram'),
             ('telegram.agent.legacy_customer_name_min', 'en', '❌ Name must be at least 2 characters. Enter it again:', 'telegram'),
-
             ('telegram.agent.legacy_customer_name_ok_enter_inn', 'ru', '✅ Название: *{name}*\n\nВведите *ИНН* (9–12 цифр) или нажмите Пропустить:', 'telegram'),
             ('telegram.agent.legacy_customer_name_ok_enter_inn', 'uz', '✅ Nomi: *{name}*\n\n*STIR*ni kiriting (9–12 raqam) yoki O''tkazib yuborishni bosing:', 'telegram'),
             ('telegram.agent.legacy_customer_name_ok_enter_inn', 'en', '✅ Name: *{name}*\n\nEnter *Tax ID* (9–12 digits) or press Skip:', 'telegram'),
-
             ('telegram.agent.legacy_customer_inn_invalid', 'ru', '❌ ИНН должен содержать от 9 до 12 цифр. Введите снова:', 'telegram'),
             ('telegram.agent.legacy_customer_inn_invalid', 'uz', '❌ STIR 9 dan 12 gacha raqamdan iborat bo''lishi kerak. Qayta kiriting:', 'telegram'),
             ('telegram.agent.legacy_customer_inn_invalid', 'en', '❌ Tax ID must contain 9 to 12 digits. Enter it again:', 'telegram'),
-
             ('telegram.agent.legacy_customer_fields_intro', 'ru', '📋 *Заполните данные клиента*\nНажмите на поле, введите значение и отправьте. Для координат — отправьте геолокацию.\n', 'telegram'),
             ('telegram.agent.legacy_customer_fields_intro', 'uz', '📋 *Mijoz ma''lumotlarini to''ldiring*\nMaydonni bosing, qiymatni kiriting va yuboring. Koordinatalar uchun geolokatsiyani yuboring.\n', 'telegram'),
             ('telegram.agent.legacy_customer_fields_intro', 'en', '📋 *Fill in customer details*\nTap a field, enter the value, and send it. For coordinates, send geolocation.\n', 'telegram'),
-
             ('telegram.agent.legacy_customer.field_name', 'ru', 'Название', 'telegram'),
             ('telegram.agent.legacy_customer.field_name', 'uz', 'Nomi', 'telegram'),
             ('telegram.agent.legacy_customer.field_name', 'en', 'Name', 'telegram'),
@@ -89,7 +80,6 @@ def upgrade() -> None:
             ('telegram.agent.legacy_customer.field_photo', 'ru', '📸 Фото', 'telegram'),
             ('telegram.agent.legacy_customer.field_photo', 'uz', '📸 Foto', 'telegram'),
             ('telegram.agent.legacy_customer.field_photo', 'en', '📸 Photo', 'telegram'),
-
             ('telegram.agent.legacy_customer.prompt_name', 'ru', 'Введите *название клиента* (минимум 2 символа):', 'telegram'),
             ('telegram.agent.legacy_customer.prompt_name', 'uz', '*Mijoz nomi*ni kiriting (kamida 2 belgi):', 'telegram'),
             ('telegram.agent.legacy_customer.prompt_name', 'en', 'Enter *customer name* (at least 2 characters):', 'telegram'),
@@ -123,7 +113,6 @@ def upgrade() -> None:
             ('telegram.agent.legacy_customer.prompt_photo', 'ru', '📸 Отправьте *фото* клиента (вывеска, магазин):', 'telegram'),
             ('telegram.agent.legacy_customer.prompt_photo', 'uz', '📸 Mijozning *fotosi*ni yuboring (peshlavha, do''kon):', 'telegram'),
             ('telegram.agent.legacy_customer.prompt_photo', 'en', '📸 Send *customer photo* (signboard, store):', 'telegram'),
-
             ('telegram.agent.legacy_customer_confirm_title', 'ru', '📋 *Подтверждение нового клиента:*\n', 'telegram'),
             ('telegram.agent.legacy_customer_confirm_title', 'uz', '📋 *Yangi mijozni tasdiqlash:*\n', 'telegram'),
             ('telegram.agent.legacy_customer_confirm_title', 'en', '📋 *Confirm new customer:*\n', 'telegram'),
@@ -145,18 +134,15 @@ def upgrade() -> None:
             ('telegram.agent.legacy_customer_created', 'ru', '✅ *Клиент создан!*\n\n*ID:* {cid}\n*Название:* {name}', 'telegram'),
             ('telegram.agent.legacy_customer_created', 'uz', '✅ *Mijoz yaratildi!*\n\n*ID:* {cid}\n*Nomi:* {name}', 'telegram'),
             ('telegram.agent.legacy_customer_created', 'en', '✅ *Customer created!*\n\n*ID:* {cid}\n*Name:* {name}', 'telegram'),
-
             ('telegram.agent.visits_for_date', 'ru', '📋 *Визиты на {date}:*\n', 'telegram'),
             ('telegram.agent.visits_for_date', 'uz', '📋 *{date} sanadagi tashriflar:*\n', 'telegram'),
             ('telegram.agent.visits_for_date', 'en', '📋 *Visits for {date}:*\n', 'telegram'),
             ('telegram.agent.visits_for_date_empty', 'ru', '📋 Визиты на {date}:\n\nНет визитов.', 'telegram'),
             ('telegram.agent.visits_for_date_empty', 'uz', '📋 {date} sanadagi tashriflar:\n\nTashriflar yo''q.', 'telegram'),
             ('telegram.agent.visits_for_date_empty', 'en', '📋 Visits for {date}:\n\nNo visits.', 'telegram'),
-
             ('telegram.agent.photo_search_prompt', 'ru', '📸 Введите название клиента или ИНН для поиска:', 'telegram'),
             ('telegram.agent.photo_search_prompt', 'uz', '📸 Qidirish uchun mijoz nomi yoki STIRni kiriting:', 'telegram'),
             ('telegram.agent.photo_search_prompt', 'en', '📸 Enter customer name or Tax ID to search:', 'telegram'),
-
             ('telegram.agent.products_choose_page', 'ru', '📦 *Выберите товар* (стр. {page}/{pages}){cart}\n', 'telegram'),
             ('telegram.agent.products_choose_page', 'uz', '📦 *Mahsulotni tanlang* (bet {page}/{pages}){cart}\n', 'telegram'),
             ('telegram.agent.products_choose_page', 'en', '📦 *Choose a product* (page {page}/{pages}){cart}\n', 'telegram'),
@@ -184,129 +170,19 @@ def upgrade() -> None:
             ('telegram.agent.send_location_via_button', 'ru', '❌ Пожалуйста, отправьте геолокацию через кнопку 📎', 'telegram'),
             ('telegram.agent.send_location_via_button', 'uz', '❌ Iltimos, geolokatsiyani 📎 tugmasi orqali yuboring', 'telegram'),
             ('telegram.agent.send_location_via_button', 'en', '❌ Please send geolocation using the 📎 button', 'telegram'),
-
             ('telegram.common.enter_value', 'ru', 'Введите значение:', 'telegram'),
             ('telegram.common.enter_value', 'uz', 'Qiymatni kiriting:', 'telegram'),
-            ('telegram.common.enter_value', 'en', 'Enter a value:', 'telegram'),
-
-            ('telegram.agent.payment_label', 'ru', 'Оплата:', 'telegram'),
-            ('telegram.agent.payment_label', 'uz', 'To''lov:', 'telegram'),
-            ('telegram.agent.payment_label', 'en', 'Payment:', 'telegram'),
-
-            ('telegram.expeditor.payment_full_question', 'ru', '💰 Заказ №{order_no}\nСумма: {amount}\n\nВы получили полную сумму?', 'telegram'),
-            ('telegram.expeditor.payment_full_question', 'uz', '💰 Buyurtma №{order_no}\nSumma: {amount}\n\nTo''liq summani oldingizmi?', 'telegram'),
-            ('telegram.expeditor.payment_full_question', 'en', '💰 Order #{order_no}\nAmount: {amount}\n\nDid you receive the full amount?', 'telegram'),
-
-            ('telegram.expeditor.full_amount', 'ru', 'Полная сумма', 'telegram'),
-            ('telegram.expeditor.full_amount', 'uz', 'To''liq summa', 'telegram'),
-            ('telegram.expeditor.full_amount', 'en', 'Full amount', 'telegram'),
-
-            ('telegram.expeditor.payment_recorded', 'ru', '✅ Оплата зафиксирована по заказу №', 'telegram'),
-            ('telegram.expeditor.payment_recorded', 'uz', '✅ To''lov buyurtma № bo''yicha qayd etildi ', 'telegram'),
-            ('telegram.expeditor.payment_recorded', 'en', '✅ Payment recorded for order #', 'telegram'),
-
-            ('telegram.expeditor.sum', 'ru', 'Сумма', 'telegram'),
-            ('telegram.expeditor.sum', 'uz', 'Summa', 'telegram'),
-            ('telegram.expeditor.sum', 'en', 'Amount', 'telegram'),
-
-            ('telegram.expeditor.status_not_changed', 'ru', 'Статус заказа не изменён.', 'telegram'),
-            ('telegram.expeditor.status_not_changed', 'uz', 'Buyurtma holati o''zgarmadi.', 'telegram'),
-            ('telegram.expeditor.status_not_changed', 'en', 'Order status was not changed.', 'telegram'),
-
-            ('telegram.expeditor.payment_already_recorded', 'ru', '⚠️ По заказу №{order_no} оплата уже была зафиксирована ранее.\nПовторное получение оплаты запрещено.', 'telegram'),
-            ('telegram.expeditor.payment_already_recorded', 'uz', '⚠️ Buyurtma №{order_no} bo''yicha to''lov avval qayd etilgan.\nTo''lovni qayta qabul qilish taqiqlanadi.', 'telegram'),
-            ('telegram.expeditor.payment_already_recorded', 'en', '⚠️ Payment for order #{order_no} was already recorded earlier.\nReceiving payment again is not allowed.', 'telegram'),
-
-            ('telegram.expeditor.enter_received_amount', 'ru', 'Введите полученную сумму по заказу №{order_no}:', 'telegram'),
-            ('telegram.expeditor.enter_received_amount', 'uz', 'Buyurtma №{order_no} bo''yicha olingan summani kiriting:', 'telegram'),
-            ('telegram.expeditor.enter_received_amount', 'en', 'Enter the amount received for order #{order_no}:', 'telegram'),
-
-            ('telegram.expeditor.enter_positive_number', 'ru', '❌ Введите число > 0:', 'telegram'),
-            ('telegram.expeditor.enter_positive_number', 'uz', '❌ 0 dan katta son kiriting:', 'telegram'),
-            ('telegram.expeditor.enter_positive_number', 'en', '❌ Enter a number greater than 0:', 'telegram'),
-
-            ('telegram.expeditor.amount_must_be_positive', 'ru', '❌ Сумма должна быть > 0:', 'telegram'),
-            ('telegram.expeditor.amount_must_be_positive', 'uz', '❌ Summa 0 dan katta bo''lishi kerak:', 'telegram'),
-            ('telegram.expeditor.amount_must_be_positive', 'en', '❌ Amount must be greater than 0:', 'telegram'),
-
-            ('telegram.expeditor.amount_limit_exceeded', 'ru', '❌ Сумма не может превышать {amount}. Введите снова:', 'telegram'),
-            ('telegram.expeditor.amount_limit_exceeded', 'uz', '❌ Summa {amount} dan oshmasligi kerak. Qayta kiriting:', 'telegram'),
-            ('telegram.expeditor.amount_limit_exceeded', 'en', '❌ Amount cannot exceed {amount}. Enter it again:', 'telegram')
+            ('telegram.common.enter_value', 'en', 'Enter a value:', 'telegram')
         ) AS x(translation_key, language_code, translation_text, category)
         ON CONFLICT (translation_key, language_code) DO UPDATE
         SET
           translation_text = EXCLUDED.translation_text,
           category = EXCLUDED.category,
           updated_at = now(),
-          updated_by = 'migration_047'
+          updated_by = 'migration_048'
         """
     )
 
 
 def downgrade() -> None:
-    op.execute(
-        """
-        DELETE FROM "Sales".translations
-        WHERE translation_key IN (
-          'telegram.agent.order_search_prompt',
-          'telegram.agent.legacy_customer_start',
-          'telegram.agent.legacy_customer_name_min',
-          'telegram.agent.legacy_customer_name_ok_enter_inn',
-          'telegram.agent.legacy_customer_inn_invalid',
-          'telegram.agent.legacy_customer_fields_intro',
-          'telegram.agent.legacy_customer.field_name',
-          'telegram.agent.legacy_customer.field_inn',
-          'telegram.agent.legacy_customer.field_firm_name',
-          'telegram.agent.legacy_customer.field_account_no',
-          'telegram.agent.legacy_customer.field_address',
-          'telegram.agent.legacy_customer.field_city',
-          'telegram.agent.legacy_customer.field_territory',
-          'telegram.agent.legacy_customer.field_phone',
-          'telegram.agent.legacy_customer.field_contact',
-          'telegram.agent.legacy_customer.field_geo',
-          'telegram.agent.legacy_customer.field_photo',
-          'telegram.agent.legacy_customer.prompt_name',
-          'telegram.agent.legacy_customer.prompt_inn',
-          'telegram.agent.legacy_customer.prompt_firm_name',
-          'telegram.agent.legacy_customer.prompt_account_no',
-          'telegram.agent.legacy_customer.prompt_address',
-          'telegram.agent.legacy_customer.prompt_city',
-          'telegram.agent.legacy_customer.prompt_territory',
-          'telegram.agent.legacy_customer.prompt_phone',
-          'telegram.agent.legacy_customer.prompt_contact',
-          'telegram.agent.legacy_customer.prompt_geo',
-          'telegram.agent.legacy_customer.prompt_photo',
-          'telegram.agent.legacy_customer_confirm_title',
-          'telegram.agent.legacy_customer.label_name',
-          'telegram.agent.legacy_customer.label_inn',
-          'telegram.agent.legacy_customer.label_coords',
-          'telegram.agent.legacy_customer.label_photo',
-          'telegram.agent.photo_attached',
-          'telegram.agent.legacy_customer_created',
-          'telegram.agent.visits_for_date',
-          'telegram.agent.visits_for_date_empty',
-          'telegram.agent.photo_search_prompt',
-          'telegram.agent.products_choose_page',
-          'telegram.agent.price',
-          'telegram.agent.enter_positive_integer',
-          'telegram.agent.added',
-          'telegram.agent.add_more',
-          'telegram.agent.order_location_received_photo_next',
-          'telegram.agent.send_image_only',
-          'telegram.agent.file_too_large_10mb',
-          'telegram.agent.send_location_via_button',
-          'telegram.agent.payment_label',
-          'telegram.common.enter_value',
-          'telegram.expeditor.payment_full_question',
-          'telegram.expeditor.full_amount',
-          'telegram.expeditor.payment_recorded',
-          'telegram.expeditor.sum',
-          'telegram.expeditor.status_not_changed',
-          'telegram.expeditor.payment_already_recorded',
-          'telegram.expeditor.enter_received_amount',
-          'telegram.expeditor.enter_positive_number',
-          'telegram.expeditor.amount_must_be_positive',
-          'telegram.expeditor.amount_limit_exceeded'
-        )
-        """
-    )
+    pass
