@@ -50,6 +50,8 @@ UPLOAD_ZIP = "deploy_upload.zip"
 
 ITEMS_TO_DEPLOY = [
     "src",
+    "alembic",
+    "alembic.ini",
     "migrations",
     "requirements.txt",
     "sales_sql.sql"
@@ -148,6 +150,20 @@ def deploy():
         
         # Cleanup remote zip
         run_remote_command(ssh, f"rm {remote_zip_path}")
+
+        # 3.1. Run DB migrations on the server
+        logging.info("Applying Alembic migrations on server...")
+        migration_command = (
+            f"cd {REMOTE_HTML_PATH} && "
+            "if [ -x .venv/bin/python ]; then .venv/bin/python -m alembic -c alembic.ini upgrade head; "
+            "elif [ -x venv/bin/python ]; then venv/bin/python -m alembic -c alembic.ini upgrade head; "
+            "elif [ -x /var/www/sales.zakharenkov.ru/venv/bin/python ]; then /var/www/sales.zakharenkov.ru/venv/bin/python -m alembic -c alembic.ini upgrade head; "
+            "elif command -v python3 >/dev/null 2>&1; then python3 -m alembic -c alembic.ini upgrade head; "
+            "else python -m alembic -c alembic.ini upgrade head; fi"
+        )
+        exit_status, _, _ = run_remote_command(ssh, migration_command)
+        if exit_status != 0:
+            raise Exception("Alembic migration failed on server.")
         
         # 4. Save a copy of the upload zip locally
         logging.info("Saving a local copy of the deployed files...")

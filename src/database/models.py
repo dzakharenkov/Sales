@@ -81,6 +81,7 @@ class Product(Base):
     last_updated_by_login = Column(String, ForeignKey("Sales.users.login"), nullable=True)
     last_updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     currency_code = Column(String, ForeignKey("Sales.currency.code"), nullable=True)
+    photo_path = Column(Text, nullable=True)
 
 
 class Batch(Base):

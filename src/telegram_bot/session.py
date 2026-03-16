@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from .config import MAX_LOGIN_ATTEMPTS, LOGIN_BLOCK_MINUTES
+from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +52,29 @@ class UserSession:
 _sessions: dict[int, UserSession] = {}
 
 
+def _session_ttl() -> timedelta:
+    return timedelta(minutes=max(int(settings.telegram_session_ttl_minutes or 0), 1))
+
+
+def _is_session_expired(last_activity_at: datetime | None) -> bool:
+    if last_activity_at is None:
+        return True
+    last_seen = last_activity_at
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
+    return last_seen < (datetime.now(timezone.utc) - _session_ttl())
+
+
 # ---------- Session CRUD ----------
 
 async def get_session(tg_user_id: int) -> UserSession | None:
     """Получить сессию из кэша или БД."""
     if tg_user_id in _sessions:
-        return _sessions[tg_user_id]
+        cached = _sessions[tg_user_id]
+        if _is_session_expired(cached.last_activity_at):
+            await delete_session(tg_user_id)
+            return None
+        return cached
     pool = _pool_or_raise()
     row = await pool.fetchrow(
         'SELECT telegram_user_id, login, jwt_token, role, fio, last_activity_at '
@@ -64,6 +82,9 @@ async def get_session(tg_user_id: int) -> UserSession | None:
         tg_user_id,
     )
     if not row:
+        return None
+    if _is_session_expired(row["last_activity_at"]):
+        await delete_session(tg_user_id)
         return None
     s = UserSession(
         telegram_user_id=row["telegram_user_id"],

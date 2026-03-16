@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     cache_ttl: int = Field(default=3600, validation_alias="CACHE_TTL")
     max_login_attempts: int = Field(default=5, validation_alias="MAX_LOGIN_ATTEMPTS")
     login_block_minutes: int = Field(default=10, validation_alias="LOGIN_BLOCK_MINUTES")
+    telegram_session_ttl_minutes: int = Field(default=720, validation_alias="TELEGRAM_SESSION_TTL_MINUTES")
     timezone: str = Field(default="Asia/Tashkent", validation_alias="TIMEZONE")
     enabled_languages: str = Field(default="ru,uz,en", validation_alias="ENABLED_LANGUAGES")
     default_language: str = Field(default="ru", validation_alias="DEFAULT_LANGUAGE")

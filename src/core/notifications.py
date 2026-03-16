@@ -6,7 +6,6 @@ import asyncio
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-
 from sqlalchemy import text
 from telegram import Bot
 
@@ -98,11 +97,12 @@ async def _resolve_chat_id(login: str) -> int | None:
                 SELECT telegram_user_id
                 FROM "Sales".telegram_sessions
                 WHERE login = :login
+                  AND last_activity_at >= now() - make_interval(mins => :ttl_minutes)
                 ORDER BY last_activity_at DESC NULLS LAST
                 LIMIT 1
                 """
             ),
-            {"login": login},
+            {"login": login, "ttl_minutes": max(int(settings.telegram_session_ttl_minutes or 0), 1)},
         )
         chat_id = row.scalar()
         return int(chat_id) if chat_id is not None else None

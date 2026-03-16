@@ -538,40 +538,16 @@ async def cb_exp_confirm_delivery(update: Update, context: ContextTypes.DEFAULT_
     if not session:
         return
     order_no = int(q.data.replace("exp_confirm_", ""))
+    await _process_order_delivery_completion(update, context, session, token, order_no)
 
-    try:
-        await api.update_order(token, order_no, {"status_code": "delivery"})
-        await log_action(q.from_user.id, session.login, session.role, "delivery_complete",
-                         f"order={order_no}", "success")
-        await q.edit_message_text(
-            f"🚚 *Доставка отмечена!*\nЗаказ №{order_no} — товар доставлен клиенту.\n\n"
-            f"Для завершения заказа получите оплату.",
-            reply_markup=back_button(),
-            parse_mode="Markdown",
-        )
-    except SDSApiError as e:
-        if e.status == 401:
-            await delete_session(q.from_user.id)
-            await _edit_loc(q, update, context, "Сессия истекла. Нажмите /start для повторной авторизации.")
-            return
-        await log_action(q.from_user.id, session.login, session.role, "delivery_complete",
-                         f"order={order_no}", "error", e.detail)
-        await q.edit_message_text(
-            await t(update, context, "telegram.common.error_with_detail", detail=e.detail),
-            reply_markup=back_button(),
-        )
-
-
-# ---------- Доставлен (только информирование, оплата — в «Получить оплату») ----------
-
-async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение доставки: создаёт операции delivery и списывает остатки."""
+async def _process_order_delivery_completion(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    session,
+    token: str,
+    order_no: int,
+):
     q = update.callback_query
-    await q.answer(await _loc(update, context, "Обрабатываю подтверждение доставки..."))
-    session, token = await _get_auth(update)
-    if not session:
-        return
-    order_no = int(q.data.replace("exp_delivered_", ""))
     in_progress_key = f"exp_delivered_in_progress_{order_no}"
     if context.user_data.get(in_progress_key):
         await q.edit_message_text(
@@ -589,9 +565,9 @@ async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         order = await api.get_order(token, order_no)
         status_code = (order.get("status_code") or "").strip().lower()
-        if status_code != "delivery":
+        if status_code not in ("open", "delivery"):
             await q.edit_message_text(
-                f"ℹ️ Заказ №{order_no} уже не в статусе «Доставка».\nТекущий статус: {status_code or 'неизвестно'}.",
+                f"ℹ️ Заказ №{order_no} нельзя подтвердить как доставленный.\nТекущий статус: {status_code or 'неизвестно'}.",
                 reply_markup=back_button(),
             )
             return
@@ -761,6 +737,19 @@ async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     finally:
         context.user_data.pop(in_progress_key, None)
+
+
+ # ---------- Доставлен (финальное подтверждение доставки) ----------
+
+async def cb_exp_delivered(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Подтверждение доставки: создаёт операции delivery и списывает остатки."""
+    q = update.callback_query
+    await q.answer(await _loc(update, context, "Обрабатываю подтверждение доставки..."))
+    session, token = await _get_auth(update)
+    if not session:
+        return
+    order_no = int(q.data.replace("exp_delivered_", ""))
+    await _process_order_delivery_completion(update, context, session, token, order_no)
 
 
 # ---------- Получить оплату ----------

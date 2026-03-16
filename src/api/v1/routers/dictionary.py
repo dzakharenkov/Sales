@@ -1,18 +1,33 @@
 """
 Справочники: товары (CRUD), типы продукции, склады, типы оплат, валюта.
 """
+import logging
+import re
+from datetime import datetime
+from pathlib import Path
+
+import aiofiles
 from src.api.v1.schemas.common import EntityModel
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.connection import get_db_session
 from src.database.models import Product, ProductType, Warehouse, PaymentType, User, Currency
+from src.core.config import settings
 from src.core.deps import get_current_user, require_admin
 from src.api.v1.services.translation_service import TranslationService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+UPLOAD_DIR = Path(settings.upload_dir or str(PROJECT_ROOT / "photo"))
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
+MAX_IMAGE_SIZE = 10 * 1024 * 1024
 
 
 async def _has_column(session: AsyncSession, table_name: str, column_name: str) -> bool:
@@ -30,6 +45,58 @@ async def _has_column(session: AsyncSession, table_name: str, column_name: str) 
         {"table_name": table_name, "column_name": column_name},
     )
     return result.first() is not None
+
+
+def _safe_product_code(code: str) -> str:
+    return re.sub(r"[^\w\-]", "_", (code or "").strip())[:100] or "product"
+
+
+def _product_photo_url(photo_path: str | None) -> str | None:
+    if not photo_path:
+        return None
+    return f"/photo/{photo_path.split('/')[-1]}"
+
+
+def _resolve_product_photo_path(code: str, ext: str) -> tuple[Path, str]:
+    stamp = datetime.now().strftime("%d%m%Y_%H%M%S")
+    base = f"product_{_safe_product_code(code)}_{stamp}"
+    filename = f"{base}.{ext}"
+    path = UPLOAD_DIR / filename
+    suffix = 0
+    while path.exists():
+        suffix += 1
+        filename = f"{base}_{suffix}.{ext}"
+        path = UPLOAD_DIR / filename
+    return path, filename
+
+
+async def _save_uploaded_image(file: UploadFile, destination: Path) -> int:
+    if file.content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Разрешены только JPG, PNG и WEBP")
+
+    ext = (Path(file.filename or "").suffix or "").lower().lstrip(".")
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Неверное расширение файла")
+
+    content = await file.read()
+    if len(content) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=413, detail="Файл слишком большой. Максимум: 10MB")
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    async with aiofiles.open(destination, "wb") as out:
+        await out.write(content)
+    return len(content)
+
+
+def _delete_product_photo_file(photo_path: str | None) -> None:
+    if not photo_path:
+        return
+    path = UPLOAD_DIR / Path(photo_path).name
+    if path.exists():
+        try:
+            path.unlink()
+        except OSError:
+            logger.warning("Failed to delete product photo file: %s", path)
 
 
 @router.get("/user-logins", response_model=EntityModel | list[EntityModel])
@@ -77,6 +144,9 @@ async def list_products(
             "expiry_days": p.expiry_days,
             "active": p.active,
             "currency_code": getattr(p, "currency_code", None),
+            "photo_path": getattr(p, "photo_path", None),
+            "photo_url": _product_photo_url(getattr(p, "photo_path", None)),
+            "has_photo": bool(getattr(p, "photo_path", None)),
         }
         for p in rows
     ]
@@ -614,6 +684,78 @@ async def delete_product(
     product.last_updated_by_login = user.login
     await session.commit()
     return {"code": code, "message": "deactivated"}
+
+
+@router.post("/products/{code}/photo", response_model=EntityModel | list[EntityModel])
+async def upload_product_photo(
+    code: str,
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_admin),
+):
+    result = await session.execute(select(Product).where(Product.code == code))
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename")
+
+    ext = (file.filename.rsplit(".", 1)[-1] or "").lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Разрешены только JPG, PNG и WEBP")
+
+    full_path: Path | None = None
+    old_photo_path = getattr(product, "photo_path", None)
+    try:
+        full_path, filename = _resolve_product_photo_path(code, ext)
+        file_size = await _save_uploaded_image(file, full_path)
+        product.photo_path = filename
+        product.last_updated_by_login = user.login
+        await session.commit()
+        _delete_product_photo_file(old_photo_path)
+        return {
+            "code": product.code,
+            "photo_path": filename,
+            "photo_url": _product_photo_url(filename),
+            "file_size": file_size,
+            "message": "photo_uploaded",
+        }
+    except HTTPException:
+        if full_path and full_path.exists():
+            try:
+                full_path.unlink()
+            except OSError:
+                logger.warning("Failed to cleanup product photo file: %s", full_path)
+        raise
+    except Exception as exc:
+        if full_path and full_path.exists():
+            try:
+                full_path.unlink()
+            except OSError:
+                logger.warning("Failed to cleanup product photo file: %s", full_path)
+        logger.exception("upload_product_photo failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Ошибка загрузки фото")
+
+
+@router.delete("/products/{code}/photo", response_model=EntityModel | list[EntityModel])
+async def delete_product_photo(
+    code: str,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_admin),
+):
+    result = await session.execute(select(Product).where(Product.code == code))
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if not getattr(product, "photo_path", None):
+        return {"code": code, "message": "photo_not_set"}
+
+    old_photo_path = product.photo_path
+    product.photo_path = None
+    product.last_updated_by_login = user.login
+    await session.commit()
+    _delete_product_photo_file(old_photo_path)
+    return {"code": code, "message": "photo_deleted"}
 
 
 # --- Cities (dictionary) ---

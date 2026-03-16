@@ -1031,6 +1031,7 @@
         wh_receipt_wh_to_lbl: { ru: 'Склад в', uz: 'Omborgacha', en: 'Warehouse to' },
         wh_receipt_products_hdr: { ru: 'Товары', uz: 'Mahsulotlar', en: 'Products' },
         wh_receipt_col_product: { ru: 'Товар', uz: 'Mahsulot', en: 'Product' },
+        wh_receipt_col_weight: { ru: 'Вес', uz: 'Vazn', en: 'Weight' },
         wh_receipt_col_expiry: { ru: 'Срок годности', uz: 'Yaroqlilik muddati', en: 'Expiry date' },
         wh_receipt_col_qty: { ru: 'Количество', uz: 'Miqdor', en: 'Quantity' },
         wh_receipt_col_price: { ru: 'Цена (из справочника)', uz: "Narx (ma'lumotnomadan)", en: 'Price (from catalog)' },
@@ -1220,6 +1221,7 @@
           // Warehouse receipt form (Приход на склад)
           'ui.wh_receipt.form.op_name', 'ui.wh_receipt.form.wh_to_lbl',
           'ui.wh_receipt.form.products_lbl', 'ui.wh_receipt.form.col_product',
+          'ui.wh_receipt.form.col_weight',
           'ui.wh_receipt.form.col_expiry', 'ui.wh_receipt.form.col_qty',
           'ui.wh_receipt.form.col_price', 'ui.wh_receipt.form.col_sum',
           'ui.wh_receipt.form.col_batch', 'ui.wh_receipt.form.total',
@@ -1832,27 +1834,79 @@
           var list = results[0] || [];
           var typeList = results[1] || [];
           var currencyList = results[2] || [];
+          function productTypeLabel(typeItem) {
+            if (!typeItem) return '';
+            return typeItem.description || typeItem.label || typeItem.name || typeItem.code || typeItem.id || '';
+          }
+          function findProductType(typeId) {
+            var target = typeId == null ? '' : String(typeId);
+            var found = null;
+            (typeList || []).some(function (t) {
+              var keys = [t && t.id, t && t.code, t && t.name];
+              var ok = keys.some(function (k) { return k != null && String(k) === target; });
+              if (ok) found = t;
+              return ok;
+            });
+            return found;
+          }
+          function productTypeName(typeId) {
+            var found = findProductType(typeId);
+            return productTypeLabel(found) || (typeId || '');
+          }
+          function renderProductTypeOptions(selectedValue) {
+            var selected = selectedValue == null ? '' : String(selectedValue);
+            var opts = '<option value="">—</option>';
+            (typeList || []).forEach(function (t) {
+              var value = t && (t.id != null ? t.id : (t.code != null ? t.code : (t.name != null ? t.name : '')));
+              if (value == null || value === '') return;
+              var valueStr = String(value);
+              opts += '<option value="' + escAttr(valueStr) + '"' + (valueStr === selected ? ' selected' : '') + '>' + escAttr(productTypeLabel(t)) + '</option>';
+            });
+            return opts;
+          }
+          function currencyLabel(currencyItem, includeDefaultMark) {
+            if (!currencyItem) return '';
+            var base = currencyItem.name || currencyItem.title || currencyItem.code || '';
+            var symbol = currencyItem.symbol ? (' (' + currencyItem.symbol + ')') : '';
+            if (includeDefaultMark && currencyItem.code === 'sum') return base + symbol + ' (по умолчанию)';
+            return base + symbol;
+          }
+          function currencyName(code) {
+            var target = code == null ? '' : String(code);
+            var found = null;
+            (currencyList || []).some(function (c) {
+              var ok = c && c.code != null && String(c.code) === target;
+              if (ok) found = c;
+              return ok;
+            });
+            return currencyLabel(found, false) || target;
+          }
           var content = document.getElementById('content');
           if (!content) return;
           var addBtn = isAdmin() ? '<button type="button" class="btn btn-primary" id="prodAdd">Добавить товар</button>' : '';
           content.innerHTML = '<div class="card"><h2>Товары</h2><p style="margin:0 0 12px 0">' + addBtn + '</p><div id="sectionTable"></div><div id="sectionErr" class="err"></div></div>';
           var tableDiv = document.getElementById('sectionTable');
-          if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Нет товаров.</p>'; bindProdAdd(typeList); return; }
+          if (!Array.isArray(list) || !list.length) { tableDiv.innerHTML = '<p>Нет товаров.</p>'; bindProdAdd(typeList, currencyList); return; }
           var sortCol = 'code';
           var sortDir = 1;
           function renderProdTable(data) {
             var sorted = data.slice().sort(function (a, b) {
               return tableSortCompare(a, b, sortCol, sortDir, function (r, c) {
                 if (c === 'weight_g' || c === 'price' || c === 'expiry_days') return (r[c] != null && r[c] !== '' ? String(Number(r[c])).padStart(15, '0') : '');
+                if (c === 'type_id') return productTypeName(r.type_id).toLowerCase();
+                if (c === 'currency_code') return currencyName(r.currency_code || 'sum').toLowerCase();
                 return (r[c] || '').toString().toLowerCase();
               });
             });
-            var t = '<table><thead><tr>' + sortableTh('code', 'Код', sortCol, sortDir) + sortableTh('name', 'Название', sortCol, sortDir) + sortableTh('type_id', 'Тип', sortCol, sortDir) + sortableTh('weight_g', 'Вес', sortCol, sortDir) + sortableTh('unit', 'Ед.', sortCol, sortDir) + sortableTh('price', 'Цена', sortCol, sortDir) + sortableTh('currency_code', 'Валюта', sortCol, sortDir) + sortableTh('expiry_days', 'Срок', sortCol, sortDir) + '<th>Действия</th></tr></thead><tbody>';
+            var t = '<table><thead><tr>' + sortableTh('code', 'Код', sortCol, sortDir) + sortableTh('name', 'Название', sortCol, sortDir) + sortableTh('type_id', 'Тип', sortCol, sortDir) + sortableTh('weight_g', 'Вес', sortCol, sortDir) + sortableTh('unit', 'Ед.', sortCol, sortDir) + sortableTh('price', 'Цена', sortCol, sortDir) + sortableTh('currency_code', 'Валюта', sortCol, sortDir) + sortableTh('expiry_days', 'Срок', sortCol, sortDir) + sortableTh('has_photo', 'Фото', sortCol, sortDir) + '<th>Действия</th></tr></thead><tbody>';
             sorted.forEach(function (p) {
               var code = escAttr(p.code), name = escAttr(p.name), typeId = escAttr(p.type_id), unit = escAttr(p.unit);
               var curr = (p.currency_code || 'sum');
-              t += '<tr><td>' + (p.code || '') + '</td><td>' + (p.name || '') + '</td><td>' + (p.type_id || '') + '</td><td>' + (p.weight_g != null ? p.weight_g : '') + '</td><td>' + (p.unit || '') + '</td><td>' + (p.price != null ? p.price : '') + '</td><td>' + escAttr(curr) + '</td><td>' + (p.expiry_days != null ? p.expiry_days : '') + '</td><td>';
-              if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-prod-edit data-code="' + code + '" data-name="' + name + '" data-type="' + typeId + '" data-weight="' + (p.weight_g != null ? p.weight_g : '') + '" data-unit="' + unit + '" data-price="' + (p.price != null ? p.price : '') + '" data-expiry="' + (p.expiry_days != null ? p.expiry_days : '') + '" data-currency="' + escAttr(curr) + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-prod-del data-code="' + code + '">Удалить</button>';
+              var typeName = productTypeName(p.type_id);
+              var currName = currencyName(curr);
+              var photoFlag = p.photo_url ? ('<a href="' + escAttr(p.photo_url) + '" target="_blank"><img src="' + escAttr(p.photo_url) + '" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #ddd"></a>') : '—';
+              t += '<tr><td>' + (p.code || '') + '</td><td>' + (p.name || '') + '</td><td>' + escAttr(typeName) + '</td><td>' + (p.weight_g != null ? p.weight_g : '') + '</td><td>' + (p.unit || '') + '</td><td>' + (p.price != null ? p.price : '') + '</td><td>' + escAttr(currName) + '</td><td>' + (p.expiry_days != null ? p.expiry_days : '') + '</td><td style="text-align:center">' + photoFlag + '</td><td>';
+              if (isAdmin()) t += '<button type="button" class="btn btn-secondary btn-small" data-prod-edit data-code="' + code + '" data-name="' + name + '" data-type="' + typeId + '" data-weight="' + (p.weight_g != null ? p.weight_g : '') + '" data-unit="' + unit + '" data-price="' + (p.price != null ? p.price : '') + '" data-expiry="' + (p.expiry_days != null ? p.expiry_days : '') + '" data-currency="' + escAttr(curr) + '" data-photo-url="' + escAttr(p.photo_url || '') + '" data-has-photo="' + (p.photo_url ? '1' : '0') + '">Изменить</button> <button type="button" class="btn btn-secondary btn-small" data-prod-del data-code="' + code + '">Удалить</button>';
               t += '</td></tr>';
             });
             t += '</tbody></table>';
@@ -1865,21 +1919,62 @@
               el.onclick = function () {
                 var unesc = function (x) { return (x || '').replace(/&quot;/g, '"'); };
                 var code = unesc(el.getAttribute('data-code'));
-                var typeOpts = productTypeSelectHtml(typeList, unesc(el.getAttribute('data-type')));
+                var typeOpts = renderProductTypeOptions(unesc(el.getAttribute('data-type')));
                 var currSelected = unesc(el.getAttribute('data-currency') || 'sum');
                 var currOpts = '<option value>—</option>';
                 (currencyList || []).forEach(function (c) {
                   var codeCur = escAttr(c.code);
-                  var label = c.code + (c.symbol ? ' (' + c.symbol + ')' : '') + (c.name ? ' — ' + c.name : '');
+                  var label = currencyLabel(c, false) || c.code;
                   currOpts += '<option value="' + codeCur + '"' + (c.code === currSelected ? ' selected' : '') + '>' + escAttr(label) + '</option>';
                 });
                 if (!currencyList.length) {
-                  currOpts += '<option value="sum"' + (currSelected === 'sum' ? ' selected' : '') + '>sum — сум</option>';
+                  currOpts += '<option value="sum"' + (currSelected === 'sum' ? ' selected' : '') + '>сум</option>';
                 }
-                var bodyHtml = '<div class="form-group"><label>Код (не изменяется)</label><input type="text" id="prod_code" value="' + escAttr(code) + '" readonly></div><div class="form-group"><label>Название</label><input type="text" id="prod_name" value="' + (unesc(el.getAttribute('data-name')) || '').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '"></div><div class="form-group"><label>Тип</label><select id="prod_type">' + typeOpts + '</select></div><div class="form-group"><label>Вес (г)</label><input type="number" id="prod_weight" value="' + (el.getAttribute('data-weight') || '') + '"></div><div class="form-group"><label>Ед.</label><input type="text" id="prod_unit" value="' + (unesc(el.getAttribute('data-unit')) || '').replace(/"/g, '&quot;') + '" placeholder="ШТ"></div><div class="form-group"><label>Цена</label><input type="number" step="0.01" id="prod_price" value="' + (el.getAttribute('data-price') || '') + '"></div><div class="form-group"><label>Валюта</label><select id="prod_currency">' + currOpts + '</select></div><div class="form-group"><label>Срок годности (дней)</label><input type="number" id="prod_expiry" value="' + (el.getAttribute('data-expiry') || '') + '"></div>';
+                var photoUrl = unesc(el.getAttribute('data-photo-url') || '');
+                var hasPhoto = el.getAttribute('data-has-photo') === '1';
+                var photoBlock = '<div class="form-group"><label>Фото товара</label><div id="prod_photo_wrap">' + (photoUrl ? ('<div style="margin-bottom:8px"><a href="' + escAttr(photoUrl) + '" target="_blank"><img src="' + escAttr(photoUrl) + '" alt="" style="max-width:140px;max-height:140px;object-fit:cover;border-radius:8px;border:1px solid #ddd"></a></div>') : '<div style="color:#666;margin-bottom:8px">Фото не загружено</div>') + '</div><div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px"><span style="position:relative"><input type="file" id="prod_photo_file" accept="image/*" style="position:absolute;left:0;top:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:0"><button type="button" class="btn btn-secondary" style="pointer-events:none">Выбрать файл</button></span><span id="prod_photo_name" style="font-size:13px;color:#64748b;min-width:120px"></span><button type="button" class="btn btn-secondary btn-small" id="prod_photo_upload_btn">Загрузить фото</button>' + (hasPhoto ? '<button type="button" class="btn btn-secondary btn-small" id="prod_photo_delete_btn">Удалить фото</button>' : '') + '</div><div id="prod_photo_err" class="err" style="margin-top:8px"></div></div>';
+                var bodyHtml = '<div class="form-group"><label>Код (не изменяется)</label><input type="text" id="prod_code" value="' + escAttr(code) + '" readonly></div><div class="form-group"><label>Название</label><input type="text" id="prod_name" value="' + (unesc(el.getAttribute('data-name')) || '').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '"></div><div class="form-group"><label>Тип</label><select id="prod_type">' + typeOpts + '</select></div><div class="form-group"><label>Вес (г)</label><input type="number" id="prod_weight" value="' + (el.getAttribute('data-weight') || '') + '"></div><div class="form-group"><label>Ед.</label><input type="text" id="prod_unit" value="' + (unesc(el.getAttribute('data-unit')) || '').replace(/"/g, '&quot;') + '" placeholder="ШТ"></div><div class="form-group"><label>Цена</label><input type="number" step="0.01" id="prod_price" value="' + (el.getAttribute('data-price') || '') + '"></div><div class="form-group"><label>Валюта</label><select id="prod_currency">' + currOpts + '</select></div><div class="form-group"><label>Срок годности (дней)</label><input type="number" id="prod_expiry" value="' + (el.getAttribute('data-expiry') || '') + '"></div>' + photoBlock;
                 showModal('Изменить товар', bodyHtml, function (errEl) {
                   return api('/api/v1/dictionary/products/' + encodeURIComponent(code), { method: 'PUT', body: JSON.stringify({ name: document.getElementById('prod_name').value.trim(), type_id: document.getElementById('prod_type').value || null, weight_g: document.getElementById('prod_weight').value ? parseInt(document.getElementById('prod_weight').value, 10) : null, unit: document.getElementById('prod_unit').value.trim() || null, price: document.getElementById('prod_price').value ? parseFloat(document.getElementById('prod_price').value) : null, expiry_days: document.getElementById('prod_expiry').value ? parseInt(document.getElementById('prod_expiry').value, 10) : null, currency_code: document.getElementById('prod_currency').value || null }) }).then(function () { loadSectionProducts(); });
                 });
+                setTimeout(function () {
+                  var fileInput = document.getElementById('prod_photo_file');
+                  var fileName = document.getElementById('prod_photo_name');
+                  var photoErr = document.getElementById('prod_photo_err');
+                  var uploadBtn = document.getElementById('prod_photo_upload_btn');
+                  var deleteBtn = document.getElementById('prod_photo_delete_btn');
+                  if (fileInput && fileName) {
+                    fileInput.onchange = function () {
+                      var f = fileInput.files && fileInput.files[0];
+                      fileName.textContent = f ? f.name : '';
+                      if (photoErr) photoErr.textContent = '';
+                    };
+                  }
+                  if (uploadBtn && fileInput) {
+                    uploadBtn.onclick = function () {
+                      var f = fileInput.files && fileInput.files[0];
+                      if (!f) { if (photoErr) photoErr.textContent = 'Выберите файл.'; return; }
+                      if (photoErr) photoErr.textContent = '';
+                      var formData = new FormData();
+                      formData.append('file', f);
+                      var headers = {};
+                      if (useBearerHeader) headers['Authorization'] = 'Bearer ' + token;
+                      fetch(window.location.origin + '/api/v1/dictionary/products/' + encodeURIComponent(code) + '/photo', { method: 'POST', headers: headers, body: formData, credentials: 'same-origin' })
+                        .then(function (r) { return r.text().then(function (text) { var data = null; try { data = text ? JSON.parse(text) : null; } catch (_) { } if (!r.ok) throw { status: r.status, data: data }; return data; }); })
+                        .then(function () { loadSectionProducts(); document.querySelector('#modalContainer .modal.show') && document.querySelector('#modalContainer .modal.show').classList.remove('show'); })
+                        .catch(function (e) { if (photoErr) photoErr.textContent = (e && e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : 'Ошибка загрузки фото'; });
+                    };
+                  }
+                  if (deleteBtn) {
+                    deleteBtn.onclick = function () {
+                      if (!confirm('Удалить фото товара?')) return;
+                      if (photoErr) photoErr.textContent = '';
+                      api('/api/v1/dictionary/products/' + encodeURIComponent(code) + '/photo', { method: 'DELETE' })
+                        .then(function () { loadSectionProducts(); document.querySelector('#modalContainer .modal.show') && document.querySelector('#modalContainer .modal.show').classList.remove('show'); })
+                        .catch(function (e) { if (photoErr) photoErr.textContent = (e && e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : 'Ошибка удаления фото'; });
+                    };
+                  }
+                }, 0);
               };
             });
             tableDiv.querySelectorAll('[data-prod-del]').forEach(function (el) {
@@ -1898,25 +1993,64 @@
           var btn = document.getElementById('prodAdd');
           if (!btn || !isAdmin()) return;
           btn.onclick = function () {
-            var typeOpts = productTypeSelectHtml(typeList, '');
-            var currOpts = '<option value="sum">sum — сум (по умолчанию)</option>';
+            var typeOpts = renderProductTypeOptions('');
+            var currOpts = '<option value="sum">сум (по умолчанию)</option>';
             (currencyList || []).forEach(function (c) {
               if (c.code === 'sum') return;
-              var label = c.code + (c.symbol ? ' (' + c.symbol + ')' : '') + (c.name ? ' — ' + c.name : '');
+              var label = currencyLabel(c, false) || c.code;
               currOpts += '<option value="' + escAttr(c.code) + '">' + escAttr(label) + '</option>';
             });
-            var bodyHtml = '<div class="form-group"><label>Название</label><input type="text" id="prod_name" placeholder="Название"></div><div class="form-group"><label>Тип</label><select id="prod_type">' + typeOpts + '</select></div><div class="form-group"><label>Вес (г)</label><input type="number" id="prod_weight" placeholder="0"></div><div class="form-group"><label>Ед.</label><input type="text" id="prod_unit" value="ШТ" placeholder="ШТ"></div><div class="form-group"><label>Цена</label><input type="number" step="0.01" id="prod_price" placeholder="0"></div><div class="form-group"><label>Валюта</label><select id="prod_currency">' + currOpts + '</select></div><div class="form-group"><label>Срок годности (дней)</label><input type="number" id="prod_expiry" placeholder="0"></div>';
+            var photoBlock = '<div class="form-group"><label>Фото товара</label><div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px"><span style="position:relative"><input type="file" id="prod_create_photo_file" accept="image/*" style="position:absolute;left:0;top:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:0"><button type="button" class="btn btn-secondary" style="pointer-events:none">Выбрать файл</button></span><span id="prod_create_photo_name" style="font-size:13px;color:#64748b;min-width:120px"></span></div><div id="prod_create_photo_err" class="err" style="margin-top:8px"></div></div>';
+            var bodyHtml = '<div class="form-group"><label>Название</label><input type="text" id="prod_name" placeholder="Название"></div><div class="form-group"><label>Тип</label><select id="prod_type">' + typeOpts + '</select></div><div class="form-group"><label>Вес (г)</label><input type="number" id="prod_weight" placeholder="0"></div><div class="form-group"><label>Ед.</label><input type="text" id="prod_unit" value="ШТ" placeholder="ШТ"></div><div class="form-group"><label>Цена</label><input type="number" step="0.01" id="prod_price" placeholder="0"></div><div class="form-group"><label>Валюта</label><select id="prod_currency">' + currOpts + '</select></div><div class="form-group"><label>Срок годности (дней)</label><input type="number" id="prod_expiry" placeholder="0"></div>' + photoBlock;
             showModal('Добавить товар', bodyHtml, function (errEl) {
               var name = document.getElementById('prod_name').value.trim();
               if (!name) return Promise.reject({ data: { detail: 'Укажите название.' } });
               var currency = document.getElementById('prod_currency').value || 'sum';
-              return api('/api/v1/dictionary/products', { method: 'POST', body: JSON.stringify({ name: name, type_id: document.getElementById('prod_type').value || null, weight_g: document.getElementById('prod_weight').value ? parseInt(document.getElementById('prod_weight').value, 10) : null, unit: document.getElementById('prod_unit').value.trim() || 'ШТ', price: document.getElementById('prod_price').value ? parseFloat(document.getElementById('prod_price').value) : null, expiry_days: document.getElementById('prod_expiry').value ? parseInt(document.getElementById('prod_expiry').value, 10) : null, currency_code: currency }) }).then(function () { loadSectionProducts(); });
+              var photoFileInput = document.getElementById('prod_create_photo_file');
+              var photoErr = document.getElementById('prod_create_photo_err');
+              var selectedFile = photoFileInput && photoFileInput.files ? photoFileInput.files[0] : null;
+              if (photoErr) photoErr.textContent = '';
+              return api('/api/v1/dictionary/products', { method: 'POST', body: JSON.stringify({ name: name, type_id: document.getElementById('prod_type').value || null, weight_g: document.getElementById('prod_weight').value ? parseInt(document.getElementById('prod_weight').value, 10) : null, unit: document.getElementById('prod_unit').value.trim() || 'ШТ', price: document.getElementById('prod_price').value ? parseFloat(document.getElementById('prod_price').value) : null, expiry_days: document.getElementById('prod_expiry').value ? parseInt(document.getElementById('prod_expiry').value, 10) : null, currency_code: currency }) }).then(function (created) {
+                var createdCode = created && created.code ? created.code : null;
+                if (!selectedFile || !createdCode) return null;
+                var formData = new FormData();
+                formData.append('file', selectedFile);
+                var headers = {};
+                if (useBearerHeader) headers['Authorization'] = 'Bearer ' + token;
+                return fetch(window.location.origin + '/api/v1/dictionary/products/' + encodeURIComponent(createdCode) + '/photo', { method: 'POST', headers: headers, body: formData, credentials: 'same-origin' })
+                  .then(function (r) { return r.text().then(function (text) { var data = null; try { data = text ? JSON.parse(text) : null; } catch (_) { } if (!r.ok) throw { status: r.status, data: data }; return data; }); });
+              }).then(function () { loadSectionProducts(); }).catch(function (e) {
+                if (photoErr) photoErr.textContent = (e && e.data && e.data.detail) ? (typeof e.data.detail === 'string' ? e.data.detail : JSON.stringify(e.data.detail)) : '';
+                throw e;
+              });
             });
+            setTimeout(function () {
+              var fileInput = document.getElementById('prod_create_photo_file');
+              var fileName = document.getElementById('prod_create_photo_name');
+              var photoErr = document.getElementById('prod_create_photo_err');
+              if (fileInput && fileName) {
+                fileInput.onchange = function () {
+                  var f = fileInput.files && fileInput.files[0];
+                  fileName.textContent = f ? f.name : '';
+                  if (photoErr) photoErr.textContent = '';
+                };
+              }
+            }, 0);
           };
         }
       }
 
       function escAttr(s) { var str = (s == null || s === undefined) ? '' : String(s); return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+      function formatProductWeight(weightG) {
+        var n = Number(weightG);
+        if (!isFinite(n) || n <= 0) return '';
+        return String(n).replace(/\.0+$/, '') + ' г';
+      }
+      function productDisplayLabel(p) {
+        var base = (p && p.code ? (p.code + ' — ') : '') + ((p && p.name) || '');
+        var weight = formatProductWeight(p && p.weight_g);
+        return weight ? (base + ', ' + weight) : base;
+      }
       function localizedPaymentTypeName(code, name) {
         var byCode = {
           bank_sum: 'Безналичный перевод (UZS)',
@@ -3138,7 +3272,9 @@
           var statusOpts = ''; statuses.forEach(function (s) { var o = (s.code === sel.status) ? ' selected' : ''; statusOpts += '<option value="' + escAttr(s.code) + '"' + o + '>' + escAttr(s.name || s.code) + '</option>'; });
           var payOpts = '<option value="">' + tr('ui.op.form.not_specified', '— Выберите тип оплаты —') + '</option>'; paymentTypes.forEach(function (pt) { var o = (pt.code === sel.payment) ? ' selected' : ''; payOpts += '<option value="' + escAttr(pt.code) + '"' + o + '>' + escAttr(pt.name || pt.code) + '</option>'; });
           var productOpts = '<option value="">' + tUi('select_product', '— Выберите товар —') + '</option>';
-          products.forEach(function (p) { productOpts += '<option value="' + escAttr(p.code) + '" data-price="' + (p.price != null ? p.price : '') + '">' + escAttr((p.code || '') + ' — ' + (p.name || '')) + '</option>'; });
+          products.forEach(function (p) {
+            productOpts += '<option value="' + escAttr(p.code) + '" data-price="' + (p.price != null ? p.price : '') + '" data-weight="' + (p.weight_g != null ? p.weight_g : '') + '">' + escAttr(productDisplayLabel(p)) + '</option>';
+          });
           var agentOpts = '<option value="">' + tUi('not_assigned', '— Не назначен —') + '</option>';
           var expeditorOpts = '<option value="">' + tUi('not_assigned', '— Не назначен —') + '</option>';
           userList.forEach(function (u) {
@@ -3151,7 +3287,7 @@
           });
           var content = document.getElementById('content');
           if (!content) return;
-          content.innerHTML = '<div class="card"><h2 id="orderFormTitle">' + tUi('order_create_title', 'Создание заказа') + '</h2><div id="orderCreateErr" class="err" style="margin-bottom:12px"></div><div id="orderFormMsg" class="msg" style="margin-bottom:12px;display:none"></div><div class="form-group"><label>' + tUi('col_customer', 'Клиент') + '</label><select id="orderCreateCustomer">' + custOpts + '</select></div><div class="form-group"><label>' + tUi('col_agent', 'Агент') + '</label><select id="orderCreateAgent">' + agentOpts + '</select></div><div class="form-group"><label>' + tUi('col_expeditor', 'Экспедитор') + '</label><select id="orderCreateExpeditor">' + expeditorOpts + '</select></div><div class="form-group"><label>' + tUi('col_status', 'Статус') + '</label><select id="orderCreateStatus">' + statusOpts + '</select></div><div class="form-group"><label>' + tUi('col_payment_type', 'Тип оплаты') + '</label><select id="orderCreatePaymentType">' + payOpts + '</select></div><div class="form-group"><label>' + tUi('scheduled_delivery_lbl', 'Назначенная дата поставки') + '</label><input type="text" id="orderScheduledDelivery" placeholder="дд.мм.гггг чч:мм" autocomplete="off"></div><div class="form-group"><label>' + tUi('order_items_lbl', 'Позиции заказа') + '</label></div><div style="overflow-x:auto"><table><thead><tr><th>' + tUi('col_product_name', 'Товар') + '</th><th>' + tUi('col_quantity', 'Количество') + '</th><th>' + tUi('col_price', 'Цена') + '</th><th>' + tUi('col_actions', 'Действия') + '</th></tr></thead><tbody id="orderCreateItemsBody"></tbody></table></div><p style="margin:12px 0"><button type="button" class="btn btn-secondary" id="orderAddRow">' + tUi('add_row_btn', 'Добавить позицию') + '</button></p><div class="form-group"><label>' + tUi('col_amount', 'Сумма') + '</label><div id="orderCreateSum" style="padding:6px 0;font-weight:600">0</div></div><p><button type="button" class="btn btn-primary" id="orderCreateSave">' + tUi('save_order_btn', 'Сохранить заказ') + '</button> <button type="button" class="btn btn-secondary" id="orderCreateCancel">' + tUi('cancel', 'Отмена') + '</button></p><div style="margin-top:24px;padding:12px;background:#f8f9fa;border-radius:6px"><div class="form-group" style="margin-bottom:8px"><label style="font-size:12px;color:#666">' + tUi('order_date_lbl', 'Дата создания заказа') + '</label><div id="orderOrderDate" class="form-readonly">—</div></div><div class="form-group" style="margin-bottom:8px"><label style="font-size:12px;color:#666">' + tUi('status_delivery_at_lbl', 'Перевод в статус «Доставка»') + '</label><div id="orderStatusDeliveryAt" class="form-readonly">—</div></div><div class="form-group" style="margin-bottom:8px"><label style="font-size:12px;color:#666">' + tUi('closed_at_lbl', 'Дата и время закрытия заказа') + '</label><div id="orderClosedAt" class="form-readonly">—</div></div><div class="form-group" style="margin-bottom:8px"><label style="font-size:12px;color:#666">' + tUi('last_updated_at_lbl', 'Дата последнего изменения') + '</label><div id="orderLastUpdatedAt" class="form-readonly">—</div></div><div class="form-group" style="margin-bottom:0"><label style="font-size:12px;color:#666">' + tUi('col_modified_by', 'Кто изменил') + '</label><div id="orderLastUpdatedBy" class="form-readonly">—</div></div></div></div>';
+          content.innerHTML = '<div class="card"><h2 id="orderFormTitle">' + tUi('order_create_title', 'Создание заказа') + '</h2><div id="orderCreateErr" class="err" style="margin-bottom:12px"></div><div id="orderFormMsg" class="msg" style="margin-bottom:12px;display:none"></div><div class="form-group"><label>' + tUi('col_customer', 'Клиент') + '</label><select id="orderCreateCustomer">' + custOpts + '</select></div><div class="form-group"><label>' + tUi('col_agent', 'Агент') + '</label><select id="orderCreateAgent">' + agentOpts + '</select></div><div class="form-group"><label>' + tUi('col_expeditor', 'Экспедитор') + '</label><select id="orderCreateExpeditor">' + expeditorOpts + '</select></div><div class="form-group"><label>' + tUi('col_status', 'Статус') + '</label><select id="orderCreateStatus">' + statusOpts + '</select></div><div class="form-group"><label>' + tUi('col_payment_type', 'Тип оплаты') + '</label><select id="orderCreatePaymentType">' + payOpts + '</select></div><div class="form-group"><label>' + tUi('scheduled_delivery_lbl', 'Назначенная дата поставки') + '</label><input type="text" id="orderScheduledDelivery" placeholder="дд.мм.гггг чч:мм" autocomplete="off"></div><div class="form-group"><label>' + tUi('order_items_lbl', 'Позиции заказа') + '</label></div><div style="overflow-x:auto"><table><thead><tr><th>' + tUi('col_product_name', 'Товар') + '</th><th>Вес</th><th>' + tUi('col_quantity', 'Количество') + '</th><th>' + tUi('col_price', 'Цена') + '</th><th>' + tUi('col_actions', 'Действия') + '</th></tr></thead><tbody id="orderCreateItemsBody"></tbody></table></div><p style="margin:12px 0"><button type="button" class="btn btn-secondary" id="orderAddRow">' + tUi('add_row_btn', 'Добавить позицию') + '</button></p><div class="form-group"><label>' + tUi('col_amount', 'Сумма') + '</label><div id="orderCreateSum" style="padding:6px 0;font-weight:600">0</div></div><p><button type="button" class="btn btn-primary" id="orderCreateSave">' + tUi('save_order_btn', 'Сохранить заказ') + '</button> <button type="button" class="btn btn-secondary" id="orderCreateCancel">' + tUi('cancel', 'Отмена') + '</button></p><div style="margin-top:24px;padding:12px;background:#f8f9fa;border-radius:6px"><div class="form-group" style="margin-bottom:8px"><label style="font-size:12px;color:#666">' + tUi('order_date_lbl', 'Дата создания заказа') + '</label><div id="orderOrderDate" class="form-readonly">—</div></div><div class="form-group" style="margin-bottom:8px"><label style="font-size:12px;color:#666">' + tUi('status_delivery_at_lbl', 'Перевод в статус «Доставка»') + '</label><div id="orderStatusDeliveryAt" class="form-readonly">—</div></div><div class="form-group" style="margin-bottom:8px"><label style="font-size:12px;color:#666">' + tUi('closed_at_lbl', 'Дата и время закрытия заказа') + '</label><div id="orderClosedAt" class="form-readonly">—</div></div><div class="form-group" style="margin-bottom:8px"><label style="font-size:12px;color:#666">' + tUi('last_updated_at_lbl', 'Дата последнего изменения') + '</label><div id="orderLastUpdatedAt" class="form-readonly">—</div></div><div class="form-group" style="margin-bottom:0"><label style="font-size:12px;color:#666">' + tUi('col_modified_by', 'Кто изменил') + '</label><div id="orderLastUpdatedBy" class="form-readonly">—</div></div></div></div>';
           document.getElementById('orderFormTitle').textContent = isEdit ? (tUi('order_edit_prefix', 'Редактирование заказа №') + ' ' + orderId) : tUi('order_create_title', 'Создание заказа');
           function formatDateTashkent(isoStr) {
             if (!isoStr) return '—';
@@ -3212,23 +3348,34 @@
             var el = document.getElementById('orderCreateSum'); if (el) el.textContent = sum;
           }
           document.getElementById('orderCreateCustomer').onchange = updateAgentExpeditor;
+          function syncOrderRowProductMeta(tr, preservePrice) {
+            var productSel = tr.querySelector('.order-item-product');
+            var priceInput = tr.querySelector('.order-item-price');
+            var weightCell = tr.querySelector('.order-item-weight');
+            var opt = productSel && productSel.selectedIndex >= 0 ? productSel.options[productSel.selectedIndex] : null;
+            var price = opt && opt.getAttribute('data-price');
+            var weight = opt && opt.getAttribute('data-weight');
+            if (weightCell) weightCell.textContent = formatProductWeight(weight) || '—';
+            if (!preservePrice && priceInput && price) priceInput.value = price;
+          }
           function addRow(existingItem) {
             var tr = document.createElement('tr');
             if (existingItem) tr.setAttribute('data-item-id', existingItem.id || '');
             var qty = (existingItem && existingItem.quantity != null) ? existingItem.quantity : 1;
             var priceStr = (existingItem && existingItem.price != null) ? existingItem.price : '';
-            tr.innerHTML = '<td><select class="order-item-product" style="min-width:220px">' + productOpts + '</select></td><td><input type="number" min="1" class="order-item-qty" value="' + qty + '" style="width:80px"></td><td><input type="number" step="0.01" min="0" class="order-item-price" placeholder="по прайсу" value="' + priceStr + '" style="width:100px"></td><td><button type="button" class="btn btn-secondary btn-small order-item-del">' + tUi('delete', 'Удалить') + '</button></td>';
+            tr.innerHTML = '<td><select class="order-item-product" style="min-width:260px">' + productOpts + '</select></td><td class="order-item-weight" style="white-space:nowrap">—</td><td><input type="number" min="1" class="order-item-qty" value="' + qty + '" style="width:80px"></td><td><input type="number" step="0.01" min="0" class="order-item-price" placeholder="по прайсу" value="' + priceStr + '" style="width:100px"></td><td><button type="button" class="btn btn-secondary btn-small order-item-del">' + tUi('delete', 'Удалить') + '</button></td>';
             tbody.appendChild(tr);
-            if (existingItem && existingItem.product_code) { var selProd = tr.querySelector('.order-item-product'); selProd.value = existingItem.product_code; }
+            if (existingItem && existingItem.product_code) {
+              var selProd = tr.querySelector('.order-item-product');
+              selProd.value = existingItem.product_code;
+            }
             tr.querySelector('.order-item-product').onchange = function () {
-              var opt = this.options[this.selectedIndex];
-              var price = opt && opt.getAttribute('data-price');
-              var priceInput = tr.querySelector('.order-item-price');
-              if (priceInput && price) priceInput.value = price;
+              syncOrderRowProductMeta(tr, false);
               updateSum();
             };
             tr.querySelector('.order-item-qty').oninput = tr.querySelector('.order-item-price').oninput = updateSum;
             tr.querySelector('.order-item-del').onclick = function () { tr.remove(); updateSum(); };
+            syncOrderRowProductMeta(tr, !!(existingItem && existingItem.price != null));
           }
           if (orderData && orderData.items && orderData.items.length) {
             orderData.items.forEach(function (it) { addRow(it); });
@@ -3868,14 +4015,14 @@
           var whOpts = '<option value="">' + tr('ui.op.form.select_wh', '— Выберите склад —') + '</option>';
           warehouses.forEach(function (w) { whOpts += '<option value="' + escAttr(w.code) + '">' + escAttr(w.name || w.code) + '</option>'; });
           var prodOpts = '<option value="">' + tr('ui.op.form.select_product', '— Выберите товар —') + '</option>';
-          products.forEach(function (p) { prodOpts += '<option value="' + escAttr(p.code) + '">' + escAttr((p.code || '') + ' — ' + (p.name || '')) + '</option>'; });
+          products.forEach(function (p) { prodOpts += '<option value="' + escAttr(p.code) + '" data-weight="' + (p.weight_g != null ? p.weight_g : '') + '">' + escAttr(productDisplayLabel(p)) + '</option>'; });
           var formHtml = '<div class="card"><h2>' + tr('ui.alloc.form.create_title', 'Создание операции: ') + escAttr(config.operation_name || tr('ui.wh_receipt.form.op_name', 'Приход на склад')) + '</h2>';
           if (config.description) formHtml += '<p style="color:#666;margin-bottom:16px">' + escAttr(config.description) + '</p>';
           formHtml += '<div id="opFormErr" class="err" style="margin-bottom:12px"></div><div id="opFormMsg" class="msg" style="margin-bottom:12px;display:none"></div>';
           var productsMap = {};
           products.forEach(function (p) { productsMap[p.code] = p; });
           formHtml += '<div class="form-group"><label>' + tr('ui.wh_receipt.form.wh_to_lbl', 'Склад в') + ' <span style="color:#c00">*</span></label><select id="opWhReceiptWarehouseTo" required>' + whOpts + '</select></div>';
-          formHtml += '<div style="margin-top:20px"><h3 style="margin-bottom:12px">' + tr('ui.wh_receipt.form.products_lbl', 'Товары') + '</h3><div style="overflow-x:auto"><table id="opWhReceiptItemsTable" style="width:100%"><thead><tr><th>' + tr('ui.wh_receipt.form.col_product', 'Товар') + ' <span style="color:#c00">*</span></th><th>' + tr('ui.wh_receipt.form.col_expiry', 'Срок годности') + ' <span style="color:#c00">*</span></th><th>' + tr('ui.wh_receipt.form.col_qty', 'Количество') + ' <span style="color:#c00">*</span></th><th>' + tr('ui.wh_receipt.form.col_price', 'Цена (из справочника)') + '</th><th>' + tr('ui.wh_receipt.form.col_sum', 'Сумма') + '</th><th>' + tr('ui.wh_receipt.form.col_batch', 'Код партии (авто)') + '</th><th></th></tr></thead><tbody id="opWhReceiptItemsBody"><tr class="op-wh-receipt-row"><td><select class="op-wh-receipt-product" required>' + prodOpts + '</select></td><td><input type="text" class="op-wh-receipt-expiry" placeholder="дд.мм.гггг" required autocomplete="off"></td><td><input type="number" class="op-wh-receipt-quantity" min="1" required></td><td class="op-wh-receipt-price" style="text-align:right;padding:8px;font-weight:600">—</td><td class="op-wh-receipt-sum" style="text-align:right;padding:8px;font-weight:600">—</td><td><input type="text" class="op-wh-receipt-batch" readonly style="background:#f0f0f0"></td><td><button type="button" class="btn btn-secondary btn-small op-wh-receipt-remove" style="display:none">' + tr('ui.wh_receipt.form.remove_btn', 'Удалить') + '</button></td></tr></tbody><tfoot id="opWhReceiptItemsFooter"><tr style="background:#f8f9fa;font-weight:600"><td colspan="3" style="text-align:right;padding:10px">' + tr('ui.wh_receipt.form.total', 'Итого:') + '</td><td></td><td id="opWhReceiptTotalSum" style="text-align:right;padding:10px">0</td><td colspan="2"></td></tr></tfoot></table></div><button type="button" class="btn btn-secondary" id="opWhReceiptAddRow" style="margin-top:8px">' + tr('ui.wh_receipt.form.add_row_btn', '+ Добавить товар') + '</button></div>';
+          formHtml += '<div style="margin-top:20px"><h3 style="margin-bottom:12px">' + tr('ui.wh_receipt.form.products_lbl', 'Товары') + '</h3><div style="overflow-x:auto"><table id="opWhReceiptItemsTable" style="width:100%"><thead><tr><th>' + tr('ui.wh_receipt.form.col_product', 'Товар') + ' <span style="color:#c00">*</span></th><th>' + tr('ui.wh_receipt.form.col_weight', 'Вес') + '</th><th>' + tr('ui.wh_receipt.form.col_expiry', 'Срок годности') + ' <span style="color:#c00">*</span></th><th>' + tr('ui.wh_receipt.form.col_qty', 'Количество') + ' <span style="color:#c00">*</span></th><th>' + tr('ui.wh_receipt.form.col_price', 'Цена (из справочника)') + '</th><th>' + tr('ui.wh_receipt.form.col_sum', 'Сумма') + '</th><th>' + tr('ui.wh_receipt.form.col_batch', 'Код партии (авто)') + '</th><th></th></tr></thead><tbody id="opWhReceiptItemsBody"><tr class="op-wh-receipt-row"><td><select class="op-wh-receipt-product" required>' + prodOpts + '</select></td><td class="op-wh-receipt-weight" style="padding:8px;font-weight:600">—</td><td><input type="text" class="op-wh-receipt-expiry" placeholder="дд.мм.гггг" required autocomplete="off"></td><td><input type="number" class="op-wh-receipt-quantity" min="1" required></td><td class="op-wh-receipt-price" style="text-align:right;padding:8px;font-weight:600">—</td><td class="op-wh-receipt-sum" style="text-align:right;padding:8px;font-weight:600">—</td><td><input type="text" class="op-wh-receipt-batch" readonly style="background:#f0f0f0"></td><td><button type="button" class="btn btn-secondary btn-small op-wh-receipt-remove" style="display:none">' + tr('ui.wh_receipt.form.remove_btn', 'Удалить') + '</button></td></tr></tbody><tfoot id="opWhReceiptItemsFooter"><tr style="background:#f8f9fa;font-weight:600"><td colspan="4" style="text-align:right;padding:10px">' + tr('ui.wh_receipt.form.total', 'Итого:') + '</td><td></td><td id="opWhReceiptTotalSum" style="text-align:right;padding:10px">0</td><td colspan="2"></td></tr></tfoot></table></div><button type="button" class="btn btn-secondary" id="opWhReceiptAddRow" style="margin-top:8px">' + tr('ui.wh_receipt.form.add_row_btn', '+ Добавить товар') + '</button></div>';
           formHtml += '<div class="form-group" style="margin-top:20px"><label>' + tr('ui.op.form.comment_lbl', 'Комментарий') + '</label><input type="text" id="opWhReceiptComment" placeholder="' + tr('ui.op.form.optional', 'необяз.') + '"></div>';
           formHtml += '<p style="margin-top:16px"><button type="button" class="btn btn-primary" id="opWhReceiptSave">' + tr('ui.wh_receipt.form.save_btn', 'Сохранить операцию') + '</button> <button type="button" class="btn btn-secondary" id="opWhReceiptCancel">' + tr('button.cancel', 'Отмена') + '</button></p></div>';
           content.innerHTML = formHtml;
@@ -3885,6 +4032,7 @@
           });
           function updateRowCalculations(row) {
             var productSel = row.querySelector('.op-wh-receipt-product');
+            var weightCell = row.querySelector('.op-wh-receipt-weight');
             var expiryInp = row.querySelector('.op-wh-receipt-expiry');
             var quantityInp = row.querySelector('.op-wh-receipt-quantity');
             var batchInp = row.querySelector('.op-wh-receipt-batch');
@@ -3895,6 +4043,7 @@
             var expiryRaw = (expiryInp.value || '').trim();
             var quantity = parseInt(quantityInp ? quantityInp.value : 0, 10) || 0;
             var product = productsMap[productCode];
+            if (weightCell) weightCell.textContent = formatProductWeight(product && product.weight_g) || '—';
             var price = product && product.price ? parseFloat(product.price) : 0;
             if (productCode && expiryRaw) {
               var m = expiryRaw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
@@ -3959,7 +4108,7 @@
             var tbody = document.getElementById('opWhReceiptItemsBody');
             var newRow = document.createElement('tr');
             newRow.className = 'op-wh-receipt-row';
-            newRow.innerHTML = '<td><select class="op-wh-receipt-product" required>' + prodOpts + '</select></td><td><input type="text" class="op-wh-receipt-expiry" placeholder="дд.мм.гггг" required autocomplete="off"></td><td><input type="number" class="op-wh-receipt-quantity" min="1" required></td><td class="op-wh-receipt-price" style="text-align:right;padding:8px;font-weight:600">—</td><td class="op-wh-receipt-sum" style="text-align:right;padding:8px;font-weight:600">—</td><td><input type="text" class="op-wh-receipt-batch" readonly style="background:#f0f0f0"></td><td><button type="button" class="btn btn-secondary btn-small op-wh-receipt-remove">Удалить</button></td>';
+            newRow.innerHTML = '<td><select class="op-wh-receipt-product" required>' + prodOpts + '</select></td><td class="op-wh-receipt-weight" style="padding:8px;font-weight:600">—</td><td><input type="text" class="op-wh-receipt-expiry" placeholder="дд.мм.гггг" required autocomplete="off"></td><td><input type="number" class="op-wh-receipt-quantity" min="1" required></td><td class="op-wh-receipt-price" style="text-align:right;padding:8px;font-weight:600">—</td><td class="op-wh-receipt-sum" style="text-align:right;padding:8px;font-weight:600">—</td><td><input type="text" class="op-wh-receipt-batch" readonly style="background:#f0f0f0"></td><td><button type="button" class="btn btn-secondary btn-small op-wh-receipt-remove">Удалить</button></td>';
             tbody.appendChild(newRow);
             var expiryEl = newRow.querySelector('.op-wh-receipt-expiry');
             if (expiryEl && window.flatpickr) window.flatpickr(expiryEl, { locale: 'ru', dateFormat: 'd.m.Y', allowInput: true });
